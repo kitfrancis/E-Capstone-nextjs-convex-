@@ -21,6 +21,12 @@ export const upsertUser = mutation({
 
     if (!existing) {
       await ctx.db.insert("users", args);
+    } else {
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        email: args.email,
+        image: args.image,
+      });
     }
   },
 });
@@ -33,7 +39,7 @@ export const getMe = query({
 
     return ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject)) // 👈 fixed
       .first();
   },
 });

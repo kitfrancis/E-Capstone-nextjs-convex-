@@ -16,20 +16,17 @@ export default function LandingPage() {
   useEffect(() => {
     if (!isLoaded) return;
     
-    // Only redirect if signed in AND already has a role in DB
     if (isSignedIn && me && me.role) {
       router.push(`/dashboard/${me.role}`);
     }
 
-    // If signed in but no role yet → stay on landing page
-    // so they can pick a role
   }, [isLoaded, isSignedIn, me]);
 
   const handleClick = (role: Role) => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("intendedRole", role);
     }
-    router.push("/auth-callback"); // 👈 skip sign-in, go straight to callback
+    router.push("/auth-callback"); 
   };
 
   if (!isLoaded) {
@@ -162,7 +159,6 @@ export default function LandingPage() {
 
             </div>
 
-            {/* Bottom section */}
             <div className="flex flex-col items-center mt-10 max-w-2xl bg-white rounded-lg p-6 border border-gray-200 shadow-md">
               <h1 className="text-lg font-semibold mb-3 text-gray-900">New to the system?</h1>
               <p className="text-gray-400 mb-4">this platform streamlines thesis and capstone project management with role-based access, version control, feedback system, and a searchable project archive.</p>

@@ -3,21 +3,44 @@
 
 import { useRouter } from "next/navigation";
 
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
+import { Kbd } from "@/components/ui/kbd"
+import { Button } from "@/components/ui/button"
+
 export default function Unauthorized() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-      <h1 className="text-3xl font-bold text-red-600">Access Denied</h1>
-      <p className="text-gray-600">
-        You are not authorized to access this role.
-      </p>
-      <button
-        onClick={() => router.push("/")}
-        className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
-      >
-        Back to Landing Page
-      </button>
+    <>
+    <div className="flex items-center justify-center h-screen">
+      <Empty>
+      <EmptyHeader>
+        <EmptyTitle className="text-3xl">401 - Unauthorized</EmptyTitle>
+        <EmptyDescription className="text-lg">
+          You are not authorized to access this page.
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        
+            <Button onClick={() => router.push("/")}>Back to Landing Page</Button>
+        
+        <EmptyDescription>
+          Need help? <a href="#">Contact support</a>
+        </EmptyDescription>
+      </EmptyContent>
+    </Empty>
     </div>
+    </>
   );
 }

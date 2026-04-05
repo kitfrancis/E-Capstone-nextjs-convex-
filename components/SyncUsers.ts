@@ -9,24 +9,33 @@ type Role = "student" | "instructor" | "adviser";
 
 export function SyncUser() {
   const { user, isSignedIn, isLoaded } = useUser();
-  const me = useQuery(api.users.getMe); // Check if Convex already has the user
+  const me = useQuery(api.users.getMe);
   const upsertUser = useMutation(api.users.upsertUser);
 
   useEffect(() => {
-    // Only proceed if Clerk is loaded/signed in AND Convex has finished its check
     if (!isLoaded || !isSignedIn || !user || me === undefined) return;
 
-    // ONLY run the mutation if the user is NOT in the Convex database yet
+     console.log("Clerk user:", {
+    fullName: user.fullName,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+    email: user.emailAddresses[0].emailAddress,
+  });
+
     if (me === null) {
       const role = (user.publicMetadata?.role as Role) ?? "student";
 
-      upsertUser({
-        clerkId: user.id,
-        name: user.fullName ?? "Unknown",
-        email: user.emailAddresses[0].emailAddress,
-        image: user.imageUrl, 
-        role,
-      });
+     upsertUser({
+  clerkId: user.id,
+  name: user.fullName ?? 
+        user.firstName ?? 
+        user.username ?? 
+        user.emailAddresses[0].emailAddress.split("@")[0], 
+  email: user.emailAddresses[0].emailAddress,
+  image: user.imageUrl,
+  role,
+});
     }
   }, [isLoaded, isSignedIn, user, me, upsertUser]);
 
