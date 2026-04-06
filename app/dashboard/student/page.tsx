@@ -11,10 +11,10 @@ export default function Dashboard() {
   return (
     
     <div className="scroll-smooth font-Poppins bg-background">
-        <div className="lg:ml-1    mx-3 px-3 max-h-auto lg:px-5 ">
-            <h1 className="text-3xl font-semibold text-gray-800 mt-10">Welcome back,  {me === undefined ? "Loading..." : me?.name ?? "—"}</h1>
-            <p className="text-gray-600 mt-2">Track your project progress and manage deliverables.</p>
-        <div className="bg-gray-100 rounded-2xl p-1  max-h-auto  mt-5 md:mt-8">
+        <div className="lg:ml-1 mx-3 px-3 max-h-auto lg:px-5 ">
+            <h1 className="text-3xl font-semibold text-primary- mt-10">Welcome back,  {me === undefined ? "Loading..." : me?.name ?? "—"}</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">Track your project progress and manage deliverables.</p>
+        <div className="bg-gray-100 rounded-2xl p-1  max-h-auto  mt-6 md:mt-10">
             <div className="gap-1 mx-5 my-5">
               <div className="flex flex-col mb-5 md:mb-8 ">
            <h1 className="font-semibold text-md">Team Overview</h1>
@@ -83,7 +83,7 @@ export default function Dashboard() {
               </div>
                 <div className="border-t border-gray-300 pt-3">
                   <div className="flex items-center gap-2">
-                      <h1 className="flex flex-row gap-2 font-medium mb-1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-message-square h-4 w-4 text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>1 Comment</h1>
+                      <h1 className="flex flex-row gap-2 font-medium mb-1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square h-4 w-4 text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>1 Comment</h1>
                   </div>
                   <button className="font-medium items-center justify-center w-full border border-gray-300 rounded-lg px-2 py-1 hover:bg-gray-300 transition-colors">
                     View Comments

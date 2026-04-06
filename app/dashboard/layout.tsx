@@ -14,6 +14,8 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/ui/theme-provider";
+import { DropdownMenuAvatar } from "@/app/components/avatar";
 
 export default function DashboardLayout({
   children,
@@ -28,7 +30,7 @@ export default function DashboardLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 fixed bg-background w-full z-10">
+        <header className="sticky top-0 z-10 flex h-16 w-full items-center gap-2 border-b bg-background px-4">
           <SidebarTrigger className="-ml-1 scale-150" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <Breadcrumb>
@@ -38,6 +40,9 @@ export default function DashboardLayout({
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+              <div className="ml-auto flex items-center gap-3 pr-2">
+                <DropdownMenuAvatar />
+             </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           {children}

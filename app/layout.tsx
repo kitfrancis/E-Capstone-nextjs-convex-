@@ -3,8 +3,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { SyncUser } from "@/components/SyncUsers";
 import ThemeProviderWrapper from "@/components/ui/ThemeProviderWrapper";
-import "./globals.css";
 import { ThemeToggle } from "@/components/ui/theme-provider";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "E-capstone",
@@ -20,10 +20,10 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body className="min-h-full flex flex-col">
-          <div className="fixed top-4 right-4 z-50">
-            <ThemeToggle />
-          </div>
           <ThemeProviderWrapper>
+            <div className="fixed top-20 right-4 z-50">
+              <ThemeToggle />
+            </div>
             <ConvexClientProvider>
               <SyncUser />
               <main>
