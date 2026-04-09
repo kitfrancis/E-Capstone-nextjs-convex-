@@ -6,11 +6,6 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useClerk } from "@clerk/nextjs";
@@ -33,15 +28,16 @@ import {
 } from "lucide-react";
 
 const studentLinks = [
-  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard ,
-    children: [
+  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
+  { label: "Capstone", href:"/dashboard/student", icon:FolderOpen,
+     children: [
       { label: "Deliverables", href: "/dashboard/student/deliverables", icon: ClipboardList },
       { label: "Upload New", href: "/dashboard/student/upload", icon: Upload },
       { label: "Tasks", href: "/dashboard/student/tasks", icon: CheckSquare },
     ],
-  },
+   },
   { label: "Archive", href: "/dashboard/student/archive", icon: Archive },
-  { label: "Profile", href: "/dashboard/student/profile", icon: User },
+  { label: "Profile", href: "/profile/student", icon: User },
 ];
 
 const instructorLinks = [
@@ -83,7 +79,7 @@ export function AppSidebar() {
       : [];
 
   return (
-    <Sidebar>
+    <Sidebar side="left">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -117,40 +113,30 @@ export function AppSidebar() {
                 </div>
               ) : (
                 links.map((link) =>
-              
                   link.children ? (
-                    <Collapsible
-                      key={link.label}
-                      defaultOpen={link.children.some((c) => c.href === pathname)}
-                      className="group/collapsible"
-                    >
-                      <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuButton className="text-base py-5">
-                            <link.icon />
-                            <span>{link.label}</span>
-                            <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                          </SidebarMenuButton>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <SidebarMenuSub>
-                            {link.children.map((child) => (
-                              <SidebarMenuSubItem key={child.href}>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={pathname === child.href}
-                                >
-                                  <button onClick={() => router.push(child.href)}>
-                                    <child.icon />
-                                    <span>{child.label}</span>
-                                  </button>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            ))}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      </SidebarMenuItem>
-                    </Collapsible>
+                    <SidebarGroup key={link.label} className="p-0">
+                      <SidebarGroupLabel className="flex items-center gap-2 text-xs px-2 py-1">
+                        <link.icon className="h-4 w-4" />
+                        <span>{link.label}</span>
+                      </SidebarGroupLabel>
+                      <SidebarGroupContent>
+                        <SidebarMenuSub>
+                          {link.children.map((child) => (
+                            <SidebarMenuSubItem key={child.href}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={pathname === child.href}
+                              >
+                                <button onClick={() => router.push(child.href)}>
+                                  <child.icon />
+                                  <span>{child.label}</span>
+                                </button>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </SidebarGroupContent>
+                    </SidebarGroup>
                   ) : (
                     <SidebarMenuItem key={link.href}>
                       <SidebarMenuButton

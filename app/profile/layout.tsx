@@ -14,15 +14,16 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
-import Notification from "../components/notification-sidebar";
+import { ThemeToggle } from "@/components/ui/theme-provider";
+import { DropdownMenuAvatar } from "@/app/components/avatar";
 
-export default function DashboardLayout({
+export default function ProfileLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const page = pathname.split("/").pop() ?? "Dashboard";
+  const page = pathname.split("/").pop() ?? "Profile";
   const formatted = page.charAt(0).toUpperCase() + page.slice(1);
 
   return (
@@ -40,7 +41,7 @@ export default function DashboardLayout({
             </BreadcrumbList>
           </Breadcrumb>
               <div className="ml-auto flex items-center gap-3 pr-2">
-                <Notification />
+                <DropdownMenuAvatar />
              </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">

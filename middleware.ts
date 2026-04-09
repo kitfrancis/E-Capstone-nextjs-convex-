@@ -1,8 +1,7 @@
-// middleware.ts (in root, same level as app/)
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isPublicRoute = createRouteMatcher([
-  "/",           // landing page
+  "/",           
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/unauthorized",

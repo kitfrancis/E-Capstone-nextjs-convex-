@@ -31,7 +31,7 @@ export default function LandingPage() {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
@@ -39,7 +39,7 @@ export default function LandingPage() {
 
   return (
     <>
-      <div className="font-Poppins bg-gray-100 min-h-screen scroll-smooth">
+      <div className="font-Poppins bg-background min-h-screen scroll-smooth">
         <div className="flex items-center justify-center px-4 sm:px-6 md:px-10 lg:px-40">
           <div className="flex flex-col items-center text-center mt-10 md:mt-20 max-w-6xl w-full">
             <h1 className="text-3xl sm:text-4xl font-bold">
