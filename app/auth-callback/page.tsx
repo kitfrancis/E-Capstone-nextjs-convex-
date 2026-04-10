@@ -34,6 +34,12 @@ export default function AuthCallback() {
           image: user.imageUrl,
           role: intendedRole,
         });
+
+         if (!me) {
+      // 🆕 New user
+      sessionStorage.removeItem("intendedRole");
+      router.push(`/dashboard/${intendedRole}`);
+    }
         sessionStorage.removeItem("intendedRole");
         router.push(`/dashboard/${intendedRole}`);
       } else {

@@ -29,14 +29,7 @@ import {
 
 const studentLinks = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
-  { label: "Capstone", href:"/dashboard/student", icon:FolderOpen,
-     children: [
-      { label: "Deliverables", href: "/dashboard/student/deliverables", icon: ClipboardList },
-      { label: "Upload New", href: "/dashboard/student/upload", icon: Upload },
-      { label: "Tasks", href: "/dashboard/student/tasks", icon: CheckSquare },
-    ],
-   },
-  { label: "Archive", href: "/dashboard/student/archive", icon: Archive },
+  { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/student", icon: User },
 ];
 

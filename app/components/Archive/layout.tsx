@@ -14,14 +14,15 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
-import Notification from "../components/notification-sidebar";
-export default function ProfileLayout({
+import Notification from "@/app/components/notification-sidebar";
+
+export default function ArchiveLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const page = pathname.split("/").pop() ?? "Profile";
+  const page = pathname.split("/").pop() ?? "Dashboard";
   const formatted = page.charAt(0).toUpperCase() + page.slice(1);
 
   return (
@@ -40,7 +41,7 @@ export default function ProfileLayout({
           </Breadcrumb>
               <div className="ml-auto flex items-center gap-3 pr-2">
                 <Notification />
-              </div>
+             </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           {children}
