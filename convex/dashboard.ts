@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const getMyProject = query({
-  args: { clerkId: v.string() },
+  args: { clerkId: v.string(),  },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("capstoneProjects")
