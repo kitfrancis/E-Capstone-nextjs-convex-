@@ -174,6 +174,7 @@ export function AppSidebar() {
                     {me?.email ?? "—"}
                   </span>
                 </DropdownMenuItem>
+                
                 <DropdownMenuItem
                   onClick={() => signOut({ redirectUrl: "/" })}
                   className="text-red-500 cursor-pointer text-sm font-medium"

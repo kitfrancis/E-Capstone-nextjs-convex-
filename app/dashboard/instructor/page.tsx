@@ -8,6 +8,7 @@ import { useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar } from "lucide-react";
 import { DialogDemo } from "@/app/components/createTeam";
+import { TaskDialogDemo } from "@/app/components/createTask";
 
 export default function InstructorDashboard() {
   const me = useQuery(api.users.getMe);
@@ -46,9 +47,9 @@ useEffect(() => {
         </p>
           </div>
           <div className="flex items-center md:justify-end mt-3 flex-row gap-3">
-                <DialogDemo />
-                <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-background text-foreground "> <Calendar /> Create Task</Button>
-            </div>
+                <DialogDemo />  
+                <TaskDialogDemo />
+          </div>
         </div>
         
       </div>

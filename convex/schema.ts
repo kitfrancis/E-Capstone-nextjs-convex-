@@ -13,6 +13,7 @@ export default defineSchema({
       v.literal("instructor"),
       v.literal("adviser")
     ),
+    course: v.optional(v.string()),
   }).index("by_clerk_id", ["clerkId"]),
 
   projects: defineTable({
