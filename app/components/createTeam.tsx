@@ -47,7 +47,7 @@ export function DialogDemo() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-black dark:bg-gray-50 text-background">
+        <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-black dark:bg-gray-50 text-background hover:bg-gray-800 hover:text-background dark:hover:bg-gray-200">
           <Plus /> Create Team
         </Button>
       </DialogTrigger>

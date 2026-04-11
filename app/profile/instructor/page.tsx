@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 
-export default function StudentProfile() {
+export default function InstructorProfile() {
   const me = useQuery(api.users.getMe);
   const updateProfile = useMutation(api.users.updateProfile);
 
@@ -75,14 +75,6 @@ export default function StudentProfile() {
               />
               <p className="text-sm text-gray-500">Email is managed by your login provider.</p>
 
-              <Label className="mt-2 font-semibold text-base">Student ID</Label>
-              <Input
-                type="text"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                placeholder="e.g. 2023-1309-A"
-                className="bg-sidebar-accent border text-foreground text-sm rounded-lg px-4 py-2 h-9 sm:h-10"
-              />
                 <Label className="mt-2 font-semibold text-base">Course</Label>
               <SelectCourseDemo/>
 
