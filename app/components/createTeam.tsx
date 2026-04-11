@@ -50,6 +50,10 @@ export function DialogDemo() {
       </SelectContent>
     </Select>
           </div>
+          <div className="space-y-1 mb-3">
+            <Label htmlFor="teamMembers">Members</Label>
+            <Input id="teamMembers" name="teamMembers" placeholder="Enter member names separated by commas" />
+          </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
