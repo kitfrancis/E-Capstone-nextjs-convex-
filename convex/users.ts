@@ -67,3 +67,24 @@ export const getMe = query({
       .first();
   },
 });
+
+
+export const getAdvisers = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("users")
+      .filter(q => q.eq(q.field("role"), "adviser"))
+      .collect();
+  },
+});
+
+export const getStudents = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("users")
+      .filter(q => q.eq(q.field("role"), "student"))
+      .collect();
+  },
+});
