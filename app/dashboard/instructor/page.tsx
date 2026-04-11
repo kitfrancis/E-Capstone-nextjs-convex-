@@ -40,7 +40,7 @@ useEffect(() => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap6 ">
           <div>
               <h1 className="text-3xl font-semibold text-primary mt-10">
-          Welcome back, {me === undefined ? "Loading..." : me?.name ?? "—"}
+          Instructor Dashboard
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">
           Manage teams, assign tasks, and track project progress.

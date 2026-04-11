@@ -94,3 +94,35 @@ export const saveDeliverable = mutation({
     });
   },
 });
+
+export const getTeams = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("capstoneProjects").collect();
+  },
+});
+
+export const createTask = mutation({
+  args: {
+    capstoneProjectId: v.id("capstoneProjects"),
+    title: v.string(),
+    description: v.string(),
+    assignedTo: v.string(),
+    dueDate: v.string(),
+    status: v.union(
+      v.literal("completed"),
+      v.literal("in_progress"),
+      v.literal("pending")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("tasks", {
+      capstoneProjectId: args.capstoneProjectId,
+      title: args.title,
+      description: args.description,
+      assignedTo: args.assignedTo,
+      dueDate: args.dueDate,
+      status: args.status,
+    });
+  },
+});

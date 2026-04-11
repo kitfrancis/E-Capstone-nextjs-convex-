@@ -10,8 +10,45 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Plus,  CalendarX2Icon} from "lucide-react"
 import { SelectTeam } from "./selectTeam"
 import { Textarea } from "@/components/ui/textarea"
+import { use } from "react"
+import { useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { getAll } from "@/convex/archive"
+import { useState } from "react"
 
 export function TaskDialogDemo() {
+    const teams = useQuery(api.dashboard.getTeams);
+    const createTask = useMutation(api.dashboard.createTask);
+
+  const [open, setOpen] = useState(false);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [dueDate, setDueDate] = useState("");
+
+  const handleSubmit = async () => {
+    if (!selectedTeamId || !taskTitle || !dueDate) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    await createTask({
+      capstoneProjectId: selectedTeamId as any,
+      title: taskTitle,
+      description,
+      assignedTo: "Team",
+      dueDate,
+      status: "pending",
+    });
+
+    setSelectedTeamId("");
+    setTaskTitle("");
+    setDescription("");
+    setDueDate("");
+    setOpen(false);
+  };
+
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -28,8 +65,28 @@ export function TaskDialogDemo() {
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="space-y-1">
-            <Label htmlFor="TeamName">Select a team</Label>
-            <SelectTeam />
+            <Label htmlFor="TeamName">Team</Label>
+            <Select onValueChange={setSelectedTeamId}>
+              <SelectTrigger className="w-full ">
+                <SelectValue placeholder="Select a team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {teams === undefined ? (
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  ) : teams.length === 0 ? (
+                    <SelectItem value="none" disabled>No teams found</SelectItem>
+                  ) : (
+                    teams.map(team => (
+                      <SelectItem key={team._id} value={team._id} className="text-xs">
+                        {team.teamName} — {team.projectTitle}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            
           </div>
           <div className="space-y-1">
             <Label htmlFor="projectTitle">Task Title</Label>
@@ -48,7 +105,7 @@ export function TaskDialogDemo() {
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button type="submit">Create Team</Button>
+          <Button type="submit">Create Task</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

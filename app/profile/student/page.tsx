@@ -69,7 +69,7 @@ export default function StudentProfile() {
               />
               <p className="text-sm text-gray-500">Email is managed by your login provider.</p>
 
-              <Label className="mt-2 font-semibold text-base">Student ID</Label   >
+              <Label className="mt-2 font-semibold text-base">Student ID</Label>
               <input
                 type="text"
                 value={studentId}
