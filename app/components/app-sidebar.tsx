@@ -175,7 +175,9 @@ export function AppSidebar() {
                 </DropdownMenuItem>
                 
                 <DropdownMenuItem
-                  onClick={() => signOut({ redirectUrl: "/" })}
+                   onClick={() => {
+                        signOut({ redirectUrl: "/" });
+                    }}
                   className="text-red-500 cursor-pointer text-sm font-medium"
                 >
                   <span>Sign out</span>

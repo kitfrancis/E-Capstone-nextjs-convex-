@@ -52,7 +52,7 @@ export function TaskDialogDemo() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-gray-50 dark:bg-black text-foreground">
+        <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-muted  text-foreground">
           <CalendarX2Icon /> Create Task
         </Button>
       </DialogTrigger>

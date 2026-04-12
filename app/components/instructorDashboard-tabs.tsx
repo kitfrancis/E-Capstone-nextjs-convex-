@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectDemo } from "@/app/components/select";
 
-
-export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
+export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState("");
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
@@ -21,10 +21,11 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
     api.dashboard.getDeliverables,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
-  const tasks = useQuery(
+   const tasks = useQuery(
     api.dashboard.getTasks,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) setFile(e.target.files[0]);
@@ -89,8 +90,8 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
     <Tabs defaultValue="deliverables" className="w-full">
       <div className="flex justify-center items-center">
         <TabsList className="gap-6 w-full">
-          <TabsTrigger value="deliverables" className="md:text-sm">Deliverables</TabsTrigger>
-          <TabsTrigger value="uploads" className="md:text-sm">Upload New</TabsTrigger>
+          <TabsTrigger value="deliverables" className="md:text-sm">Teams</TabsTrigger>
+          <TabsTrigger value="uploads" className="md:text-sm">Submissions</TabsTrigger>
           <TabsTrigger value="tasks" className="md:text-sm">Tasks</TabsTrigger>
         </TabsList>
       </div>
@@ -145,71 +146,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
         <Card>
           <CardHeader>
             <CardDescription>
-              <div className="flex flex-col max-h-auto bg-sidebar rounded-lg mt-1 p-5">
-                <div className="flex flex-col gap-1">
-                  <h1 className="text-base font-semibold">Upload Project Deliverable</h1>
-                  <p className="text-sm text-gray-500">Upload a new version of your project deliverable for review</p>
-                </div>
-
-                <div className="space-y-1 mt-5 flex flex-col w-full">
-                  <label className="text-sm font-semibold">Project Phase</label>
-                  <SelectDemo onValueChange={setPhase} />
-                </div>
-
-                <div className="space-y-2 mt-2">
-                  <label className="font-semibold items-center text-sm">Select File</label>
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="cursor-pointer border-2 border-dashed border-gray-400 hover:border-gray-600 rounded-lg flex items-center justify-center p-7 mt-1"
-                  >
-                    <div className="flex flex-col items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 mx-auto mb-3 text-gray-400"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                      {file ? (
-                        <p className="text-gray-800 font-medium">{file.name}</p>
-                      ) : (
-                        <>
-                          <p className="text-gray-600">Click to select a file</p>
-                          <p className="text-xs text-gray-500 mt-1">PDF, DOC, DOCX, or ZIP (max 50MB)</p>
-                        </>
-                      )}
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,.zip"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </div>
-
-                  {success && (
-                    <div className="bg-green-50 border border-green-300 text-green-700 text-sm rounded-lg px-4 py-2">
-                      ✅ File uploaded successfully!
-                    </div>
-                  )}
-
-                  <div className="flex flex-col max-h-auto bg-sidebar outline rounded-lg mt-5 px-5 py-3">
-                    <h1 className="text-sm font-medium">Submission Process</h1>
-                    <ul className="list-disc pl-3 text-start text-sm space-y-1 mt-1">
-                      <li className="marker:text-purple-600 text-gray-600">Upload project deliverables</li>
-                      <li className="marker:text-blue-600 text-gray-600">Track submission status</li>
-                      <li className="marker:text-yellow-600 text-gray-600">View feedback from advisers</li>
-                      <li className="marker:text-green-600 text-gray-600">Manage team tasks</li>
-                    </ul>
-                  </div>
-
-                  <div className="border-t border-gray-300 mt-3">
-                    <button
-                      onClick={handleUpload}
-                      disabled={!file || !phase || uploading}
-                      className="text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                      {uploading ? "Uploading..." : "Upload Deliverable"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              
             </CardDescription>
           </CardHeader>
         </Card>

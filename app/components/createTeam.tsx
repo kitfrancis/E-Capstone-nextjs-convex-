@@ -95,7 +95,7 @@ export function DialogDemo() {
             {selectedStudents.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1">
                 {selectedStudents.map(id => (
-                  <span key={id} className="inline-flex items-center gap-1 bg-gray-200 text-xs rounded-full px-2 py-0.5">
+                  <span key={id} className="inline-flex items-center gap-1 bg-sidebar-accent text-xs rounded-full px-2 py-0.5">
                     {getStudentName(id)}
                     <button onClick={() => removeStudent(id)}>
                       <X className="h-3 w-3" />
@@ -118,7 +118,7 @@ export function DialogDemo() {
                     key={student._id}
                     onMouseDown={e => e.preventDefault()}
                     onClick={() => addStudent(student._id)}
-                    className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+                    className=" px-2 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-950 cursor-pointer"
                   >
                     {student.name}
                     <span className="text-xs text-gray-400 ml-2">{student.email}</span>

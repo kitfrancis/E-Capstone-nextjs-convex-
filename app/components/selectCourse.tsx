@@ -11,7 +11,7 @@ import {
 
 interface SelectCourseDemoProps {
   onValueChange?: (value: string) => void;
-}
+} 
 
 
 export function SelectCourseDemo({ onValueChange }: SelectCourseDemoProps) {
