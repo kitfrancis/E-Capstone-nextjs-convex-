@@ -63,7 +63,7 @@ export const getMe = query({
 
     return ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject)) // 👈 fixed
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .first();
   },
 });

@@ -38,6 +38,7 @@ export default defineSchema({
     underReview: v.number(),
     needsRevision: v.number(),
     adviserId: v.optional(v.string()),
+    members: v.array(v.string()),
   }),
 
   deliverables: defineTable({
