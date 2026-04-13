@@ -4,9 +4,7 @@ export default function Notification() {
     const [open, setOpen] = useState(false);
 
     const notifications = [
-        { id: 1, title: "New message", desc: "You have a new message from Alex.", time: "2m ago", read: false },
-        { id: 2, title: "Update available", desc: "Version 2.1.0 is ready to install.", time: "1h ago", read: false },
-        { id: 3, title: "Reminder", desc: "Team standup starts in 15 minutes.", time: "3h ago", read: true },
+        { id: 1, title: " ", desc: "", time: "", read: false },
     ];
 
     const unreadCount = notifications.filter(n => !n.read).length;
@@ -15,7 +13,7 @@ export default function Notification() {
         <div className="relative">
             <button
                 onClick={() => setOpen(true)}
-                className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary relative"
+                className="p-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary relative"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.341 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -33,7 +31,7 @@ export default function Notification() {
             )}
 
             <div
-                className={`fixed top-0 right-0 h-full w-80 z-50 bg-white dark:bg-gray-900 shadow-xl flex flex-col transition-transform duration-300 ${
+                className={`fixed top-0 right-0 h-full w-80 z-50 bg-sidebar shadow-xl flex flex-col transition-transform duration-300 ${
                     open ? "translate-x-0" : "translate-x-full"
                 }`}
             >
