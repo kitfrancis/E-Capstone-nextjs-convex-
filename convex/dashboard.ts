@@ -30,40 +30,6 @@ export const getTasks = query({
   },
 });
 
-export const seed = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const projectId = await ctx.db.insert("capstoneProjects", {
-      teamName: "Team Codevenger",
-      projectTitle: "E-Capstone: Thesis Management System",
-      phase: "Development",
-      progress: 10,
-      approved: 1,
-      underReview: 1,
-      needsRevision: 0,
-    });
-
-    await ctx.db.insert("deliverables", {
-      capstoneProjectId: projectId,
-      fileName: "Project Proposal.pdf",
-      phase: "Proposal",
-      version: 2,
-      status: "approved",
-      fileSize: "2.0MB",
-      uploadedAt: "Oct 24, 2024",
-      comments: 1,
-    });
-
-    await ctx.db.insert("tasks", {
-      capstoneProjectId: projectId,
-      title: "Complete User Interface Mockups",
-      description: "Design and finalize all user interface mockups for application.",
-      assignedTo: "Team",
-      dueDate: "Dec 01, 2024",
-      status: "completed",
-    });
-  },
-});
 
 export const generateUploadUrl = mutation({
   args: {},

@@ -6,6 +6,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectDemo } from "@/app/components/select";
+import { Separator } from "@/components/ui/separator";
+import { SeparatorVertical } from "lucide-react";
 
 
 export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
@@ -96,9 +98,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
       </div>
 
       <TabsContent value="deliverables">
-        <Card>
-          <CardHeader>
-            <CardDescription>
+        
               {deliverables === undefined ? (
                 <p className="text-center py-4 text-gray-500">Loading...</p>
               ) : deliverables.length === 0 ? (
@@ -109,35 +109,33 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                 </div>
               ) : (
                 deliverables.map((d, i) => (
-                  <div key={i} className="flex flex-col mt-4 md:mt-2 border-b pb-4 mb-4 last:border-0">
+            <Card key={d._id} className="mb-5">
+          <CardHeader>
+            <CardDescription>
+                  <div className="flex flex-col mt-4 md:mt-2 border-b  last:border-0">
                     <div className="flex justify-between">
                       <div className="flex flex-col">
-                        <h1 className="font-medium text-lg">{d.fileName}</h1>
-                        <p className="text-gray-500">Phase: {d.phase} • Version {d.version}</p>
+                        <h1 className="font-medium text-foreground text-base">{d.fileName}</h1>
+                        <p className="text-muted-foreground text-xs font-medium">Phase: {d.phase} • Version {d.version}</p>
                       </div>
                       <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${getStatusColor(d.status)} text-white text-xs font-medium gap-1 h-6`}>
                         {getStatusLabel(d.status)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center mt-4 pb-3">
-                      <h1 className="text-gray-500 text-sm">{formatDate(d.uploadedAt)}</h1>
-                      <h1 className="text-gray-500 text-sm">Size {d.fileSize}</h1>
-                    </div>
-                    <div className="border-t border-gray-300 pt-3">
-                      <h1 className="flex flex-row gap-2 font-medium mb-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        {d.comments} Comment{d.comments !== 1 ? "s" : ""}
-                      </h1>
-                      <button className="text-sm font-medium items-center justify-center w-full border border-gray-300 rounded-lg px-2 py-1 hover:bg-gray-300 transition-colors">
+                    <Separator className="mt-3" />
+                    <div className="flex justify-between items-center mt-4 ">
+                      <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
+                      <button className="text-sm outline rounded-md py-1 px-2  transition-colors">
                         View Comments
                       </button>
                     </div>
                   </div>
-                ))
-              )}
-            </CardDescription>
+                  </CardDescription>
           </CardHeader>
         </Card>
+                ))
+              )}
+            
       </TabsContent>
 
       {/* UPLOAD TAB */}
