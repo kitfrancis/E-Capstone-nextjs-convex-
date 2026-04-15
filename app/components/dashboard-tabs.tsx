@@ -241,7 +241,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                     </div>
                     <div className="flex flex-col justify-end mt-3">
                       <p className="text-muted-foreground text-sm mb-5"><span className="font-medium">Description: </span>{task.description}</p>
-                      <p className="text-muted-foreground text-xs">Due: {task.dueDate}</p>
+                      <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
                     </div>
                   </div>
                   </CardDescription>

@@ -150,7 +150,7 @@ export function DialogDemo() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Members(If the student is missing from the search, they are already on a team.)</Label>
+            <Label className="">Members <span className="text-muted-foreground">(Shows unassigned students only.)</span> </Label>
             {selectedStudents.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-1">
                 {selectedStudents.map(id => (
@@ -171,9 +171,13 @@ export function DialogDemo() {
               onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
               disabled={selectedStudents.length >= 1}
             />
-            {selectedStudents.length >= 1 && (
-              <p className="text-xs text-amber-600 mt-1">Only 1 student per team allowed</p>
-            )}
+            {selectedStudents.length > 0 && (selectedStudents.length < 3 || selectedStudents.length > 4) && (
+                <p className="text-xs text-amber-600 mt-1 font-medium">
+                  {selectedStudents.length < 3 
+                    ? `Add ${3 - selectedStudents.length} more to meet the 3-4 student requirement.`
+                    : "Please remove students to stay within the 4-student limit."}
+                </p>
+              )}
             {showDropdown && filteredStudents.length > 0 && selectedStudents.length < 1 && (
               <div className="border border-gray-200 rounded-lg max-h-32 overflow-y-auto mt-1">
                 {filteredStudents.map(student => (
