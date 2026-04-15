@@ -15,6 +15,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { getAll } from "@/convex/archive"
 import { useState } from "react"
+import { toast } from "sonner"
 
 export function TaskDialogDemo() {
     const teams = useQuery(api.dashboard.getTeams);
@@ -32,25 +33,31 @@ export function TaskDialogDemo() {
       return;
     }
 
-    await createTask({
-      capstoneProjectId: selectedTeamId as any,
-      title: taskTitle,
-      description,
-      assignedTo: "Team",
-      dueDate,
-      status: "pending",
-    });
+    try {
+      await createTask({
+        capstoneProjectId: selectedTeamId as any,
+        title: taskTitle,
+        description: description || "No description provided",
+        assignedTo: "Team",
+        dueDate,
+        status: "pending",
+      });
 
-    setSelectedTeamId("");
-    setTaskTitle("");
-    setDescription("");
-    setDueDate("");
-    setOpen(false);
+      setSelectedTeamId("");
+      setTaskTitle("");
+      setDescription("");
+      setDueDate("");
+      setOpen(false);
+      toast.success("Task created successfully!");
+    } catch (error) {
+      console.error("Failed to create task:", error);
+      toast.error("Failed to create task");
+    }
   };
 
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-muted  text-foreground">
           <CalendarX2Icon /> Create Task
@@ -90,22 +97,37 @@ export function TaskDialogDemo() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="projectTitle">Task Title</Label>
-            <Input id="projectTitle" name="projectTitle" placeholder="e.g. Complete UI design" />
+            <Input 
+              id="projectTitle" 
+              placeholder="e.g. Complete UI design" 
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+            />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="adviser">Description</Label> 
-            <Textarea id="description" name="description" placeholder="Provide details about the task and its requirements." />
+            <Label htmlFor="description">Description</Label> 
+            <Textarea 
+              id="description" 
+              placeholder="Provide details about the task and its requirements." 
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
           <div className="space-y-1 mb-3">
-            <Label htmlFor="teamMembers">Due Date</Label>
-            <Input id="teamMembers" name="teamMembers" type="date" />
+            <Label htmlFor="dueDate">Due Date</Label>
+            <Input 
+              id="dueDate"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button type="submit">Create Task</Button>
+          <Button onClick={handleSubmit}>Create Task</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

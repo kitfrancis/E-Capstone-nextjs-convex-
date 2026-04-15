@@ -215,39 +215,41 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
 
       {/* TASKS TAB */}
       <TabsContent value="tasks">
-        <Card>
-          <CardHeader>
-            <CardDescription>
               {tasks === undefined ? (
                 <p className="text-center py-4 text-gray-500">Loading...</p>
               ) : tasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <p className="text-gray-500">No tasks yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Tasks will be created by your instructor</p>
                 </div>
               ) : (
                 tasks.map((task, i) => (
-                  <div key={i} className="rounded-lg px-3 mb-4 border-b pb-4 last:border-0">
+        <Card className="mb-3">
+          <CardHeader>
+            <CardDescription>
+                  <div key={i} className="rounded-lg   ">
                     <div className="flex flex-col mt-4 md:mt-2">
                       <div className="flex justify-between">
                         <div className="flex flex-col">
-                          <h1 className="font-medium text-lg">{task.title}</h1>
-                          <p className="text-gray-500">{task.assignedTo}</p>
+                          <h1 className="font-medium text-base">{task.title}</h1>
+                          <p className="text-muted-foreground text-xs">{task.assignedTo}</p>
                         </div>
                         <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
                           {task.status === "completed" ? "Completed" : task.status === "in_progress" ? "In Progress" : "Pending"}
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col mt-4">
-                      <p className="text-gray-500 text-sm">{task.description}</p>
-                      <p className="text-gray-500 text-sm">Due: {task.dueDate}</p>
+                    <div className="flex flex-col justify-end mt-3">
+                      <p className="text-muted-foreground text-sm mb-5"><span className="font-medium">Description: </span>{task.description}</p>
+                      <p className="text-muted-foreground text-xs">Due: {task.dueDate}</p>
                     </div>
                   </div>
-                ))
-              )}
-            </CardDescription>
+                  </CardDescription>
           </CardHeader>
         </Card>
+                ))
+              )}
+            
       </TabsContent>
     </Tabs>
   );

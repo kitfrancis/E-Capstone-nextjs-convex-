@@ -2,11 +2,21 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const getMyProject = query({
-  args: { clerkId: v.string(),  },
+  args: { clerkId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("capstoneProjects")
+    // Get the current user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
       .first();
+
+    if (!user) return null;
+
+    // Find a project where this user is in the members array
+    const projects = await ctx.db.query("capstoneProjects").collect();
+    const myProject = projects.find(p => p.members && p.members.includes(user._id));
+    
+    return myProject || null;
   },
 });
 
@@ -68,6 +78,37 @@ export const getTeams = query({
   },
 });
 
+export const getStudentTeams = query({
+  args: { studentId: v.string() },
+  handler: async (ctx, args) => {
+    // Query for projects that include this student
+    const allProjects = await ctx.db.query("capstoneProjects").collect();
+    return allProjects.filter(p => p.members && p.members.includes(args.studentId));
+  },
+});
+
+export const createCapstoneProject = mutation({
+  args: {
+    teamName: v.string(),
+    projectTitle: v.string(),
+    adviserId: v.string(),
+    members: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("capstoneProjects", {
+      teamName: args.teamName,
+      projectTitle: args.projectTitle,
+      phase: "Proposal",
+      progress: 0,
+      approved: 0,
+      underReview: 0,
+      needsRevision: 0,
+      adviserId: args.adviserId,
+      members: args.members,
+    });
+  },
+});
+
 export const createTask = mutation({
   args: {
     capstoneProjectId: v.id("capstoneProjects"),
@@ -90,5 +131,33 @@ export const createTask = mutation({
       dueDate: args.dueDate,
       status: args.status,
     });
+  },
+});
+
+export const getProjectMembers = query({
+  args: { capstoneProjectId: v.id("capstoneProjects") },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.capstoneProjectId);
+    if (!project || !project.members) return [];
+    
+    const members = [];
+    for (const memberId of project.members) {
+      const allUsers = await ctx.db.query("users").collect();
+      const user = allUsers.find(u => u._id === memberId);
+      if (user) members.push(user);
+    }
+    return members;
+  },
+});
+
+export const getProjectAdviser = query({
+  args: { capstoneProjectId: v.id("capstoneProjects") },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.capstoneProjectId);
+    if (!project || !project.adviserId) return null;
+    
+    const allUsers = await ctx.db.query("users").collect();
+    const adviser = allUsers.find(u => u._id === project.adviserId);
+    return adviser || null;
   },
 });

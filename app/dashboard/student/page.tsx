@@ -3,13 +3,23 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { TabsDemo } from "@/app/components/dashboard-tabs";
 import { Separator } from "@/components/ui/separator"
+import { Id } from "@/convex/_generated/dataModel";
  
 export default function Dashboard() {
   const me = useQuery(api.users.getMe);
-    const advisers = useQuery(api.users.getAdvisers);
   const project = useQuery(
     api.dashboard.getMyProject,
     me ? { clerkId: me.clerkId } : "skip"
+  );
+
+  const teamMembers = useQuery(
+    api.dashboard.getProjectMembers,
+    project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
+  );
+
+  const projectAdviser = useQuery(
+    api.dashboard.getProjectAdviser,
+    project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
   );
  
   return (
@@ -130,40 +140,40 @@ export default function Dashboard() {
                     <div className="border border-border rounded-2xl bg-card p-5 mb-6">
                       <div className="flex flex-row items-center gap-3">
                         <div className="w-13 h-13 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-                          {advisers === undefined ? (
+                          {projectAdviser === undefined ? (
                             <span className="text-muted-foreground">?</span>
-                          ) : advisers.length === 0 ? ( 
+                          ) : projectAdviser === null ? ( 
                             <span className="text-muted-foreground">-</span>
                           ) : (
-                            advisers[0].name.charAt(0)
+                            projectAdviser.name.charAt(0)
                           )}
                         </div>
                         <div className="">
                           <p className="text-base font-medium text-foreground">
-                            {advisers === undefined ? (
+                            {projectAdviser === undefined ? (
                               <span className="text-muted-foreground">Loading...</span>
-                            ) : advisers.length === 0 ? (
-                              <span className="text-muted-foreground">No advisers found</span>
+                            ) : projectAdviser === null ? (
+                              <span className="text-muted-foreground">No adviser assigned</span>
                             ) : (
-                              advisers[0].name
+                              projectAdviser.name
                             )}
                           </p>
                           <p className="text-sm font-medium text-muted-foreground">
-                            {advisers === undefined ? (
+                            {projectAdviser === undefined ? (
                               <span className="text-muted-foreground">Loading...</span>
-                            ) : advisers.length === 0 ? (
-                              <span className="text-muted-foreground">No advisers found</span>
+                            ) : projectAdviser === null ? (
+                              <span className="text-muted-foreground">—</span>
                             ) : (
-                              advisers[0].course
+                              projectAdviser.role
                             )}
                           </p>
-                          <p className="text-sm font font-medium text-muted-foreground">
-                            {advisers === undefined ? (
+                          <p className="text-sm font-medium text-muted-foreground">
+                            {projectAdviser === undefined ? (
                               <span className="text-muted-foreground">Loading...</span>
-                            ): advisers.length === 0 ? (
-                              <span className="text-muted-foreground">No advisers found</span>
+                            ): projectAdviser === null ? (
+                              <span className="text-muted-foreground">—</span>
                             ) : (
-                              advisers[0].email
+                              projectAdviser.email
                             )}
                           </p>
                         </div>
@@ -184,178 +194,46 @@ export default function Dashboard() {
              <div className="flex flex-col">
                     <h1 className="text-xs font-semibold text-foreground mb-3">TEAM MEMBERS</h1>
                     <div className="border border-border rounded-2xl bg-card p-5 mb-6">
-                      {/* {project.members.map((member) => 
-                        <div key={member.id} className="flex flex-row items-center gap-3 mb-4">
-                          <div className="w-13 h-13 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-                            {member.name.charAt(0)}
-                          </div>
-                          <div className="">
-                            <p className="text-base font-medium text-foreground">
-                              {member.name}
-                            </p>
-                            <p className="text-sm font-medium text-muted-foreground">
-                              {member.course}
-                            </p>
-                            <p className="text-sm font font-medium text-muted-foreground">
-                              {member.email}
-                            </p>
-                          </div>
-                        </div> */}
-                        
-                        <div className="flex flex-col gap-3 mb-4">
-                          <div className="flex flex-row gap-6 items-center">
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-                              {me === undefined ? (
-                                <span className="text-muted-foreground">?</span>
-                              ) : me ? (
-                               me.name
-                                .split(" ")
-                                .filter(Boolean) 
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-
-                          </div>
-                            <div>
-                              <div className="flex item-center justify-center gap-1">
-                                  <p className="text-base font-medium text-foreground">
-                                {me === undefined ? (
-                                  <span className="text-muted-foreground">Loading...</span>
-                                ) : (
-                                  me?.name ?? "—"
-                                )}
-                              </p>
-
-                                <p className="py-1.5 px-3 flex items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                                You
-                              </p>
-                              </div>
-                              
-                              <p className="text-sm font-medium text-muted-foreground ">
-                                {me?.role ?? "—"}
-                              </p>
-                            </div>
-                              
-                          
-                          </div>
-
-                          
+                      {teamMembers === undefined ? (
+                        <div className="flex flex-col gap-3">
+                          <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
                         </div>
-                        <Separator className="mt-5"/>
-
-                        <div className="mt-5 flex flex-col gap-4">
-                            <div className="flex flex-row gap-6 items-center ">
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-                              {me === undefined ? (
-                                <span className="text-muted-foreground">?</span>
-                              ) : me ? (
-                               me.name
-                                .split(" ")
-                                .filter(Boolean) 
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-
-                          </div>
-                            <div>
-                              <div className="flex item-center justify-center gap-1">
-                                  <p className="text-base font-medium text-foreground">
-                                {me === undefined ? (
-                                  <span className="text-muted-foreground">Loading...</span>
-                                ) : (
-                                  me?.name ?? "—"
-                                )}
-                              </p>
+                      ) : teamMembers.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No team members found</p>
+                      ) : (
+                        <div className="flex flex-col gap-4">
+                          {teamMembers.map((member) => (
+                            <div key={member._id} className="flex flex-row gap-6 items-center">
+                              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
+                                {member.name
+                                  .split(" ")
+                                  .filter(Boolean)
+                                  .map((n: string) => n[0])
+                                  .join("")
+                                  .slice(0, 2)}
                               </div>
-                              
-                              <p className="text-sm font-medium text-muted-foreground ">
-                                {me?.role ?? "—"}
-                              </p>
-                            </div>
-                              
-                          
-                          </div>
-
-                          <div className="flex flex-row gap-6 items-center ">
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-                              {me === undefined ? (
-                                <span className="text-muted-foreground">?</span>
-                              ) : me ? (
-                               me.name
-                                .split(" ")
-                                .filter(Boolean) 
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-
-                          </div>
-                            <div>
-                              <div className="flex item-center justify-center gap-1">
+                              <div>
+                                <div className="flex items-center justify-start gap-1">
                                   <p className="text-base font-medium text-foreground">
-                                {me === undefined ? (
-                                  <span className="text-muted-foreground">Loading...</span>
-                                ) : (
-                                  me?.name ?? "—"
-                                )}
-                              </p>
+                                    {member.name}
+                                  </p>
+                                  {me?._id === member._id && (
+                                    <p className="py-1.5 px-3 flex items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
+                                      You
+                                    </p>
+                                  )}
+                                </div>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  {member.role}
+                                </p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  {member.email}
+                                </p>
                               </div>
-                              
-                              <p className="text-sm font-medium text-muted-foreground ">
-                                {me?.role ?? "—"}
-                              </p>
                             </div>
-                              
-                          
-                          </div>
-                          <div className="flex flex-row gap-6 items-center ">
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
-                              {me === undefined ? (
-                                <span className="text-muted-foreground">?</span>
-                              ) : me ? (
-                               me.name
-                                .split(" ")
-                                .filter(Boolean) 
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-
-                          </div>
-                            <div>
-                              <div className="flex item-center justify-center gap-1">
-                                  <p className="text-base font-medium text-foreground">
-                                {me === undefined ? (
-                                  <span className="text-muted-foreground">Loading...</span>
-                                ) : (
-                                  me?.name ?? "—"
-                                )}
-                              </p>
-                              </div>
-                              
-                              <p className="text-sm font-medium text-muted-foreground ">
-                                {me?.role ?? "—"}
-                              </p>
-                            </div>
-                              
-                          
-                          </div>
-
+                          ))}
                         </div>
-
-                        
-                          
-                          
+                      )}
                     </div>
              </div>
             </div>
