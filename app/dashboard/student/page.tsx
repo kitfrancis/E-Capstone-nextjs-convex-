@@ -24,7 +24,7 @@ export default function Dashboard() {
  
   return (
     <div className="scroll-smooth font-Poppins bg-background min-h-screen">
-      <div className="mx-3 px-3 lg:ml-1 lg:px-5 pb-10">
+      <div className=" lg:ml-1 lg:px-5 pb-5">
  
         {/* Header */}
         <div className="mt-10 mb-6">
@@ -76,14 +76,12 @@ export default function Dashboard() {
         ) : (
           <>
             <div className="border border-border rounded-2xl bg-card p-5 mb-6">
- 
-            
               <div className="flex items-start justify-between gap-3 mb-5">
                 <div>
                   <h2 className="text-base font-semibold text-foregrou nd leading-tight">
                     {project.teamName}
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-xs lg:text-sm text-muted-foreground mt-1 lg:mt-0.5">
                     {project.projectTitle}
                   </p>
                 </div>
@@ -94,13 +92,13 @@ export default function Dashboard() {
 
               <div className="mb-5">
                 <div className="flex justify-between items-center mb-2">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs lg:text-sm text-muted-foreground">
                     Current phase:{" "}
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium text-foreground text-xs lg:text-sm">
                       {project.phase}
                     </span>
                   </p>
-                  <span className="text-sm font-semibold text-foreground">
+                  <span className="text-sm font-semibold text-foreground ">
                     {project.progress}%
                   </span>
                 </div>
@@ -113,21 +111,21 @@ export default function Dashboard() {
               </div>
  
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-muted/60 p-3 text-center">
+                <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3 ">
                 <p className="text-xs text-muted-foreground mt-0.5">Approved</p>
                   <p className="text-xl font-semibold text-green-700 dark:text-green-400">
                     {project.approved}
                   </p>
                   
                 </div>
-                <div className="rounded-xl bg-muted/60 p-3 text-center">
-                  <p className="text-xs text-muted-foreground mt-0.5">Under review</p>
+                <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground mt-0.5">Under_review</p>
                   <p className="text-xl font-semibold text-blue-700 dark:text-blue-400">
                     {project.underReview}
                   </p>
                 </div>
-                <div className="rounded-xl bg-muted/60 p-3 text-center">
-                  <p className="text-xs text-muted-foreground mt-0.5">Needs revision</p>
+                <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground mt-0.5">Needs_revision</p>
                   <p className="text-xl font-semibold text-amber-700 dark:text-amber-400">
                     {project.needsRevision}
                   </p>
@@ -136,10 +134,10 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="flex flex-col">
-                   <h1 className="text-xs font-semibold text-foreground mb-3">ADVISER</h1>
-                    <div className="border border-border rounded-2xl bg-card p-5 mb-6">
+                   <h1 className="text-xs font-semibold text-foreground mb-2 lg:mb-3">ADVISER</h1>
+                    <div className="border border-border rounded-2xl bg-card p-3.5 lg:p-5 mb-1 lg:mb-6">
                       <div className="flex flex-row items-center gap-3">
-                        <div className="w-13 h-13 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
+                        <div className="w-11 h-11 lg:w-13 lg:h-13 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
                           {projectAdviser === undefined ? (
                             <span className="text-muted-foreground">?</span>
                           ) : projectAdviser === null ? ( 
@@ -149,7 +147,7 @@ export default function Dashboard() {
                           )}
                         </div>
                         <div className="">
-                          <p className="text-base font-medium text-foreground">
+                          <p className="text-sm lg:text-base font-medium text-foreground">
                             {projectAdviser === undefined ? (
                               <span className="text-muted-foreground">Loading...</span>
                             ) : projectAdviser === null ? (
@@ -158,7 +156,7 @@ export default function Dashboard() {
                               projectAdviser.name
                             )}
                           </p>
-                          <p className="text-sm font-medium text-muted-foreground">
+                          <p className="text-xs lg:text-sm font-medium text-muted-foreground">
                             {projectAdviser === undefined ? (
                               <span className="text-muted-foreground">Loading...</span>
                             ) : projectAdviser === null ? (
@@ -167,7 +165,7 @@ export default function Dashboard() {
                               projectAdviser.role
                             )}
                           </p>
-                          <p className="text-sm font-medium text-muted-foreground">
+                          <p className=" text-xs lg:text-sm font-medium text-muted-foreground">
                             {projectAdviser === undefined ? (
                               <span className="text-muted-foreground">Loading...</span>
                             ): projectAdviser === null ? (
@@ -180,11 +178,11 @@ export default function Dashboard() {
                         </div>
                         <Separator className="mt-5"/>
 
-                        <div className="flex flex-row gap-4 mt-5 items-center">
-                            <p className="p-2 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-foreground">
+                        <div className="flex flex-row gap-2 lg:gap-4 mt-3 lg:mt-5 items-center">
+                            <p className="p-1.5 lg:p-2 rounded-full bg-muted flex items-center justify-center text-xs lg:text-xs font-medium text-foreground">
                               Adviser
                             </p>
-                            <p className="text-sm font-medium text-muted-foreground">
+                            <p className="text-xs lg:text-sm font-medium text-muted-foreground">
                               Room
                             </p>
                         </div>
@@ -193,17 +191,17 @@ export default function Dashboard() {
              
              <div className="flex flex-col">
                     <h1 className="text-xs font-semibold text-foreground mb-3">TEAM MEMBERS</h1>
-                    <div className="border border-border rounded-2xl bg-card p-5 mb-6">
+                    <div className="border border-border rounded-2xl bg-card p-3.5 lg:p-5 mb-6">
                       {teamMembers === undefined ? (
                         <div className="flex flex-col gap-3">
-                          <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
+                          <p className="text-xs lg:text-sm text-muted-foreground animate-pulse">Loading members...</p>
                         </div>
                       ) : teamMembers.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No team members found</p>
                       ) : (
                         <div className="flex flex-col gap-4">
                           {teamMembers.map((member) => (
-                            <div key={member._id} className="flex flex-row gap-6 items-center">
+                            <div key={member._id} className="flex flex-row gap-3 lg:gap-6 items-center">
                               <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
                                 {member.name
                                   .split(" ")
@@ -214,19 +212,19 @@ export default function Dashboard() {
                               </div>
                               <div>
                                 <div className="flex items-center justify-start gap-1">
-                                  <p className="text-base font-medium text-foreground">
+                                  <p className="text-sm lg:text-base font-medium text-foreground">
                                     {member.name}
                                   </p>
                                   {me?._id === member._id && (
-                                    <p className="py-1.5 px-3 flex items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
+                                    <p className="py-1 lg:py-1.5 px-2 lg:px-3 flex items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
                                       You
                                     </p>
                                   )}
                                 </div>
-                                <p className="text-sm font-medium text-muted-foreground">
+                                <p className="text-xs lg:text-sm font-medium text-muted-foreground">
                                   {member.role}
                                 </p>
-                                <p className="text-sm font-medium text-muted-foreground">
+                                <p className="text-xs lg:text-sm font-medium text-muted-foreground">
                                   {member.email}
                                 </p>
                               </div>

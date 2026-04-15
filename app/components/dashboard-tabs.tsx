@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectDemo } from "@/app/components/select";
 import { Separator } from "@/components/ui/separator";
 import { SeparatorVertical } from "lucide-react";
+import { Toaster } from "@/components/ui/sonner"
+import { toast } from "sonner";
 
 
 export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
@@ -29,6 +31,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    toast.error("File uploads are currently disabled while we work out some issues. Please check back later.");
     if (e.target.files?.[0]) setFile(e.target.files[0]);
   };
 
@@ -36,7 +39,6 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
     if (!file || !phase || !capstoneProjectId) return;
     setUploading(true);
     try {
-      // Get upload URL from Convex
       const uploadUrl = await generateUploadUrl();
 
       // Upload file to Convex storage
@@ -112,20 +114,20 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
             <Card key={d._id} className="mb-5">
           <CardHeader>
             <CardDescription>
-                  <div className="flex flex-col mt-4 md:mt-2 border-b  last:border-0">
+                  <div className="flex flex-col mt-0 lg:mt-2 border-b  last:border-0">
                     <div className="flex justify-between">
                       <div className="flex flex-col">
-                        <h1 className="font-medium text-foreground text-base">{d.fileName}</h1>
+                        <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
                         <p className="text-muted-foreground text-xs font-medium">Phase: {d.phase} • Version {d.version}</p>
                       </div>
-                      <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${getStatusColor(d.status)} text-white text-xs font-medium gap-1 h-6`}>
+                      <span className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium  h-5 lg:h-6`}>
                         {getStatusLabel(d.status)}
                       </span>
                     </div>
                     <Separator className="mt-3" />
                     <div className="flex justify-between items-center mt-4 ">
                       <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
-                      <button className="text-sm outline rounded-md py-1 px-2  transition-colors">
+                      <button className="text-xs lg:text-sm outline rounded-md py-1 px-2  transition-colors">
                         View Comments
                       </button>
                     </div>
