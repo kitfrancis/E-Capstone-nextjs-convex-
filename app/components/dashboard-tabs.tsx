@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { SeparatorVertical } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner";
+import { PDFViewer } from "@/app/components/PDFViewer";
 
 
 export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
@@ -18,6 +19,10 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  //for pdf viewer
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string} | null>(null);
+  const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
@@ -41,7 +46,6 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
     try {
       const uploadUrl = await generateUploadUrl();
 
-      // Upload file to Convex storage
       const result = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": file.type },
@@ -49,7 +53,6 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
       });
       const { storageId } = await result.json();
 
-      // Save metadata to database
       await saveDeliverable({
         storageId,
         fileName: file.name,
@@ -114,7 +117,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
             <Card key={d._id} className="mb-5">
           <CardHeader>
             <CardDescription>
-                  <div className="flex flex-col mt-0 lg:mt-2 border-b  last:border-0">
+                  <div onClick={() => setSelectedDeliverable({fileName: d.fileName, storageId: d.storageId!})} className="flex flex-col mt-0 lg:mt-2 border-b  last:border-0">
                     <div className="flex justify-between">
                       <div className="flex flex-col">
                         <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
@@ -140,7 +143,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
             
       </TabsContent>
 
-      {/* UPLOAD TAB */}
+      {/* Upload */}
       <TabsContent value="uploads">
         <Card>
           <CardHeader>
@@ -215,7 +218,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
         </Card>
       </TabsContent>
 
-      {/* TASKS TAB */}
+      {/* task*/}
       <TabsContent value="tasks">
               {tasks === undefined ? (
                 <p className="text-center py-4 text-gray-500">Loading...</p>
@@ -254,6 +257,15 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
               )}
             
       </TabsContent>
+      {/* for pdf viewer */}
+      <PDFViewer
+  open={!!selectedDeliverable && !!fileUrl}
+  fileUrl={fileUrl ?? ""}
+  fileName={selectedDeliverable?.fileName ?? ""}
+  onClose={() => setSelectedDeliverable(null)}
+/>
     </Tabs>
+    
+
   );
 }

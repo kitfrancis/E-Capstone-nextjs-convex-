@@ -158,3 +158,11 @@ export const getProjectAdviser = query({
     return adviser || null;
   },
 });
+
+
+export const getFileUrl = query({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    return await ctx.storage.getUrl(args.storageId);
+  },
+});
