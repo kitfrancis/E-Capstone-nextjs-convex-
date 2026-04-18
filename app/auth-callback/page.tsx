@@ -26,7 +26,6 @@ export default function AuthCallback() {
 
     const handle = async () => {
       if (!me) {
-        // 🆕 New user — save with intended role
         await upsertUser({
           clerkId: user.id,
           name: user.fullName ?? "Unknown",
@@ -36,21 +35,15 @@ export default function AuthCallback() {
         });
 
          if (!me) {
-      // 🆕 New user
       sessionStorage.removeItem("intendedRole");
       router.push(`/dashboard/${intendedRole}`);
     }
-        sessionStorage.removeItem("intendedRole");
-        router.push(`/dashboard/${intendedRole}`);
       } else {
-        // 👤 Existing user — STRICTLY check role
         if (me.role !== intendedRole) {
-          // ❌ Wrong role selected
           sessionStorage.removeItem("intendedRole");
           router.push("/unauthorized");
           return;
         }
-        // ✅ Correct role
         sessionStorage.removeItem("intendedRole");
         router.push(`/dashboard/${me.role}`);
       }

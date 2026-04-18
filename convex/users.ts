@@ -25,7 +25,6 @@ export const upsertUser = mutation({
       await ctx.db.patch(existing._id, {
         email: args.email,
         image: args.image,
-        role: args.role,
       });
     }
   },

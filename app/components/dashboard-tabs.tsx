@@ -184,7 +184,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
 
                   {success && (
                     <div className="bg-green-50 border border-green-300 text-green-700 text-sm rounded-lg px-4 py-2">
-                      ✅ File uploaded successfully!
+                      File uploaded successfully!
                     </div>
                   )}
 
@@ -225,11 +225,11 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                   <p className="text-xs text-gray-400 mt-1">Tasks will be created by your instructor</p>
                 </div>
               ) : (
-                tasks.map((task, i) => (
-        <Card className="mb-3">
+                tasks.map((task) => (
+        <Card key={task._id} className="mb-3">
           <CardHeader>
             <CardDescription>
-                  <div key={i} className="rounded-lg   ">
+                  <div  className="rounded-lg">
                     <div className="flex flex-col mt-4 md:mt-2">
                       <div className="flex justify-between">
                         <div className="flex flex-col">
@@ -241,6 +241,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                         </span>
                       </div>
                     </div>
+                    <Separator className="mt-3"/>
                     <div className="flex flex-col justify-end mt-3">
                       <p className="text-muted-foreground text-sm mb-5"><span className="font-medium">Description: </span>{task.description}</p>
                       <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react"; // Added useQuery
+import { useMutation, useQuery } from "convex/react"; 
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
 
@@ -19,7 +19,6 @@ export function SyncUser() {
     fullName: user.fullName,
     firstName: user.firstName,
     lastName: user.lastName,
-    username: user.username,
     email: user.emailAddresses[0].emailAddress,
   });
 

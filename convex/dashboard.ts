@@ -4,7 +4,6 @@ import { v } from "convex/values";
 export const getMyProject = query({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
-    // Get the current user
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
@@ -12,7 +11,6 @@ export const getMyProject = query({
 
     if (!user) return null;
 
-    // Find a project where this user is in the members array
     const projects = await ctx.db.query("capstoneProjects").collect();
     const myProject = projects.find(p => p.members && p.members.includes(user._id));
     
@@ -81,7 +79,6 @@ export const getTeams = query({
 export const getStudentTeams = query({
   args: { studentId: v.string() },
   handler: async (ctx, args) => {
-    // Query for projects that include this student
     const allProjects = await ctx.db.query("capstoneProjects").collect();
     return allProjects.filter(p => p.members && p.members.includes(args.studentId));
   },
