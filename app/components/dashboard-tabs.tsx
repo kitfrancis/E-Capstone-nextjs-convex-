@@ -10,7 +10,13 @@ import { Separator } from "@/components/ui/separator";
 import { SeparatorVertical } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner";
-import { PDFViewer } from "@/app/components/PDFViewer";
+import dynamic from "next/dynamic";
+
+// Dynamically import PDFViewer to avoid SSR issues
+const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-64">Loading PDF viewer...</div>
+});
 
 
 export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
@@ -176,19 +182,11 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                         </>
                       )}
                     </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,.zip"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
+                    <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.zip" onChange={handleFileChange} className="hidden" />
                   </div>
 
                   {success && (
-                    <div className="bg-green-50 border border-green-300 text-green-700 text-sm rounded-lg px-4 py-2">
-                      File uploaded successfully!
-                    </div>
+                  toast.success("Upload Successfully!")
                   )}
 
                   <div className="flex flex-col max-h-auto bg-sidebar outline rounded-lg mt-5 px-5 py-3">
@@ -202,11 +200,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                   </div>
 
                   <div className="border-t border-gray-300 mt-3">
-                    <button
-                      onClick={handleUpload}
-                      disabled={!file || !phase || uploading}
-                      className="text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
+                    <button onClick={handleUpload} disabled={!file || !phase || uploading} className="text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                       {uploading ? "Uploading..." : "Upload Deliverable"}
                     </button>

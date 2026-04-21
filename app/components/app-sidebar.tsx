@@ -75,16 +75,17 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <div className="cursor-default">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <LayoutDashboard className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold text-lg">E-Capstone</span>
-                  <span className="text-base capitalize text-muted-foreground">
-                    {me?.role ?? "—"}
-                  </span>
+          <SidebarMenuButton size="lg" asChild>
+            <div className="cursor-default">
+             <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <LayoutDashboard className="size-4" />
+             </div>
+
+            <div className="flex flex-col gap-0.5 leading-none">
+              <span className="font-semibold text-lg">E-Capstone</span>
+                <span className="text-base capitalize text-muted-foreground">
+                  {me?.role ?? "—"}
+                </span>
                 </div>
               </div>
             </SidebarMenuButton>
@@ -114,14 +115,13 @@ export function AppSidebar() {
                       <SidebarGroupContent>
                         <SidebarMenuSub>
                           {link.children.map((child) => (
-                            <SidebarMenuSubItem key={child.href}>
+                           <SidebarMenuSubItem key={child.href}>
                               <SidebarMenuSubButton
-                                asChild
-                                isActive={pathname === child.href}
-                              >
-                                <button onClick={() => router.push(child.href)}>
-                                  <child.icon />
-                                  <span>{child.label}</span>
+                              asChild
+                              isActive={pathname === child.href}>
+                               <button onClick={() => router.push(child.href)}>
+                                 <child.icon />
+                             <span>{child.label}</span>
                                 </button>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>

@@ -69,4 +69,12 @@ export default defineSchema({
       v.literal("pending")
     ),
   }),
+
+  notifications: defineTable({
+    userId: v.string(),
+    message: v.string(),
+    read: v.boolean(),
+    type: v.string(),
+    relatedId: v.optional(v.string()),
+  }).index("by_user", ["userId"]).index("by_user_read", ["userId", "read"]),
 });

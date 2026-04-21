@@ -10,6 +10,7 @@
 
 import type * as archive from "../archive.js";
 import type * as dashboard from "../dashboard.js";
+import type * as notifications from "../notifications.js";
 import type * as users from "../users.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   archive: typeof archive;
   dashboard: typeof dashboard;
+  notifications: typeof notifications;
   users: typeof users;
 }>;
 

@@ -97,30 +97,16 @@ export function TaskDialogDemo() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="projectTitle">Task Title</Label>
-            <Input 
-              id="projectTitle" 
-              placeholder="e.g. Complete UI design" 
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-            />
+            <Input  id="projectTitle"  placeholder="e.g. Complete UI design" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="description">Description</Label> 
             <Textarea 
-              id="description" 
-              placeholder="Provide details about the task and its requirements." 
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+              id="description" placeholder="Provide details about the task and its requirements." value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="space-y-1 mb-3">
             <Label htmlFor="dueDate">Due Date</Label>
-            <Input 
-              id="dueDate"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
+            <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}/>
           </div>
         </div>
         <DialogFooter>

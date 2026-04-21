@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 
 export const getMyProject = query({
   args: { clerkId: v.string() },
@@ -92,7 +93,7 @@ export const createCapstoneProject = mutation({
     members: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("capstoneProjects", {
+    const projectId = await ctx.db.insert("capstoneProjects", {
       teamName: args.teamName,
       projectTitle: args.projectTitle,
       phase: "Proposal",
@@ -103,6 +104,24 @@ export const createCapstoneProject = mutation({
       adviserId: args.adviserId,
       members: args.members,
     });
+
+    for (const memberId of args.members) {
+      await ctx.runMutation(api.notifications.sendNotification, {
+        userId: memberId,
+        message: `You have been added to team "${args.teamName}" for project "${args.projectTitle}".`,
+        type: "team_created",
+        relatedId: projectId,
+      });
+    }
+
+    await ctx.runMutation(api.notifications.sendNotification, {
+      userId: args.adviserId,
+      message: `You have been assigned as adviser for team "${args.teamName}" on project "${args.projectTitle}".`,
+      type: "team_created",
+      relatedId: projectId,
+    });
+
+    return projectId;
   },
 });
 
@@ -120,7 +139,7 @@ export const createTask = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("tasks", {
+    const taskId = await ctx.db.insert("tasks", {
       capstoneProjectId: args.capstoneProjectId,
       title: args.title,
       description: args.description,
@@ -128,6 +147,20 @@ export const createTask = mutation({
       dueDate: args.dueDate,
       status: args.status,
     });
+
+    const project = await ctx.db.get(args.capstoneProjectId);
+    if (project && project.members) {
+      for (const memberId of project.members) {
+        await ctx.runMutation(api.notifications.sendNotification, {
+          userId: memberId,
+          message: `A new task "${args.title}" has been assigned to your team. Due date: ${args.dueDate}.`,
+          type: "task_assigned",
+          relatedId: taskId,
+        });
+      }
+    }
+
+    return taskId;
   },
 });
 

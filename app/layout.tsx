@@ -5,6 +5,8 @@ import { SyncUser } from "@/components/SyncUsers";
 import ThemeProviderWrapper from "@/components/ui/ThemeProviderWrapper";
 import { ThemeToggle } from "@/components/ui/theme-provider";
 import "./globals.css";
+import { Toaster } from "sonner"
+import { Toast } from "radix-ui";
 
 export const metadata: Metadata = {
   title: "E-capstone",
@@ -28,6 +30,7 @@ export default function RootLayout({
               <SyncUser />
               <main>
                 {children}
+                <Toaster/>
               </main>
             </ConvexClientProvider>
           </ThemeProviderWrapper>

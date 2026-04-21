@@ -54,12 +54,10 @@ export function PDFViewer({ fileUrl, fileName, open, onClose }: Props) {
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
       <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
 
-        {/* Header */}
         <DialogHeader className="px-4 py-3 border-b shrink-0">
           <DialogTitle className="text-sm truncate pr-6">{fileName}</DialogTitle>
         </DialogHeader>
 
-        {/* PDF Viewer — scrollable area */}
         <div
           ref={containerRef}
           className="flex-1 overflow-auto flex flex-col items-center p-4 bg-muted/30 min-h-0"
@@ -94,7 +92,6 @@ export function PDFViewer({ fileUrl, fileName, open, onClose }: Props) {
           )}
         </div>
 
-        {/* Page Controls — sticky bottom */}
         {numPages > 0 && (
           <div className="flex gap-3 items-center justify-center border-t px-4 py-3 bg-background shrink-0">
             <Button
