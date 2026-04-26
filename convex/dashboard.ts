@@ -40,12 +40,32 @@ export const getTasks = query({
 });
 
 
+export const getAllTasks = query({
+  args: {},
+  handler: async (ctx) => {
+    const tasks = await ctx.db.query("tasks").collect();
+    return await Promise.all(
+      tasks.map(async (task) => {
+        const project = await ctx.db.get(task.capstoneProjectId);
+        return {
+          ...task,
+          teamName: project?.teamName ?? "Unknown Team",
+        };
+      })
+    );
+  },
+});
+
+
+
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
     return await ctx.storage.generateUploadUrl();
   },
 });
+
+
 
 export const saveDeliverable = mutation({
   args: {
@@ -69,6 +89,32 @@ export const saveDeliverable = mutation({
     });
   },
 });
+
+
+
+
+export const getAllDeliverables = query({
+  args: {},
+  handler: async (ctx) => {
+    const deliverables = await ctx.db.query("deliverables").collect();
+    return await Promise.all(
+      deliverables.map(async (d) => {
+        const project = await ctx.db.get(d.capstoneProjectId);
+        return {
+          ...d,                                         
+          teamName: project?.teamName ?? "Unknown Team", 
+        };
+      })
+    );
+  },
+});
+
+
+
+
+
+
+
 
 export const getTeams = query({
   args: {},
@@ -139,16 +185,17 @@ export const createTask = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    
+    const project = await ctx.db.get(args.capstoneProjectId);
     const taskId = await ctx.db.insert("tasks", {
       capstoneProjectId: args.capstoneProjectId,
       title: args.title,
       description: args.description,
-      assignedTo: args.assignedTo,
+      assignedTo: project?.teamName ?? args.assignedTo,
       dueDate: args.dueDate,
       status: args.status,
     });
 
-    const project = await ctx.db.get(args.capstoneProjectId);
     if (project && project.members) {
       for (const memberId of project.members) {
         await ctx.runMutation(api.notifications.sendNotification, {
@@ -161,7 +208,7 @@ export const createTask = mutation({
     }
 
     return taskId;
-  },
+  },  
 });
 
 export const getProjectMembers = query({
@@ -199,3 +246,36 @@ export const getFileUrl = query({
     return await ctx.storage.getUrl(args.storageId);
   },
 });
+
+
+
+
+
+export const updateTask = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    title: v.string(),
+    description: v.string(),
+    dueDate: v.string(),
+    capstoneProjectId: v.id("capstoneProjects"),
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.capstoneProjectId);
+
+    await ctx.db.patch(args.taskId, {
+      title: args.title,
+      description: args.description,
+      dueDate: args.dueDate,
+      capstoneProjectId: args.capstoneProjectId,
+      assignedTo: project?.teamName ?? "Team",
+    });
+  },
+});
+
+
+export const deleteTask = mutation({
+  args: {taskId: v.id("tasks")}, 
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.taskId);
+  }
+})

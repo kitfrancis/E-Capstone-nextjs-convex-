@@ -26,7 +26,6 @@ export default function Dashboard() {
     <div className="scroll-smooth font-Poppins bg-background min-h-screen">
       <div className=" lg:ml-1 lg:px-5 pb-5">
  
-        {/* Header */}
         <div className="mt-10 mb-6">
           <h1 className="text-2xl font-semibold text-foreground">
             Welcome back,{" "}
@@ -41,7 +40,6 @@ export default function Dashboard() {
           </p>
         </div>
  
-        {/* Not in a team */}
         {project === null ? (
           <div className="border border-border rounded-2xl p-10 mt-4 flex flex-col items-center justify-center text-center gap-3 bg-muted/30">
             <svg

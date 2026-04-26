@@ -11,6 +11,11 @@ import { SeparatorVertical } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 // Dynamically import PDFViewer to avoid SSR issues
 const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
@@ -154,22 +159,22 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
         <Card>
           <CardHeader>
             <CardDescription>
-              <div className="flex flex-col max-h-auto bg-sidebar rounded-lg mt-1 p-5">
+              <div className="flex flex-col max-h-auto bg-sidebar rounded-lg mt-1 lg:p-5">
                 <div className="flex flex-col gap-1">
-                  <h1 className="text-base font-semibold">Upload Project Deliverable</h1>
-                  <p className="text-sm text-gray-500">Upload a new version of your project deliverable for review</p>
+                  <h1 className="text-foreground text-sm lg:text-base font-semibold">Upload Project Deliverable</h1>
+                  <p className="text-xs lg:text-sm text-muted-foreground">Upload a new version of your project deliverable for review</p>
                 </div>
 
-                <div className="space-y-1 mt-5 flex flex-col w-full">
-                  <label className="text-sm font-semibold">Project Phase</label>
+                <div className="space-y-1 mt-3 lg:mt-5 flex flex-col w-full">
+                  <label className="text-foreground text-xs lg:text-sm font-semibold">Project Phase</label>
                   <SelectDemo onValueChange={setPhase} />
                 </div>
 
                 <div className="space-y-2 mt-2">
-                  <label className="font-semibold items-center text-sm">Select File</label>
+                  <label className="font-semibold text-foreground items-center text-xs lg:text-sm">Select File</label>
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="cursor-pointer border-2 border-dashed border-gray-400 hover:border-gray-600 rounded-lg flex items-center justify-center p-7 mt-1"
+                    className="cursor-pointer border-2 border-dashed border-gray-400 hover:border-gray-600 rounded-lg flex items-center justify-center p-5 lg:p-7 mt-1"
                   >
                     <div className="flex flex-col items-center justify-center">
                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 mx-auto mb-3 text-gray-400"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
@@ -177,8 +182,8 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                         <p className="text-gray-800 font-medium">{file.name}</p>
                       ) : (
                         <>
-                          <p className="text-gray-600">Click to select a file</p>
-                          <p className="text-xs text-gray-500 mt-1">PDF, DOC, DOCX, or ZIP (max 50MB)</p>
+                          <p className="text-foreground text-xs">Click to select a file</p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, or ZIP (max 50MB)</p>
                         </>
                       )}
                     </div>
@@ -190,17 +195,17 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                   )}
 
                   <div className="flex flex-col max-h-auto bg-sidebar outline rounded-lg mt-5 px-5 py-3">
-                    <h1 className="text-sm font-medium">Submission Process</h1>
+                    <h1 className="tex-xs lg:text-sm font-medium">Submission Process</h1>
                     <ul className="list-disc pl-3 text-start text-sm space-y-1 mt-1">
-                      <li className="marker:text-purple-600 text-gray-600">Upload project deliverables</li>
-                      <li className="marker:text-blue-600 text-gray-600">Track submission status</li>
-                      <li className="marker:text-yellow-600 text-gray-600">View feedback from advisers</li>
-                      <li className="marker:text-green-600 text-gray-600">Manage team tasks</li>
+                      <li className="marker:text-purple-600 text-xs lg:text-sm text-muted-foreground">Upload project deliverables</li>
+                      <li className="marker:text-blue-600 text-xs lg:text-sm text-muted-foreground">Track submission status</li>
+                      <li className="marker:text-yellow-600 text-xs lg:text-sm text-muted-foreground">View feedback from advisers</li>
+                      <li className="marker:text-green-600 text-xs lg:text-sm text-muted-foreground">Manage team tasks</li>
                     </ul>
                   </div>
 
-                  <div className="border-t border-gray-300 mt-3">
-                    <button onClick={handleUpload} disabled={!file || !phase || uploading} className="text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
+                  <div className="border-t border-gray-300 mt-1 lg:mt-3">
+                    <button onClick={handleUpload} disabled={!file || !phase || uploading} className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                       {uploading ? "Uploading..." : "Upload Deliverable"}
                     </button>
@@ -227,10 +232,10 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
           <CardHeader>
             <CardDescription>
                   <div  className="rounded-lg">
-                    <div className="flex flex-col mt-4 md:mt-2">
+                    <div className="flex flex-col">
                       <div className="flex justify-between">
                         <div className="flex flex-col">
-                          <h1 className="font-medium text-base">{task.title}</h1>
+                          <h1 className="text-foreground font-medium text-sm lg:text-base">{task.title}</h1>
                           <p className="text-muted-foreground text-xs">{task.assignedTo}</p>
                         </div>
                         <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
@@ -239,8 +244,9 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                       </div>
                     </div>
                     <Separator className="mt-3"/>
-                    <div className="flex flex-col justify-end mt-3">
-                      <p className="text-muted-foreground text-sm mb-5"><span className="font-medium">Description: </span>{task.description}</p>
+                    <div className="grid grid-cols-1 gap-1 mt-3 ">
+                      <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word"><span className="text-xs  font-medium text-popover-foreground">Description: </span><br />
+                      {task.description}</p>
                       <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
                     </div>
                   </div>

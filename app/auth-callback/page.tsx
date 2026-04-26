@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Role = "student" | "instructor" | "adviser";
 
@@ -36,7 +37,6 @@ export default function AuthCallback() {
 
          if (!me) {
       sessionStorage.removeItem("intendedRole");
-      router.push(`/dashboard/${intendedRole}`);
     }
       } else {
         if (me.role !== intendedRole) {

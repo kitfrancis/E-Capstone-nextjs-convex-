@@ -106,7 +106,7 @@ export function DialogDemo() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-black dark:bg-gray-50 text-background hover:bg-gray-800 hover:text-background dark:hover:bg-gray-200">
+        <Button variant="outline" className="text-xs lg:text-sm flex items-center justify-center px-1.5 lg:px-3 bg-black dark:bg-gray-50 text-background hover:bg-gray-800 hover:text-background dark:hover:bg-gray-200">
           <Plus /> Create Team
         </Button>
       </DialogTrigger>

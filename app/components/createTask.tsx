@@ -8,12 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus,  CalendarX2Icon} from "lucide-react"
-import { SelectTeam } from "./selectTeam"
 import { Textarea } from "@/components/ui/textarea"
-import { use } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { getAll } from "@/convex/archive"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -59,11 +56,11 @@ export function TaskDialogDemo() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-sm flex items-center justify-center px-3 bg-muted  text-foreground">
+        <Button variant="outline" className="text-xs lg:text-sm flex items-center justify-center px-1.5 lg:px-3 bg-muted  text-foreground">
           <CalendarX2Icon /> Create Task
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm ">
         <DialogHeader>
           <DialogTitle>Create New Task</DialogTitle>
           <DialogDescription>
@@ -101,8 +98,7 @@ export function TaskDialogDemo() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="description">Description</Label> 
-            <Textarea 
-              id="description" placeholder="Provide details about the task and its requirements." value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Textarea  id="description" placeholder="Provide details about the task and its requirements." value={description} onChange={(e) => setDescription(e.target.value)}  />
           </div>
           <div className="space-y-1 mb-3">
             <Label htmlFor="dueDate">Due Date</Label>
