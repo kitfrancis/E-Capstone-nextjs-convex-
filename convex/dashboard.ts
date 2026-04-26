@@ -307,4 +307,4 @@ export const deleteTeam = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.teamId);
   },
-});
+}); 
