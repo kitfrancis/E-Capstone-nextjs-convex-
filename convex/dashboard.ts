@@ -13,9 +13,32 @@ export const getMyProject = query({
     if (!user) return null;
 
     const projects = await ctx.db.query("capstoneProjects").collect();
-    const myProject = projects.find(p => p.members && p.members.includes(user._id));
     
-    return myProject || null;
+    // First check if user is a member of any project
+    const asMember = projects.find(p => p.members && p.members.includes(user._id));
+    if (asMember) return asMember;
+    
+    // Then check if user is an adviser of any project
+    const asAdviser = projects.find(p => p.adviserId === user._id);
+    if (asAdviser) return asAdviser;
+    
+    return null;
+  },
+});
+
+// Dedicated query for advisers to get all projects they supervise
+export const getAdviserProjects = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) return [];
+
+    const allProjects = await ctx.db.query("capstoneProjects").collect();
+    return allProjects.filter(p => p.adviserId === user._id);
   },
 });
 
