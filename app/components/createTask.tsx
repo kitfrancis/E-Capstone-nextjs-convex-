@@ -83,7 +83,10 @@ export function TaskDialogDemo() {
                   ) : (
                     teams.map(team => (
                       <SelectItem key={team._id} value={team._id} className="text-xs">
-                        {team.teamName} — {team.projectTitle}
+                        <span className=" max-w-56 lg:max-w-72 truncate block">
+                          {team.teamName} — {team.projectTitle}
+                        </span>
+                        
                       </SelectItem>
                     ))
                   )}

@@ -11,9 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Pencil, Trash, Trash2 } from "lucide-react";
 import { EditTask } from "@/app/components/editTask";
 import { DeleteTask } from "./deleteTask";
+import { InstructorProgress } from "@/app/components/TeamsProgress";
+import { Progress } from "@/components/ui/progress";
+import { EditTeam } from "@/app/components/editTeam";
+import { DeleteTeam } from "@/app/components/deleteTeam";
 
 export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const { user } = useUser();
+    const [progress, setProgress] = useState(13)
 
   const allDeliverables = useQuery(api.dashboard.getAllDeliverables, {});
   const allTeams = useQuery(api.dashboard.getTeams, {});
@@ -77,7 +82,6 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
   <CardHeader>
     <CardDescription>
       <div className="flex flex-col gap-3">
-        {/* Header */}
         <div className="flex justify-between items-start">
           <div className="flex flex-col">
             <h1 className="font-semibold text-foreground text-sm lg:text-base">{team.teamName}</h1>
@@ -113,6 +117,22 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
             <p className="text-xs text-muted-foreground">Progress</p>
             <p className="text-sm font-semibold text-foreground">{team.progress ?? 0}%</p>
           </div>
+        </div>
+        <div className="w-full">
+          <InstructorProgress progress={team.progress ?? 0} />
+        </div>
+
+        <div className="flex items-center justify-end w-full gap-2">
+        <EditTeam
+              teamId={team._id}
+              initialTeamName={team.teamName}
+              initialProjectTitle={team.projectTitle}
+              initialPhase={team.phase}
+            />
+            <DeleteTeam teamId={team._id} teamName={team.teamName} />
+        </div>
+        <div>
+          
         </div>
       </div>
     </CardDescription>

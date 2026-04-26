@@ -41,9 +41,8 @@ const instructorLinks = [
 
 const adviserLinks = [
   { label: "Dashboard", href: "/dashboard/adviser", icon: LayoutDashboard },
-  { label: "My Students", href: "/dashboard/adviser/students", icon: Users },
-  { label: "Review Papers", href: "/dashboard/adviser/review", icon: BookOpen },
-  { label: "Approvals", href: "/dashboard/adviser/approvals", icon: CheckSquare },
+  { label: "Archive", href: "/components/Archive", icon: Archive },
+  { label: "Profile", href: "/profile/adviser", icon: User },
 ];
 
 type LinkItem = {

@@ -93,8 +93,8 @@ export function EditTask({
           <div className="space-y-1">
             <Label>Team</Label>
             <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a team" />
+              <SelectTrigger className="w-full overflow-hidden">
+                <SelectValue placeholder="Select a team" className="w-full overflow-hidden" />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -105,7 +105,7 @@ export function EditTask({
                   ) : (
                     teams.map(team => (
                       <SelectItem key={team._id} value={team._id} className="text-xs">
-                        {team.teamName} — {team.projectTitle}
+                         <span className="max-w-56 lg:max-w-72 truncate block">{team.teamName} — {team.projectTitle}</span>
                       </SelectItem>
                     ))
                   )}

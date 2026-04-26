@@ -279,3 +279,32 @@ export const deleteTask = mutation({
     await ctx.db.delete(args.taskId);
   }
 })
+
+
+export const updateTeam = mutation({
+  args: {
+    teamId: v.id("capstoneProjects"),
+    teamName: v.string(),
+    projectTitle: v.string(),
+    phase: v.union(
+      v.literal("Proposal"),
+      v.literal("Development"),
+      v.literal("Testing"),
+      v.literal("Final")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.teamId, {
+      teamName: args.teamName,
+      projectTitle: args.projectTitle,
+      phase: args.phase,
+    });
+  },
+});
+
+export const deleteTeam = mutation({
+  args: { teamId: v.id("capstoneProjects") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.teamId);
+  },
+});
