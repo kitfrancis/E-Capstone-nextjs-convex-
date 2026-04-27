@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -17,7 +17,13 @@ export default function AdviserDashboard() {
     me ? { clerkId: me.clerkId } : "skip"
   );
 
-  const project = adviserProjects && adviserProjects.length > 0 ? adviserProjects[0] : null;
+  // State to track selected team
+  const [selectedTeamIndex, setSelectedTeamIndex] = useState<number>(0);
+
+  // Get the currently selected project based on state
+  const project = adviserProjects && adviserProjects.length > 0 
+    ? adviserProjects[selectedTeamIndex] 
+    : null;
 
   const teamMembers = useQuery(
     api.dashboard.getProjectMembers,
@@ -119,11 +125,99 @@ export default function AdviserDashboard() {
           </Button>
         </div>
 
-        <div className="flex items-center mb-3">
-          <Button variant='outline' className="rounded-full">
-            {project?.teamName ?? "No Team Assigned"}
-          </Button>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {adviserProjects === undefined ? (
+            <p className="text-sm text-muted-foreground">Loading teams...</p>
+          ) : adviserProjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No teams assigned yet.</p>
+          ) : (
+            adviserProjects.map((proj, index) => (
+              <Button 
+                key={proj._id} 
+                variant={selectedTeamIndex === index ? "default" : "outline"}
+                className="rounded-full py-2 px-2"
+                onClick={() => setSelectedTeamIndex(index)}
+              >
+                {proj.teamName}
+              </Button>
+            ))
+          )}
         </div>
+
+        {project && (
+          <div className="border border-border rounded-2xl bg-card p-5 mb-6">
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div>
+                  <h2 className="text-base font-semibold text-foregrou nd leading-tight">
+                    {project.teamName}
+                  </h2>
+                  <p className="text-xs lg:text-sm text-muted-foreground mt-1 lg:mt-0.5">
+                    {project.projectTitle}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
+                  {project.phase}
+                </span>
+              </div>
+
+              <div className="mb-5">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs lg:text-sm text-muted-foreground">
+                    Current phase:{" "}
+                    <span className="font-medium text-foreground text-xs lg:text-sm">
+                      {project.phase}
+                    </span>
+                  </p>
+                  <span className="text-sm font-semibold text-foreground ">
+                    {project.progress}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-1.5 rounded-full bg-violet-600 dark:bg-violet-500 transition-all duration-500"
+                    style={{ width: `${project.progress}%` }}
+                  />
+                </div>
+              </div>
+ 
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3 ">
+                <p className="text-xs text-muted-foreground mt-0.5">Approved</p>
+                  <p className="text-xl font-semibold text-green-700 dark:text-green-400">
+                    {project.approved}
+                  </p>
+                  
+                </div>
+                <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground mt-0.5">Under_review</p>
+                  <p className="text-xl font-semibold text-blue-700 dark:text-blue-400">
+                    {project.underReview}
+                  </p>
+                </div>
+                <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3">
+                  <p className="text-xs text-muted-foreground mt-0.5">Needs_revision</p>
+                  <p className="text-xl font-semibold text-amber-700 dark:text-amber-400">
+                    {project.needsRevision}
+                  </p>
+                </div>
+              </div>
+            </div>
+        )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -144,8 +238,8 @@ export default function AdviserDashboard() {
               <p className="text-xs lg:text-sm font-medium text-muted-foreground">{me?.email ?? "—"}</p>
             </div>
           </div>
-          <Separator className="mt-5" />
-          <div className="flex flex-row gap-2 lg:gap-4 mt-3 lg:mt-5 items-center">
+          <Separator className="mt-3" />
+          <div className="flex flex-row gap-2 lg:gap-4 mt-1 lg:mt-2 items-center">
             <p className="p-1.5 lg:p-2 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-foreground">
               Adviser
             </p>
@@ -171,15 +265,15 @@ export default function AdviserDashboard() {
            <div key={member._id} className="flex flex-row gap-3 lg:gap-6 items-center">
              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
                {member.name .split(" ") .filter(Boolean) .map((n: string) => n[0]) .join("") .slice(0, 2)}
-                              </div>
-                              <div>
-                                <div className="flex items-center justify-start gap-1">
-                                  <p className="text-sm lg:text-base font-medium text-foreground">
-                                    {member.name}
-                                  </p>
-                                </div>
-                                <p className="text-xs lg:text-sm font-medium text-muted-foreground">
-                                  {member.role}
+                      </div>
+                      <div>
+                           <div className="flex items-center justify-start gap-1">
+                        <p className="text-sm lg:text-base font-medium text-foreground">
+                        {member.name}
+                        </p>
+                        </div>
+                           <p className="text-xs lg:text-sm font-medium text-muted-foreground">
+                              {member.role}
                                 </p>
                                 <p className="text-xs lg:text-sm font-medium text-muted-foreground">
                                   {member.email}

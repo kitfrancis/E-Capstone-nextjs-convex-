@@ -14,11 +14,9 @@ export const getMyProject = query({
 
     const projects = await ctx.db.query("capstoneProjects").collect();
     
-    // First check if user is a member of any project
     const asMember = projects.find(p => p.members && p.members.includes(user._id));
     if (asMember) return asMember;
     
-    // Then check if user is an adviser of any project
     const asAdviser = projects.find(p => p.adviserId === user._id);
     if (asAdviser) return asAdviser;
     
@@ -26,7 +24,6 @@ export const getMyProject = query({
   },
 });
 
-// Dedicated query for advisers to get all projects they supervise
 export const getAdviserProjects = query({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
@@ -331,3 +328,24 @@ export const deleteTeam = mutation({
     await ctx.db.delete(args.teamId);
   },
 }); 
+
+
+export const getStudents = query({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users.filter(u => u.role === "student");
+  },
+});
+
+export const updateTeamMembers = mutation({
+  args: {
+    teamId: v.id("capstoneProjects"),
+    members: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.teamId, {
+      members: args.members,
+    });
+  },
+});

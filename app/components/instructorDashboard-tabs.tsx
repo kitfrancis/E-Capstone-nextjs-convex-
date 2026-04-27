@@ -128,6 +128,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
               initialTeamName={team.teamName}
               initialProjectTitle={team.projectTitle}
               initialPhase={team.phase}
+              initialMembers={team.members ?? []} 
             />
             <DeleteTeam teamId={team._id} teamName={team.teamName} />
         </div>

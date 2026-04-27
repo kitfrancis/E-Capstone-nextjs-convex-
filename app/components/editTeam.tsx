@@ -11,18 +11,20 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Pencil } from "lucide-react"
-import { useMutation } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
+import { X } from "lucide-react";
 
 interface EditTeamProps {
   teamId: Id<"capstoneProjects">;
   initialTeamName: string;
   initialProjectTitle: string;
   initialPhase: string;
+  initialMembers?: string[];
 }
 
 export function EditTeam({
@@ -30,21 +32,63 @@ export function EditTeam({
   initialTeamName,
   initialProjectTitle,
   initialPhase,
+  initialMembers = [],
 }: EditTeamProps) {
   const [open, setOpen] = useState(false);
   const [teamName, setTeamName] = useState(initialTeamName);
   const [projectTitle, setProjectTitle] = useState(initialProjectTitle);
   const [phase, setPhase] = useState(initialPhase);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>(initialMembers?? []);
+  const [search, setSearch] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
 
+    const students = useQuery(api.dashboard.getStudents);
   const updateTeam = useMutation(api.dashboard.updateTeam);
+  const updateTeamMembers = useMutation(api.dashboard.updateTeamMembers);
+  const allTeam = useQuery(api.dashboard.getTeams);
+
+
+const studentsInOtherTeams = useMemo(() => {
+  const taken = new Set<string>();
+  if (allTeam) {
+    allTeam.forEach(team => {
+      if (team._id === teamId) return;
+      team.members?.forEach(id => taken.add(String(id))); // ← cast to string
+    });
+  }
+  return taken;
+}, [allTeam, teamId]);
+
+
 
   useEffect(() => {
     if (open) {
       setTeamName(initialTeamName);
       setProjectTitle(initialProjectTitle);
       setPhase(initialPhase);
+      setSelectedMembers(initialMembers ?? []);
+      setSearch("");
     }
-  }, [open, initialTeamName, initialProjectTitle, initialPhase]);
+  }, [open, initialTeamName, initialProjectTitle, initialPhase, initialMembers]);
+
+
+  const filteredStudents = students?.filter(s =>
+  !selectedMembers.includes(s._id) &&          // not already selected
+  !studentsInOtherTeams.has(s._id) &&           // not in another team
+  (s.name?.toLowerCase().includes(search.toLowerCase()) ||
+   s.email?.toLowerCase().includes(search.toLowerCase()))
+) ?? [];
+
+    const addMember = (id: string) => {
+    setSelectedMembers(prev => [...prev, id]);
+    setSearch("");
+  };
+
+  const removeMember = (id: string) => {
+    setSelectedMembers(prev => prev.filter(m => m !== id));
+  };
+
+
 
   const handleSubmit = async () => {
     if (!teamName || !projectTitle || !phase) {
@@ -58,6 +102,7 @@ export function EditTeam({
         projectTitle,
         phase: phase as any,
       });
+      await updateTeamMembers({teamId, members: selectedMembers});
       setOpen(false);
       toast.success("Team updated successfully!");
     } catch (error) {
@@ -66,6 +111,11 @@ export function EditTeam({
     }
   };
 
+
+  const getMemberName = (id: string) => {
+    const s = students?.find(s => s._id === id);
+    return s?.name ?? s?.email ?? id;
+  };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -113,6 +163,58 @@ export function EditTeam({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <Label>Members</Label>
+
+            {/* Selected member tags */}
+            {selectedMembers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {selectedMembers.map(id => (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 bg-muted text-foreground text-xs px-2 py-1 rounded-full border"
+                  >
+                    {getMemberName(id)}
+                    <button
+                      onClick={() => removeMember(id)}
+                      className="hover:text-destructive transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <Input
+              placeholder="Search students to add..."
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  onFocus={() => setShowDropdown(true)}
+  onBlur={() => setTimeout(() => setShowDropdown(false), 300)}
+            />
+
+            {(search || showDropdown) && (
+              <div className="border rounded-md bg-popover max-h-36 overflow-y-auto mt-1">
+                {filteredStudents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-3 py-2">No students found</p>
+                ) : (
+                  filteredStudents.map(s => (
+                    <button
+                      key={s._id}
+                      onClick={() => addMember(s._id)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted flex flex-col"
+                    >
+                      <span className="font-medium text-foreground">{s.name}</span>
+                      <span className="text-muted-foreground">{s.email}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            </div>
+            
         </div>
         <DialogFooter>
           <DialogClose asChild>
