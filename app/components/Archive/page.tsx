@@ -34,9 +34,9 @@ export default function Archive() {
 
   return (
     <div className="scroll-smooth font-Poppins">
-      <div className="lg:ml-1 mx-3 px-3 max-h-auto lg:px-5">
-        <h1 className="text-3xl font-semibold text-foreground mt-10">Project Archive and Repository</h1>
-        <p className="text-muted-foreground mt-2">Searchable digital library of completed thesis and capstone projects</p>
+      <div className="lg:ml-1 max-h-auto ">
+        <h1 className="text-3xl font-semibold text-foreground mt-10 px-1">Project Archive and Repository</h1>
+        <p className="text-muted-foreground mt-2 px-1">Searchable digital library of completed thesis and capstone projects</p>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-5 md:mt-10">
