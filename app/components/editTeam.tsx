@@ -164,7 +164,7 @@ const studentsInOtherTeams = useMemo(() => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Members</Label>
+            <Label>Members<span className="text-muted-foreground">(Can search unassigned students only.)</span></Label>
 
             {/* Selected member tags */}
             {selectedMembers.length > 0 && (
