@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
+import { AdviserTabsDemo } from "@/app/components/adviserDashboard-Tabs";
 
 export default function AdviserDashboard() {
   const me = useQuery(api.users.getMe);
@@ -205,21 +206,6 @@ export default function AdviserDashboard() {
         )}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="flex flex-col">
               <div className="border border-border rounded-2xl bg-card p-3.5 lg:p-5 mb-5">
@@ -290,6 +276,9 @@ export default function AdviserDashboard() {
         </div>
 
         
+        <div className="flex items-center justify-center ml-auto mt-4 lg:mt-6">
+                      <AdviserTabsDemo capstoneProjectId={project?._id}/>
+                    </div>
 
 
       </div>

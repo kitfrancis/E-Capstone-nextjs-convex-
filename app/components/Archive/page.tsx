@@ -20,7 +20,7 @@ export default function Archive() {
   const projectsData = useQuery(api.archive.getAll);
 
   const Year = ["All Year", "2025", "2026", "2027", "2028"]
-  const Course = ["All Department", "Computer Science", "Information Technology", "Software Engineering", "BLIS"]
+  const Course = ["All Department", "Computer Science", "Information Technology", "BLIS"]
 
 
   if (projectsData === undefined) {

@@ -349,3 +349,17 @@ export const updateTeamMembers = mutation({
     });
   },
 });
+
+export const adviserDeliverableStatus = mutation({
+  args: {
+    deliverableId: v.id("deliverables"),
+    status: v.union(
+      v.literal("approved"),
+      v.literal("under_review"),
+      v.literal("needs_revision"),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.deliverableId, { status: args.status });
+  },
+});

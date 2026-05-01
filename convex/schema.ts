@@ -49,7 +49,7 @@ export default defineSchema({
     status: v.union(
       v.literal("approved"),
       v.literal("under_review"),
-      v.literal("needs_revision")
+      v.literal("needs_revision"),
     ),
     fileSize: v.string(),
     uploadedAt: v.string(),

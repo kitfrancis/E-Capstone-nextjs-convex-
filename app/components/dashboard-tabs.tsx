@@ -34,6 +34,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
   //for pdf viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string} | null>(null);
   const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
+  const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
@@ -47,41 +48,48 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    toast.error("File uploads are currently disabled while we work out some issues. Please check back later.");
-    if (e.target.files?.[0]) setFile(e.target.files[0]);
-  };
+  if (e.target.files?.[0]) setFile(e.target.files[0]);
+};
 
-  const handleUpload = async () => {
-    if (!file || !phase || !capstoneProjectId) return;
-    setUploading(true);
-    try {
-      const uploadUrl = await generateUploadUrl();
+const handleUpload = async () => {
+  if (!file || !phase || !capstoneProjectId) {
+    toast.error("Please select a file and phase first.");
+    return;
+  }
+  setUploading(true);
+  try {
+    const uploadUrl = await generateUploadUrl();
 
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      const { storageId } = await result.json();
+    const result = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
 
-      await saveDeliverable({
-        storageId,
-        fileName: file.name,
-        phase,
-        fileSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
-        capstoneProjectId: capstoneProjectId as any,
-      });
-
-      setSuccess(true);
-      setFile(null);
-      setPhase("");
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setUploading(false);
+    if (!result.ok) {
+      throw new Error(`Upload failed with status ${result.status}`);
     }
-  };
+
+    const { storageId } = await result.json();
+
+    await saveDeliverable({
+      storageId,
+      fileName: file.name,
+      phase,
+      fileSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+      capstoneProjectId,
+    });
+
+    toast.success("Uploaded successfully!");
+    setFile(null);
+    setPhase("");
+  } catch (err) {
+    console.error(err);
+    toast.error(`Upload failed: ${err}`);
+  } finally {
+    setUploading(false);
+  }
+};
 
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
@@ -128,7 +136,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
             <Card key={d._id} className="mb-5">
           <CardHeader>
             <CardDescription>
-                  <div onClick={() => setSelectedDeliverable({fileName: d.fileName, storageId: d.storageId!})} className="flex flex-col mt-0 lg:mt-2 border-b  last:border-0">
+                  <div  className="flex flex-col mt-0 lg:mt-2 border-b  last:border-0">
                     <div className="flex justify-between">
                       <div className="flex flex-col">
                         <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
@@ -141,9 +149,23 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
                     <Separator className="mt-3" />
                     <div className="flex justify-between items-center mt-4 ">
                       <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
-                      <button className="text-xs lg:text-sm outline rounded-md py-1 px-2  transition-colors">
-                        View Comments
-                      </button>
+                      {isPdf(d.fileName) ? (
+                  <button
+                    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId! })}
+                    className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
+                  >
+                    View File
+                  </button>
+                ) : (
+                  <a
+                    href={fileUrl ?? "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
+                  >
+                    Download File
+                  </a>
+                )}
                     </div>
                   </div>
                   </CardDescription>
