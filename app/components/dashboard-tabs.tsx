@@ -216,15 +216,6 @@ const handleUpload = async () => {
                   toast.success("Upload Successfully!")
                   )}
 
-                  <div className="flex flex-col max-h-auto bg-sidebar outline rounded-lg mt-5 px-5 py-3">
-                    <h1 className="tex-xs lg:text-sm font-medium">Submission Process</h1>
-                    <ul className="list-disc pl-3 text-start text-sm space-y-1 mt-1">
-                      <li className="marker:text-purple-600 text-xs lg:text-sm text-muted-foreground">Upload project deliverables</li>
-                      <li className="marker:text-blue-600 text-xs lg:text-sm text-muted-foreground">Track submission status</li>
-                      <li className="marker:text-yellow-600 text-xs lg:text-sm text-muted-foreground">View feedback from advisers</li>
-                      <li className="marker:text-green-600 text-xs lg:text-sm text-muted-foreground">Manage team tasks</li>
-                    </ul>
-                  </div>
 
                   <div className="border-t border-gray-300 mt-1 lg:mt-3">
                     <button onClick={handleUpload} disabled={!file || !phase || uploading} className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
