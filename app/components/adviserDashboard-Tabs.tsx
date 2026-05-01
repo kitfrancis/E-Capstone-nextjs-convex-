@@ -5,6 +5,16 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal } from "lucide-react";
+
+import {
   Card,
   CardContent,
   CardDescription,
@@ -45,7 +55,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
     if (status === "under_review") return "bg-blue-500";
-    if (status === "needs_revision") return "bg-red-500";
+    if (status === "needs_revision") return "bg-yellow-500";
   };
 
   const getStatusLabel = (status: string) => {
@@ -159,75 +169,64 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
 
                       <Separator className="mt-3" />
 
-                <div className="flex justify-between items-center mt-3 gap-2 flex-wrap">
+                <div className="flex justify-between items-center mt-3 gap-2">
+  <button
+    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId! })}
+    className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
+  >
+    View Document
+  </button>
 
-                  <div className="flex gap-2 flex-wrap justify-end">
-                    {d.status === "under_review" && (
-                      <>
-                        <button
-                          onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId! })}
-                          className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
-                        >
-                          Review
-                        </button>
-                        <button
-                          onClick={() => {/* open comment modal */}}
-                          className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
-                        >
-                          Add Comment
-                        </button>
-                        <button
-                          onClick={() => updateStatus({ deliverableId: d._id, status: "needs_revision" })}
-                          className="text-xs bg-red-500 text-white rounded-md py-1 px-2 hover:bg-red-600 transition-colors"
-                        >
-                          Request Revision
-                        </button>
-                        <button
-                          onClick={() => updateStatus({ deliverableId: d._id, status: "approved" })}
-                          className="text-xs bg-green-500 text-white rounded-md py-1 px-2 hover:bg-green-600 transition-colors"
-                        >
-                          Approve
-                        </button>
-                      </>
-                    )}
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted">
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuGroup>
 
-                    {d.status === "needs_revision" && (
-                      <>
-                        <button
-                          onClick={() => {}}
-                          className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
-                        >
-                          View Feedback
-                        </button>
-                        <button
-                          onClick={() => {/* open comment modal */}}
-                          className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
-                        >
-                          Add Comment
-                        </button>
-                      </>
-                    )}
+        {d.status === "under_review" && (
+          <>
+            <DropdownMenuItem onClick={() => {}}>
+              Add Comment
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => updateStatus({ deliverableId: d._id, status: "needs_revision" })}
+              className="text-yellow-600 focus:text-yellow-600"
+            >
+              Request Revision
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => updateStatus({ deliverableId: d._id, status: "approved" })}
+              className="text-green-600 focus:text-green-600"
+            >
+              Approve
+            </DropdownMenuItem>
+          </>
+        )}
 
-                    {d.status === "approved" && (
-                      <>
-                        <button
-                          onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId! })}
-                          className="text-xs bg-blue-500 text-white rounded-md py-1 px-2 hover:bg-blue-600 transition-colors"
-                        >
-                          View Document
-                        </button>
-                        <button
-                          onClick={() => {/* open comments modal */}}
-                          className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
-                        >
-                          View Comments
-                        </button>
-                      </>
-                    )}
+        {d.status === "needs_revision" && (
+          <>
+            <DropdownMenuItem onClick={() => {}}>
+              View Feedback
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => {}}>
+              Add Comment
+            </DropdownMenuItem>
+          </>
+        )}
 
-                  
-                  </div>
-                </div>
+        {d.status === "approved" && (
+          <DropdownMenuItem onClick={() => {}}>
+            View Comments
+          </DropdownMenuItem>
+        )}
+
+      </DropdownMenuGroup>
+    </DropdownMenuContent>
+  </DropdownMenu>
+</div>
                     </div>
                   </CardDescription>
                 </CardHeader>
@@ -254,7 +253,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
 
       {/* PDF Viewer shared across tabs */}
       <PDFViewer
-        open={!!selectedDeliverable && !!fileUrl}
+        open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
         fileUrl={fileUrl ?? ""}
         fileName={selectedDeliverable?.fileName ?? ""}
         onClose={() => setSelectedDeliverable(null)}

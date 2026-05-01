@@ -60,10 +60,12 @@ const handleUpload = async () => {
   try {
     const uploadUrl = await generateUploadUrl();
 
+    const formData = new FormData();
+    formData.append("file", file);
+
     const result = await fetch(uploadUrl, {
       method: "POST",
-      headers: { "Content-Type": file.type },
-      body: file,
+      body: formData,
     });
 
     if (!result.ok) {
