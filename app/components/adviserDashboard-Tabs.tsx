@@ -39,7 +39,9 @@ type StatusFilter = "all" | "under_review" | "approved" | "needs_revision" | "pe
 
 export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [selectedDeliverable, setSelectedDeliverable] = useState<{ fileName: string; storageId: string } | null>(null);
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{ fileName: string; storageId: string; deliverableId: string } | null>(null);
+
+  const me = useQuery(api.users.getMe);
 
   const deliverables = useQuery(
     api.dashboard.getDeliverables,
@@ -171,7 +173,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
 
                 <div className="flex justify-between items-center mt-3 gap-2">
   <button
-    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId! })}
+    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
     className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
   >
     View Document
@@ -256,6 +258,9 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
         open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
         fileUrl={fileUrl ?? ""}
         fileName={selectedDeliverable?.fileName ?? ""}
+        deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
+        userId={me?.clerkId}
+        userName={me?.name ?? ""}
         onClose={() => setSelectedDeliverable(null)}
       />
     </>

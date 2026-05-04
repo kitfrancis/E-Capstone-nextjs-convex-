@@ -57,6 +57,17 @@ export default defineSchema({
   storageId: v.optional(v.id("_storage")),
   }),
 
+  pdfComments: defineTable({
+    deliverableId: v.id("deliverables"),
+    userId: v.string(),
+    userName: v.string(),
+    comment: v.string(),
+    pageNumber: v.number(),
+    x: v.number(), // percentage from left
+    y: v.number(), // percentage from top
+    createdAt: v.string(),
+  }).index("by_deliverable", ["deliverableId"]),
+
   tasks: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),
     title: v.string(),

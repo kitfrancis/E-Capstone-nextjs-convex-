@@ -17,7 +17,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 
-// Dynamically import PDFViewer to avoid SSR issues
 const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-64">Loading PDF viewer...</div>
@@ -32,7 +31,7 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   //for pdf viewer
-  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string} | null>(null);
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string} | null>(null);
   const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
   const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
@@ -153,7 +152,7 @@ const handleUpload = async () => {
                       <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
                       {isPdf(d.fileName) ? (
                   <button
-                    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId! })}
+                    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
                     className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
                   >
                     View File
@@ -277,6 +276,7 @@ const handleUpload = async () => {
   open={!!selectedDeliverable && !!fileUrl}
   fileUrl={fileUrl ?? ""}
   fileName={selectedDeliverable?.fileName ?? ""}
+  deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
   onClose={() => setSelectedDeliverable(null)}
 />
     </Tabs>

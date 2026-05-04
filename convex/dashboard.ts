@@ -363,3 +363,63 @@ export const adviserDeliverableStatus = mutation({
     await ctx.db.patch(args.deliverableId, { status: args.status });
   },
 });
+
+export const getPdfComments = query({
+  args: { deliverableId: v.id("deliverables") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("pdfComments")
+      .withIndex("by_deliverable", (q) => q.eq("deliverableId", args.deliverableId))
+      .collect();
+  },
+});
+
+export const addPdfComment = mutation({
+  args: {
+    deliverableId: v.id("deliverables"),
+    userId: v.string(),
+    userName: v.string(),
+    comment: v.string(),
+    pageNumber: v.number(),
+    x: v.number(),
+    y: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const commentId = await ctx.db.insert("pdfComments", {
+      deliverableId: args.deliverableId,
+      userId: args.userId,
+      userName: args.userName,
+      comment: args.comment,
+      pageNumber: args.pageNumber,
+      x: args.x,
+      y: args.y,
+      createdAt: new Date().toISOString(),
+    });
+
+    const deliverable = await ctx.db.get(args.deliverableId);
+    if (deliverable) {
+      await ctx.db.patch(args.deliverableId, {
+        comments: (deliverable.comments || 0) + 1,
+      });
+    }
+
+    return commentId;
+  },
+});
+
+export const deletePdfComment = mutation({
+  args: { commentId: v.id("pdfComments") },
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (comment) {
+      await ctx.db.delete(args.commentId);
+
+      const deliverable = await ctx.db.get(comment.deliverableId);
+      if (deliverable && deliverable.comments > 0) {
+        await ctx.db.patch(comment.deliverableId, {
+          comments: deliverable.comments - 1,
+        });
+      }
+    }
+  },
+});
