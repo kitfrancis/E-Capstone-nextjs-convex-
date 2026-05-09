@@ -22,19 +22,18 @@ export function SyncUser() {
     email: user.emailAddresses[0].emailAddress,
   });
 
-    if (me === null) {
-      const role = (user.publicMetadata?.role as Role) ?? "student";
-
-     upsertUser({
-  clerkId: user.id,
-  name: user.fullName ?? 
-        user.firstName ?? 
-        user.username ?? 
-        user.emailAddresses[0].emailAddress.split("@")[0], 
-  email: user.emailAddresses[0].emailAddress,
-  image: user.imageUrl,
-  role,
-});
+    if (me !== null) {
+      // Update existing user
+      upsertUser({
+        clerkId: user.id,
+        name: user.fullName ?? 
+          user.firstName ?? 
+          user.username ?? 
+          user.emailAddresses[0].emailAddress.split("@")[0], 
+        email: user.emailAddresses[0].emailAddress,
+        image: user.imageUrl,
+        role: me.role, // Keep existing role
+      });
     }
   }, [isLoaded, isSignedIn, user, me, upsertUser]);
 

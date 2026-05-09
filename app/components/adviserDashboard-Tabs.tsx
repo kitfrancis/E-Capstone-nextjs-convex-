@@ -9,11 +9,9 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
-
+import { MoreHorizontal, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -37,11 +35,26 @@ const PDFViewer = dynamic(
 
 type StatusFilter = "all" | "under_review" | "approved" | "needs_revision" | "pending";
 
+function NoTeamState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-2 lg:py-5 text-center">
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <Users className="h-5 md:h-8 w-5 md:w-8 text-muted-foreground" />
+      </div>
+      <h3 className="font-semibold text-sm md:text-base text-foreground mb-1">No team assigned yet</h3>
+      <p className="text-xs md:text-sm text-muted-foreground max-w-xs">
+        You haven't been assigned to any capstone group yet. Check back later or contact your coordinator.
+      </p>
+    </div>
+  );
+}
+
 export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedDeliverable, setSelectedDeliverable] = useState<{ fileName: string; storageId: string; deliverableId: string } | null>(null);
 
   const me = useQuery(api.users.getMe);
+  const hasTeam = !!capstoneProjectId;
 
   const deliverables = useQuery(
     api.dashboard.getDeliverables,
@@ -52,18 +65,21 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
     api.dashboard.getFileUrl,
     selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage"> } : "skip"
   );
+
   const updateStatus = useMutation(api.dashboard.adviserDeliverableStatus);
 
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
     if (status === "under_review") return "bg-blue-500";
     if (status === "needs_revision") return "bg-yellow-500";
+    return "bg-gray-400";
   };
 
   const getStatusLabel = (status: string) => {
     if (status === "approved") return "Approved";
     if (status === "under_review") return "Under Review";
     if (status === "needs_revision") return "Needs Revision";
+    return status;
   };
 
   const formatDate = (dateStr: string) =>
@@ -109,131 +125,132 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
         <TabsContent value="groupManagement">
           <Card>
             <CardHeader>
-              <CardDescription>Group management content here.</CardDescription>
+              <CardTitle>Group Management</CardTitle>
+              <CardDescription>Manage your assigned capstone group.</CardDescription>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              You have 12 active projects and 3 pending tasks.
+            <CardContent>
+              {!hasTeam ? (
+                <NoTeamState />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Your group details will appear here.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Review Deliverables */}
         <TabsContent value="reviewDeliverables">
-          <div className="flex flex-row items-center gap-2 my-3 overflow-x-auto whitespace-nowrap pb-2">
-            {filterButtons.map((btn) => (
-              <Button
-                key={btn.value}
-                variant={statusFilter === btn.value ? "default" : "outline"}
-                className="text-xs rounded-lg"
-                onClick={() => setStatusFilter(btn.value)}
-              >
-                {btn.label}
-              </Button>
-            ))}
-          </div>
-
-          {deliverables === undefined ? (
-            <p className="text-center py-4 text-gray-500">Loading...</p>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3">
-                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-                <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-              </svg>
-              <p className="text-gray-500">No deliverables found</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {statusFilter === "all" ? "No submissions yet from any group." : `No deliverables with status "${getStatusLabel(statusFilter)}".`}
-              </p>
-            </div>
+          {!hasTeam ? (
+            <Card>
+              <CardContent className="p-0">
+                <NoTeamState />
+              </CardContent>
+            </Card>
           ) : (
-            filtered.map((d) => (
-              <Card key={d._id} className="mb-4">
-                <CardHeader>
-                  <CardDescription>
-                    <div className="flex flex-col">
-                      <div className="flex justify-between items-start">
-                        <div
-                          className="flex flex-col cursor-pointer hover:opacity-80"
-                          
-                        >
-                          <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
-                          <p className="text-muted-foreground text-xs font-medium">
-                            Phase: {d.phase} • Version {d.version} • Submitted: {formatDate(d.uploadedAt)} • Comment:
-                          </p>
-                          
+            <>
+              <div className="flex flex-row items-center gap-2 my-3 overflow-x-auto whitespace-nowrap pb-2">
+                {filterButtons.map((btn) => (
+                  <Button
+                    key={btn.value}
+                    variant={statusFilter === btn.value ? "default" : "outline"}
+                    className="text-xs rounded-lg"
+                    onClick={() => setStatusFilter(btn.value)}
+                  >
+                    {btn.label}
+                  </Button>
+                ))}
+              </div>
+
+              {deliverables === undefined ? (
+                <p className="text-center py-4 text-gray-500">Loading...</p>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3">
+                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                  </svg>
+                  <p className="text-gray-500">No deliverables found</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {statusFilter === "all"
+                      ? "No submissions yet from your group."
+                      : `No deliverables with status "${getStatusLabel(statusFilter)}".`}
+                  </p>
+                </div>
+              ) : (
+                filtered.map((d) => (
+                  <Card key={d._id} className="mb-4">
+                    <CardHeader>
+                      <CardDescription>
+                        <div className="flex flex-col">
+                          <div className="flex justify-between items-start">
+                            <div className="flex flex-col cursor-pointer hover:opacity-80">
+                              <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
+                              <p className="text-muted-foreground text-xs font-medium">
+                                Phase: {d.phase} • Version {d.version} • Submitted: {formatDate(d.uploadedAt)} • Comment:
+                              </p>
+                            </div>
+                            <span className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium h-5 lg:h-6`}>
+                              {getStatusLabel(d.status)}
+                            </span>
+                          </div>
+
+                          <Separator className="mt-3" />
+
+                          <div className="flex justify-between items-center mt-3 gap-2">
+                            <button
+                              onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
+                              className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
+                            >
+                              View Document
+                            </button>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuGroup>
+                                  {d.status === "under_review" && (
+                                    <>
+                                      <DropdownMenuItem onClick={() => {}}>Add Comment</DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => updateStatus({ deliverableId: d._id, status: "needs_revision" })}
+                                        className="text-yellow-600 focus:text-yellow-600"
+                                      >
+                                        Request Revision
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => updateStatus({ deliverableId: d._id, status: "approved" })}
+                                        className="text-green-600 focus:text-green-600"
+                                      >
+                                        Approve
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  {d.status === "needs_revision" && (
+                                    <>
+                                      <DropdownMenuItem onClick={() => {}}>View Feedback</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => {}}>Add Comment</DropdownMenuItem>
+                                    </>
+                                  )}
+                                  {d.status === "approved" && (
+                                    <DropdownMenuItem onClick={() => {}}>View Comments</DropdownMenuItem>
+                                  )}
+                                </DropdownMenuGroup>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
-                        <span
-                          className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium h-5 lg:h-6`}
-                        >
-                          {getStatusLabel(d.status)}
-                        </span>
-                      </div>
-
-                      <Separator className="mt-3" />
-
-                <div className="flex justify-between items-center mt-3 gap-2">
-  <button
-    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
-    className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
-  >
-    View Document
-  </button>
-
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <button className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted">
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-44">
-      <DropdownMenuGroup>
-
-        {d.status === "under_review" && (
-          <>
-            <DropdownMenuItem onClick={() => {}}>
-              Add Comment
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => updateStatus({ deliverableId: d._id, status: "needs_revision" })}
-              className="text-yellow-600 focus:text-yellow-600"
-            >
-              Request Revision
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => updateStatus({ deliverableId: d._id, status: "approved" })}
-              className="text-green-600 focus:text-green-600"
-            >
-              Approve
-            </DropdownMenuItem>
-          </>
-        )}
-
-        {d.status === "needs_revision" && (
-          <>
-            <DropdownMenuItem onClick={() => {}}>
-              View Feedback
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {}}>
-              Add Comment
-            </DropdownMenuItem>
-          </>
-        )}
-
-        {d.status === "approved" && (
-          <DropdownMenuItem onClick={() => {}}>
-            View Comments
-          </DropdownMenuItem>
-        )}
-
-      </DropdownMenuGroup>
-    </DropdownMenuContent>
-  </DropdownMenu>
-</div>
-                    </div>
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            ))
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                ))
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -242,18 +259,21 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
           <Card>
             <CardHeader>
               <CardTitle>Reports</CardTitle>
-              <CardDescription>
-                Generate and download your detailed reports.
-              </CardDescription>
+              <CardDescription>Generate and download your detailed reports.</CardDescription>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              You have 5 reports ready and available to export.
+            <CardContent>
+              {!hasTeam ? (
+                <NoTeamState />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  You have 5 reports ready and available to export.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* PDF Viewer shared across tabs */}
       <PDFViewer
         open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
         fileUrl={fileUrl ?? ""}

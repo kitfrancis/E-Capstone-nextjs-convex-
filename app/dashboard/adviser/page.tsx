@@ -130,7 +130,7 @@ export default function AdviserDashboard() {
           {adviserProjects === undefined ? (
             <p className="text-sm text-muted-foreground">Loading teams...</p>
           ) : adviserProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No teams assigned yet.</p>
+            <p className="text-sm text-muted-foreground">No teams assigned to youyet.</p>
           ) : (
             adviserProjects.map((proj, index) => (
               <Button 
@@ -241,11 +241,9 @@ export default function AdviserDashboard() {
                       {adviserProjects === undefined ? (
     <p className="text-sm text-muted-foreground">Loading...</p>
   ) : adviserProjects.length === 0 ? (
-    <p className="text-sm text-muted-foreground">No teams assigned yet.</p>
+    <p className="text-sm text-muted-foreground">No team members yet.</p>
   ) : teamMembers === undefined ? (
     <p className="text-sm text-muted-foreground">Loading members...</p>
-  ) : teamMembers.length === 0 ? (
-    <p className="text-sm text-muted-foreground">No members in this team.</p>
   ) : (
     teamMembers.map((member) => (
            <div key={member._id} className="flex flex-row gap-3 lg:gap-6 items-center">
