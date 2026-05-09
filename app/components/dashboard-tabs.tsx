@@ -100,8 +100,8 @@ const handleUpload = async () => {
 
   const getStatusLabel = (status: string) => {
     if (status === "approved") return "Approved";
-    if (status === "under_review") return "Under Review";
-    return "Needs Revision";
+    if (status === "under_review") return "Under_Review";
+    return "Needs_Revision";
   };
 
   const formatDate = (dateStr: string) => {

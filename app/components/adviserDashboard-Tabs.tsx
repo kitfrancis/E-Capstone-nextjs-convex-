@@ -77,8 +77,8 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
 
   const getStatusLabel = (status: string) => {
     if (status === "approved") return "Approved";
-    if (status === "under_review") return "Under Review";
-    if (status === "needs_revision") return "Needs Revision";
+    if (status === "under_review") return "Under_Review";
+    if (status === "needs_revision") return "Needs_Revision";
     return status;
   };
 
