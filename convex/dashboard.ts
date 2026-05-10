@@ -433,11 +433,41 @@ export const deletePdfComment = mutation({
 });
 
 export const getDashboardData = query({
+  args: { capstoneProjectId: v.id("capstoneProjects") },
+  handler: async (ctx, args) => {
+    const tasks = await ctx.db
+      .query("tasks")
+      .filter(q => q.eq(q.field("capstoneProjectId"), args.capstoneProjectId))
+      .collect();
+    const deliverables = await ctx.db
+      .query("deliverables")
+      .filter(q => q.eq(q.field("capstoneProjectId"), args.capstoneProjectId))
+      .collect();
+    const approvedCount = deliverables.filter(d => d.status === "approved").length;
+    const underReviewCount = deliverables.filter(d => d.status === "under_review").length;
+    const needsRevisionCount = deliverables.filter(d => d.status === "needs_revision").length;
+
+    const now = new Date().toISOString();
+
+    return {
+      pendingReviews: deliverables.filter(d => d.status === "under_review").length,
+      overdueTasks: tasks.filter(t => t.dueDate < now && t.status !== "completed").length,
+      approvedCount,
+      underReviewCount,
+      needsRevisionCount,
+    };
+  },
+});
+
+export const getInstructorDashboardData = query({
   args: {},
   handler: async (ctx) => {
     const projects = await ctx.db.query("capstoneProjects").collect();
     const tasks = await ctx.db.query("tasks").collect();
     const deliverables = await ctx.db.query("deliverables").collect();
+    const approvedCount = deliverables.filter(d => d.status === "approved").length;
+    const underReviewCount = deliverables.filter(d => d.status === "under_review").length;
+    const needsRevisionCount = deliverables.filter(d => d.status === "needs_revision").length;
 
     const now = new Date().toISOString();
 
@@ -446,6 +476,9 @@ export const getDashboardData = query({
       activeProjects: projects.length,
       pendingReviews: deliverables.filter(d => d.status === "under_review").length,
       overdueTasks: tasks.filter(t => t.dueDate < now && t.status !== "completed").length,
+      approvedCount,
+      underReviewCount,
+      needsRevisionCount,
     };
   },
 });

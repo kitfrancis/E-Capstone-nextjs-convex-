@@ -7,12 +7,11 @@ import { useEffect } from "react";
 import { DialogDemo } from "@/app/components/createTeam";
 import { TaskDialogDemo } from "@/app/components/createTask";
 import { InstructorTabsDemo } from "@/app/components/instructorDashboard-tabs";
-import { da } from "date-fns/locale";
 
 export default function InstructorDashboard() {
   const me = useQuery(api.users.getMe);
   const router = useRouter();
-  const dashboardData = useQuery(api.dashboard.getDashboardData);
+  const dashboardData = useQuery(api.dashboard.getInstructorDashboardData);
 
 
 useEffect(() => {

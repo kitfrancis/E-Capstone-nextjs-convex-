@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Users } from "lucide-react";
+import { MoreHorizontal, Users, MoreVertical, EyeIcon } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -188,7 +188,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                             <div className="flex flex-col cursor-pointer hover:opacity-80">
                               <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
                               <p className="text-muted-foreground text-xs font-medium">
-                                Phase: {d.phase} • Version {d.version} • Submitted: {formatDate(d.uploadedAt)} • Comment:
+                                Phase: {d.phase} • Version {d.version} • Submitted: {formatDate(d.uploadedAt)} • Comment: {d.comments ?? 0}
                               </p>
                             </div>
                             <span className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium h-5 lg:h-6`}>
@@ -201,9 +201,9 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                           <div className="flex justify-between items-center mt-3 gap-2">
                             <button
                               onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
-                              className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted"
+                              className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted flex items-center gap-1"
                             >
-                              View Document
+                             <EyeIcon className="h-4 w-4" /> View Document
                             </button>
 
                             <DropdownMenu>

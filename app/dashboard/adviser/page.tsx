@@ -38,10 +38,17 @@ export default function AdviserDashboard() {
   const allTeams = useQuery(api.dashboard.getTeams, {});
   const allDeliverables = useQuery(api.dashboard.getAllDeliverables, {});
 
+   const dashboardData = useQuery(
+        api.dashboard.getDashboardData,
+        project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
+      );
+  
+
   const teamsCount = adviserProjects?.length ?? 0;
   const waitingReview = allDeliverables?.filter(d => d.status === "under_review").length ?? 0;
   const approved = allDeliverables?.filter(d => d.status === "approved").length ?? 0;
   const needRevision = allDeliverables?.filter(d => d.status === "needs_revision").length ?? 0;
+
 
 
   useEffect(() => {
@@ -185,20 +192,20 @@ export default function AdviserDashboard() {
                 <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3 ">
                 <p className="text-xs text-muted-foreground mt-0.5">Approved</p>
                   <p className="text-xl font-semibold text-green-700 dark:text-green-400">
-                    {project.approved}
+                    {dashboardData?.approvedCount ?? 0}
                   </p>
                   
                 </div>
                 <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3">
                   <p className="text-xs text-muted-foreground mt-0.5">Under_review</p>
                   <p className="text-xl font-semibold text-blue-700 dark:text-blue-400">
-                    {project.underReview}
+                    {dashboardData?.underReviewCount ?? 0}
                   </p>
                 </div>
                 <div className="flex flex-col items-center justify-center rounded-xl bg-muted/60 p-3">
                   <p className="text-xs text-muted-foreground mt-0.5">Needs_revision</p>
                   <p className="text-xl font-semibold text-amber-700 dark:text-amber-400">
-                    {project.needsRevision}
+                    {dashboardData?.needsRevisionCount ?? 0}
                   </p>
                 </div>
               </div>

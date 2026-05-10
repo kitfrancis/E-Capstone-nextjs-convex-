@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
 import { Button } from "@/components/ui/button";
-import { MoreVertical } from "lucide-react";
+import { Calendar, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -294,6 +294,11 @@ const handleUpload = async () => {
                   <div className="flex items-center justify-between w-full">
                     <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word"><span className="text-xs  font-medium text-popover-foreground">Description: </span><br />
                       {task.description}</p>
+                    </div>                    
+                      
+                      
+                      <div className="flex items-center justify-between w-full">
+                     <p className="text-muted-foreground text-xs "><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
                     <button
                           disabled={task.status === "completed"}
                           onClick={() => {
@@ -306,12 +311,10 @@ const handleUpload = async () => {
                               "bg-gray-400 cursor-not-allowed"}`}
                         >
                           {task.status === "pending" ? "Start Task" :
-                          task.status === "in_progress" ? "Mark Complete" : "Completed"}
+                          task.status === "in_progress" ? "Done" : "Completed"}
                         </button>
-                    </div>                    
-                      
-                      
-                      <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
+                    </div>   
+                     
                     </div>
                   </div>
                   </CardDescription>

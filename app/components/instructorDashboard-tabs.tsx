@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
 import { PDFViewer } from "@/app/components/PDFViewer";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, EyeIcon } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,14 +97,54 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
   <CardHeader>
     <CardDescription>
       <div className="flex flex-col gap-3">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center gap-3 mb-5">
           <div className="flex flex-col">
             <h1 className="font-semibold text-foreground text-sm lg:text-base">{team.teamName}</h1>
             <p className="text-muted-foreground text-xs mt-0.5">{team.projectTitle}</p>
+            
           </div>
-          <span className="inline-flex items-center justify-center rounded-full px-2.5 py-0.5 bg-blue-500 text-white text-xs font-medium shrink-0">
-            {team.phase}
-          </span>
+          
+          <div className="flex items-center gap-0 md:gap-2 shrink-0">
+  <span className="inline-flex items-center justify-center rounded-full px-2.5 py-0.5 bg-blue-500 text-white text-xs font-medium">
+    {team.phase}
+  </span>
+
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
+        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="space-y-1 p-1">
+      <EditTeam
+        teamId={team._id}
+        initialTeamName={team.teamName}
+        initialProjectTitle={team.projectTitle}
+        initialPhase={team.phase}
+        initialMembers={team.members ?? []}
+        trigger={
+          <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
+            Edit Team
+          </button>
+        }
+      />
+      <DeleteTeam
+        teamId={team._id}
+        teamName={team.teamName}
+        trigger={
+          <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
+            Delete Team
+          </button>
+        }
+      />
+    </DropdownMenuContent>
+  </DropdownMenu>
+</div>
+          
+
+
+
+          
         </div>
 
         <Separator />
@@ -137,42 +177,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           <InstructorProgress progress={team.progress ?? 0} />
         </div>
 
-        <div className="flex items-center justify-end w-full mt-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className=" hover:bg-muted transition-colors">
-                <MoreVertical className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="space-y-1 p-1">
-              <div>
-                <EditTeam
-                  teamId={team._id}
-                  initialTeamName={team.teamName}
-                  initialProjectTitle={team.projectTitle}
-                  initialPhase={team.phase}
-                  initialMembers={team.members ?? []}
-                  trigger={
-                    <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
-                      Edit Team
-                    </button>
-                  }
-                />
-              </div>
-              <div>
-                <DeleteTeam
-                  teamId={team._id}
-                  teamName={team.teamName}
-                  trigger={
-                    <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
-                      Delete Team
-                    </button>
-                  }
-                />
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        
         <div>
           
         </div>
@@ -220,9 +225,8 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                       <h1 className="text-foreground text-xs">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
                       <button
                     onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
-                    className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
-                  >
-                    View File
+                    className="text-xs outline rounded-md py-1 px-2 transition-colors"
+                  > View File
                   </button>
                     </div>
                   </div>
@@ -253,24 +257,14 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                           <h1 className="text-foreground font-medium text-sm lg:text-base">{task.title}</h1>
                           <p className="text-muted-foreground text-xs">Team: {task.assignedTo}</p>
                         </div>
-                        <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
+                        
+
+                        <div className="flex items-center gap-2">
+
+                            <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
                           {task.status === "completed" ? "Completed" : task.status === "in_progress" ? "In Progress" : "Pending"}
                         </span>
-                      </div>
-                    </div>
-                    <Separator className="mt-3" />
-                    <div className="grid grid-cols-1 gap-1 mt-3">
-                      <div>
-                        <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word">
-                        <span className="text-xs font-medium text-popover-foreground">Description: </span><br />
-                        {task.description}
-                      </p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                          <p className="text-muted-foreground text-xs">
-                        <span className="font-medium">Due:</span> {formatDate(task.dueDate)}
-                      </p>
-                      <div className="flex items-center">
+                          <div className="flex items-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
@@ -306,6 +300,29 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+
+
+                        </div>
+                        
+
+
+
+
+                      </div>
+                    </div>
+                    <Separator className="mt-3" />
+                    <div className="grid grid-cols-1 gap-1 mt-3">
+                      <div>
+                        <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word">
+                        <span className="text-xs font-medium text-popover-foreground">Description: </span><br />
+                        {task.description}
+                      </p>
+                      </div>
+                      <div className="flex items-center justify-between">
+                          <p className="text-muted-foreground text-xs">
+                        <span className="font-medium">Due:</span> {formatDate(task.dueDate)}
+                      </p>
+                      
                       </div>
 
                       
