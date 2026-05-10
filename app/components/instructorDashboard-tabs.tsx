@@ -16,6 +16,13 @@ import { Progress } from "@/components/ui/progress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
 import { PDFViewer } from "@/app/components/PDFViewer";
+import { MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const { user } = useUser();
@@ -130,15 +137,41 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           <InstructorProgress progress={team.progress ?? 0} />
         </div>
 
-        <div className="flex items-center justify-end w-full gap-2">
-        <EditTeam
-              teamId={team._id}
-              initialTeamName={team.teamName}
-              initialProjectTitle={team.projectTitle}
-              initialPhase={team.phase}
-              initialMembers={team.members ?? []} 
-            />
-            <DeleteTeam teamId={team._id} teamName={team.teamName} />
+        <div className="flex items-center justify-end w-full mt-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className=" hover:bg-muted transition-colors">
+                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="space-y-1 p-1">
+              <div>
+                <EditTeam
+                  teamId={team._id}
+                  initialTeamName={team.teamName}
+                  initialProjectTitle={team.projectTitle}
+                  initialPhase={team.phase}
+                  initialMembers={team.members ?? []}
+                  trigger={
+                    <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
+                      Edit Team
+                    </button>
+                  }
+                />
+              </div>
+              <div>
+                <DeleteTeam
+                  teamId={team._id}
+                  teamName={team.teamName}
+                  trigger={
+                    <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
+                      Delete Team
+                    </button>
+                  }
+                />
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div>
           
@@ -191,7 +224,6 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                   >
                     View File
                   </button>
-                      
                     </div>
                   </div>
                 </CardDescription>
@@ -238,9 +270,41 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                           <p className="text-muted-foreground text-xs">
                         <span className="font-medium">Due:</span> {formatDate(task.dueDate)}
                       </p>
-                      <div className="space-x-3 flex items-center">
-                          <EditTask taskId={task._id} initialTitle={task.title}  initialDescription={task.description} initialDueDate={task.dueDate} initialTeamId={task.capstoneProjectId}/>
-                          <DeleteTask taskId={task._id} taskTitle={task.title} />
+                      <div className="flex items-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
+                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="space-y-1 p-1">
+                            <div>
+                              <EditTask
+                                taskId={task._id}
+                                initialTitle={task.title}
+                                initialDescription={task.description}
+                                initialDueDate={task.dueDate}
+                                initialTeamId={task.capstoneProjectId}
+                                trigger={
+                                  <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
+                                    Edit Task
+                                  </button>
+                                }
+                              />
+                            </div>
+                            <div>
+                              <DeleteTask
+                                taskId={task._id}
+                                taskTitle={task.title}
+                                trigger={
+                                  <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
+                                    Delete Task
+                                  </button>
+                                }
+                              />
+                            </div>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                       </div>
 

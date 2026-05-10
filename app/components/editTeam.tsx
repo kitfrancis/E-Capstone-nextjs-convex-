@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { Pencil } from "lucide-react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
@@ -25,6 +25,7 @@ interface EditTeamProps {
   initialProjectTitle: string;
   initialPhase: string;
   initialMembers?: string[];
+  trigger?: ReactNode;
 }
 
 export function EditTeam({
@@ -33,6 +34,7 @@ export function EditTeam({
   initialProjectTitle,
   initialPhase,
   initialMembers = [],
+  trigger,
 }: EditTeamProps) {
   const [open, setOpen] = useState(false);
   const [teamName, setTeamName] = useState(initialTeamName);
@@ -119,9 +121,13 @@ const studentsInOtherTeams = useMemo(() => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-xs">
-          <Pencil className="w-3 h-3 mr-1" /> Edit
-        </Button>
+        {trigger ? (
+          trigger
+        ) : (
+          <Button variant="outline" size="sm" className="text-xs">
+            <Pencil className="w-3 h-3 mr-1" /> Edit
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>

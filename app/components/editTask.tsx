@@ -12,13 +12,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { useState } from "react"
+import { useState, useEffect, type ReactNode } from "react"
 import { Pencil } from "lucide-react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { toast } from "sonner"
 import { Id } from "@/convex/_generated/dataModel"
-import { useEffect } from "react";
 
 interface EditTaskProps {
   taskId: Id<"tasks">;
@@ -26,6 +25,7 @@ interface EditTaskProps {
   initialDescription: string;
   initialDueDate: string;
   initialTeamId: string;
+  trigger?: ReactNode;
 }
 
 export function EditTask({
@@ -34,6 +34,7 @@ export function EditTask({
   initialDescription,
   initialDueDate,
   initialTeamId,
+  trigger,
 }: EditTaskProps) {
   const [open, setOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState(initialTitle);
@@ -80,7 +81,11 @@ export function EditTask({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm"><Pencil className="w-3 h-3 mr-1" /> Edit</Button>
+        {trigger ? (
+          trigger
+        ) : (
+          <Button variant="outline" size="sm"><Pencil className="w-3 h-3 mr-1" /> Edit</Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>

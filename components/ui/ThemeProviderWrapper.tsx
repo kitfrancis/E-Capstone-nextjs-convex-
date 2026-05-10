@@ -1,12 +1,30 @@
-  "use client";
+"use client";
 
-  import { ThemeProvider as NextThemesProvider } from "next-themes";
-  import { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
-  export default function ThemeProviderWrapper({ children }: { children: ReactNode }) {
-    return (
-      <NextThemesProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange  nonce="">
-        {children}
-      </NextThemesProvider>
-    );
+const THEME_STORAGE_KEY = "theme";
+const DARK_CLASS = "dark";
+
+function getSystemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme: string) {
+  const root = document.documentElement;
+  if (theme === "dark") {
+    root.classList.add(DARK_CLASS);
+  } else {
+    root.classList.remove(DARK_CLASS);
   }
+  root.dataset.theme = theme;
+}
+
+export default function ThemeProviderWrapper({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const theme = savedTheme === "dark" || savedTheme === "light" ? savedTheme : getSystemTheme();
+    applyTheme(theme);
+  }, []);
+
+  return <>{children}</>;
+}

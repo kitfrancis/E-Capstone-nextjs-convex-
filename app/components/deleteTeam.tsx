@@ -7,6 +7,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Trash2 } from "lucide-react"
+import type { ReactNode } from "react"
 import { useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
@@ -15,9 +16,10 @@ import { toast } from "sonner"
 interface DeleteTeamProps {
   teamId: Id<"capstoneProjects">;
   teamName: string;
+  trigger?: ReactNode;
 }
 
-export function DeleteTeam({ teamId, teamName }: DeleteTeamProps) {
+export function DeleteTeam({ teamId, teamName, trigger }: DeleteTeamProps) {
   const deleteTeam = useMutation(api.dashboard.deleteTeam);
 
   const handleDelete = async () => {
@@ -33,9 +35,13 @@ export function DeleteTeam({ teamId, teamName }: DeleteTeamProps) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-xs text-red-500 border-red-500/30 hover:bg-red-500/10 hover:text-red-500">
-          <Trash2 className="w-3 h-3 mr-1" /> Delete
-        </Button>
+        {trigger ? (
+          trigger
+        ) : (
+          <Button variant="outline" size="sm" className="text-xs text-red-500 border-red-500/30 hover:bg-red-500/10 hover:text-red-500">
+            <Trash2 className="w-3 h-3 mr-1" /> Delete
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

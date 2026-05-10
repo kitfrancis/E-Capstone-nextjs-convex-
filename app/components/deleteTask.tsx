@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Trash2 } from "lucide-react"
 import { useMutation } from "convex/react"
+import type { ReactNode } from "react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
@@ -21,9 +22,10 @@ import { toast } from "sonner"
 interface DeleteTaskProps {
   taskId: Id<"tasks">;
   taskTitle: string;
+  trigger?: ReactNode;
 }
 
-export function DeleteTask({ taskId, taskTitle }: DeleteTaskProps) {
+export function DeleteTask({ taskId, taskTitle, trigger }: DeleteTaskProps) {
   const deleteTask = useMutation(api.dashboard.deleteTask);
 
   const handleDelete = async () => {
@@ -39,9 +41,13 @@ export function DeleteTask({ taskId, taskTitle }: DeleteTaskProps) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button className="bg-red-500 text-white" size="sm">
-          <Trash2 className="w-3 h-3 mr-1" /> Remove
-        </Button>
+        {trigger ? (
+          trigger
+        ) : (
+          <Button className="bg-red-500 text-white" size="sm">
+            <Trash2 className="w-3 h-3 mr-1" /> Remove
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

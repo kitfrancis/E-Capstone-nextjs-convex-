@@ -1,25 +1,44 @@
 "use client";
 
 import * as React from "react";
-import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 
-export function ThemeProvider({
-  children,
-  ...props
-}: React.ComponentProps<typeof NextThemesProvider>) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+const THEME_STORAGE_KEY = "theme";
+const DARK_CLASS = "dark";
+
+function getSystemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme: "light" | "dark") {
+  const root = document.documentElement;
+  if (theme === "dark") {
+    root.classList.add(DARK_CLASS);
+  } else {
+    root.classList.remove(DARK_CLASS);
+  }
+  root.dataset.theme = theme;
 }
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  const [theme, setTheme] = React.useState<"light" | "dark">("light");
 
   React.useEffect(() => {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const resolvedTheme = savedTheme === "dark" || savedTheme === "light" ? savedTheme : getSystemTheme();
+    setTheme(resolvedTheme);
+    applyTheme(resolvedTheme);
     setMounted(true);
   }, []);
+
+  const handleToggle = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    setTheme(nextTheme);
+    applyTheme(nextTheme);
+  };
 
   if (!mounted) return null;
 
@@ -27,7 +46,7 @@ export function ThemeToggle() {
     <Button
       variant="outline"
       size="icon"
-      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      onClick={handleToggle}
     >
       <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
       <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
