@@ -63,8 +63,8 @@ export default defineSchema({
     userName: v.string(),
     comment: v.string(),
     pageNumber: v.number(),
-    x: v.number(), // percentage from left
-    y: v.number(), // percentage from top
+    x: v.number(),
+    y: v.number(), 
     createdAt: v.string(),
   }).index("by_deliverable", ["deliverableId"]),
 

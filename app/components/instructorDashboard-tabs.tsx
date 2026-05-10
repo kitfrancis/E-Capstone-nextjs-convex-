@@ -15,10 +15,18 @@ import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { Progress } from "@/components/ui/progress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
+import { PDFViewer } from "@/app/components/PDFViewer";
 
 export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const { user } = useUser();
     const [progress, setProgress] = useState(13)
+
+    //for pdf viewer
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string} | null>(null);
+  const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
+  const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
+
+
 
   const allDeliverables = useQuery(api.dashboard.getAllDeliverables, {});
   const allTeams = useQuery(api.dashboard.getTeams, {});
@@ -177,6 +185,12 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                     <Separator className="mt-3" />
                     <div className="flex justify-between items-center mt-4">
                       <h1 className="text-foreground text-xs">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
+                      <button
+                    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
+                    className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
+                  >
+                    View File
+                  </button>
                       
                     </div>
                   </div>
@@ -239,6 +253,14 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           ))
         )}
       </TabsContent>
+      {/* for pdf viewer */}
+            <PDFViewer
+        open={!!selectedDeliverable && !!fileUrl}
+        fileUrl={fileUrl ?? ""}
+        fileName={selectedDeliverable?.fileName ?? ""}
+        deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
+        onClose={() => setSelectedDeliverable(null)}
+      />
     </Tabs>
   );
 }

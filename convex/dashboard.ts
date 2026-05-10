@@ -301,6 +301,7 @@ export const deleteTask = mutation({
 })
 
 
+
 export const updateTeam = mutation({
   args: {
     teamId: v.id("capstoneProjects"),
@@ -328,6 +329,13 @@ export const deleteTeam = mutation({
     await ctx.db.delete(args.teamId);
   },
 }); 
+
+export const deleteDeliverable = mutation({
+  args: { deliverableId: v.id("deliverables") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.deliverableId);
+  }
+});
 
 
 export const getStudents = query({
@@ -421,5 +429,37 @@ export const deletePdfComment = mutation({
         });
       }
     }
+  },
+});
+
+export const getDashboardData = query({
+  args: {},
+  handler: async (ctx) => {
+    const projects = await ctx.db.query("capstoneProjects").collect();
+    const tasks = await ctx.db.query("tasks").collect();
+    const deliverables = await ctx.db.query("deliverables").collect();
+
+    const now = new Date().toISOString();
+
+    return {
+      totalTeams: projects.length,
+      activeProjects: projects.length,
+      pendingReviews: deliverables.filter(d => d.status === "under_review").length,
+      overdueTasks: tasks.filter(t => t.dueDate < now && t.status !== "completed").length,
+    };
+  },
+});
+
+export const updateTaskStatus = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("in_progress"),
+      v.literal("completed")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.taskId, { status: args.status });
   },
 });

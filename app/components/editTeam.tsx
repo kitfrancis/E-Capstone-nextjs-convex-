@@ -53,7 +53,7 @@ const studentsInOtherTeams = useMemo(() => {
   if (allTeam) {
     allTeam.forEach(team => {
       if (team._id === teamId) return;
-      team.members?.forEach(id => taken.add(String(id))); // ← cast to string
+      team.members?.forEach(id => taken.add(String(id))); 
     });
   }
   return taken;
@@ -73,8 +73,8 @@ const studentsInOtherTeams = useMemo(() => {
 
 
   const filteredStudents = students?.filter(s =>
-  !selectedMembers.includes(s._id) &&          // not already selected
-  !studentsInOtherTeams.has(s._id) &&           // not in another team
+  !selectedMembers.includes(s._id) &&  
+  !studentsInOtherTeams.has(s._id) &&   
   (s.name?.toLowerCase().includes(search.toLowerCase()) ||
    s.email?.toLowerCase().includes(search.toLowerCase()))
 ) ?? [];

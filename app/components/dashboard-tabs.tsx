@@ -7,15 +7,18 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectDemo } from "@/app/components/select";
 import { Separator } from "@/components/ui/separator";
-import { SeparatorVertical } from "lucide-react";
-import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
+import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
+import { Button } from "@/components/ui/button";
+import { MoreVertical } from "lucide-react";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 
 const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
   ssr: false,
@@ -37,6 +40,9 @@ export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capsto
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
+const updateTaskStatus = useMutation(api.dashboard.updateTaskStatus);
+
+const [activeTab, setActiveTab] = useState("deliverables");
    const deliverables = useQuery(
     api.dashboard.getDeliverables,
     capstoneProjectId ? { capstoneProjectId } : "skip"
@@ -92,6 +98,8 @@ const handleUpload = async () => {
   }
 };
 
+
+
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
     if (status === "under_review") return "bg-blue-500";
@@ -113,7 +121,7 @@ const handleUpload = async () => {
 };
 
   return (
-    <Tabs defaultValue="deliverables" className="w-full">
+    <Tabs value={activeTab} onValueChange={setActiveTab}  className="w-full">
       <div className="flex justify-center items-center">
         <TabsList className="gap-6 w-full">
           <TabsTrigger value="deliverables" className="md:text-sm">Deliverables</TabsTrigger>
@@ -150,23 +158,46 @@ const handleUpload = async () => {
                     <Separator className="mt-3" />
                     <div className="flex justify-between items-center mt-4 ">
                       <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
-                      {isPdf(d.fileName) ? (
-                  <button
-                    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
-                    className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
-                  >
-                    View File
+                     
+
+                      <div className="flex  ">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
+                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
                   </button>
-                ) : (
-                  <a
-                    href={fileUrl ?? "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs lg:text-sm outline rounded-md py-1 px-2 transition-colors"
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="flex flex-col justify-center">
+                  {d.status === "needs_revision" && (
+                    <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
+                      Resubmit
+                    </DropdownMenuItem>
+                  )}
+                  {isPdf(d.fileName) ? (
+                    <DropdownMenuItem
+                      onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
+                    >
+                      View File
+                     
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem asChild>
+                      <a href={fileUrl ?? "#"} target="_blank" rel="noopener noreferrer">
+                        Download File
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(e) => e.preventDefault()}
                   >
-                    Download File
-                  </a>
-                )}
+                    <DeleteDeliverable deliverableId={d._id} fileName={d.fileName} 
+                    trigger={<span className="w-full text-sm">Delete</span>} />
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+                     
                     </div>
                   </div>
                   </CardDescription>
@@ -258,9 +289,28 @@ const handleUpload = async () => {
                       </div>
                     </div>
                     <Separator className="mt-3"/>
-                    <div className="grid grid-cols-1 gap-1 mt-3 ">
-                      <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word"><span className="text-xs  font-medium text-popover-foreground">Description: </span><br />
+                      <div className="grid grid-cols-1 gap-1 mt-3 ">
+                      
+                  <div className="flex items-center justify-between w-full">
+                    <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word"><span className="text-xs  font-medium text-popover-foreground">Description: </span><br />
                       {task.description}</p>
+                    <button
+                          disabled={task.status === "completed"}
+                          onClick={() => {
+                            if (task.status === "pending") updateTaskStatus({ taskId: task._id, status: "in_progress" });
+                            else if (task.status === "in_progress") updateTaskStatus({ taskId: task._id, status: "completed" });
+                          }}
+                          className={`text-xs px-3 py-1 rounded-md text-white font-medium
+                            ${task.status === "pending" ? "bg-blue-500 hover:bg-blue-600" :
+                              task.status === "in_progress" ? "bg-green-500 hover:bg-green-600" :
+                              "bg-gray-400 cursor-not-allowed"}`}
+                        >
+                          {task.status === "pending" ? "Start Task" :
+                          task.status === "in_progress" ? "Mark Complete" : "Completed"}
+                        </button>
+                    </div>                    
+                      
+                      
                       <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
                     </div>
                   </div>

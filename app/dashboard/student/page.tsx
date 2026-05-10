@@ -11,6 +11,7 @@ export default function Dashboard() {
     api.dashboard.getMyProject,
     me ? { clerkId: me.clerkId } : "skip"
   );
+  const dashboardData = useQuery(api.dashboard.getDashboardData);
 
   const teamMembers = useQuery(
     api.dashboard.getProjectMembers,
