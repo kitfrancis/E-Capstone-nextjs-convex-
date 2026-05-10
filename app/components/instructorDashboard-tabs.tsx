@@ -15,7 +15,7 @@ import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { Progress } from "@/components/ui/progress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
-import { PDFViewer } from "@/app/components/PDFViewer";
+import dynamic from "next/dynamic";
 import { MoreVertical, EyeIcon } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,6 +27,11 @@ import {
 export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const { user } = useUser();
     const [progress, setProgress] = useState(13)
+
+    const PDFViewer = dynamic(
+  () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
+  { ssr: false, loading: () => <div>Loading PDF viewer...</div> }
+);
 
     //for pdf viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string} | null>(null);
