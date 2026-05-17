@@ -16,8 +16,7 @@ export default defineSchema({
       v.literal("instructor"),
       v.literal("adviser")
     ),
-
-    course: v.optional(v.string()),
+    inviteCode: v.optional(v.string()),
   }).index("by_clerk_id", ["clerkId"])
     .index("by_studentno", ["studentNo"]),
 
@@ -44,7 +43,7 @@ export default defineSchema({
     needsRevision: v.number(),
     adviserId: v.optional(v.string()),
     members: v.optional(v.array(v.string())),
-    inviteCode: v.string(),
+    inviteCode: v.optional(v.string()),
   }).index("by_inviteCode", ["inviteCode"]),
 
   deliverables: defineTable({

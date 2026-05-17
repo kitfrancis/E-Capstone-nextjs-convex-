@@ -17,7 +17,6 @@ export default function AdviserProfile() {
   const [studentNo, setStudentNo] = useState("");
   const [program, setProgram] = useState("");
   const [section, setSection] = useState("");
-  const [course, setCourse] = useState("computer-science");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -26,7 +25,6 @@ export default function AdviserProfile() {
       setStudentNo(me.studentNo || "");
       setProgram(me.program || "");
       setSection(me.section || "");
-      setCourse(me.course || "computer-science");
     }
   }, [me]);
 

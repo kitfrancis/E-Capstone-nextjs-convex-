@@ -24,7 +24,6 @@ export default function InstructorProfile() {
       setName(me.name || "");
       setProgram(me.program || "");
       setSection(me.section || "");
-      setCourse(me.course || "computer-science");
     }
   }, [me]);
 

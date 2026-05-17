@@ -499,4 +499,58 @@ export const updateTaskStatus = mutation({
 
 
 
-// make sure this exists in convex/dashboard.ts
+//for invite code
+
+export const getTeamByInviteCode = query({
+  args: { inviteCode: v.string() },
+  handler: async (ctx, args) => {
+    const teams = await ctx.db.query("capstoneProjects").collect();
+    return teams.find(t => t.inviteCode === args.inviteCode) ?? null;
+  },
+});
+
+// export const validateInviteCode = action({
+//   args: { inviteCode: v.string() },
+//   handler: async (ctx, args): Promise<boolean> => {
+//     const team = await ctx.runQuery(api.dashboard.getTeamByInviteCode, {
+//       inviteCode: args.inviteCode,
+//     });
+//     return team !== null;
+//   },
+// });
+
+
+export const validateInviteCode = query({
+  args: { inviteCode: v.string() },
+  handler: async (ctx, args): Promise<boolean> => {
+    const teams = await ctx.db.query("capstoneProjects").collect();
+    const team = teams.find(t => t.inviteCode === args.inviteCode);
+    return team !== null;
+  },
+});
+
+export const joinTeamByInviteCode = mutation({
+  args: {
+    clerkId: v.string(),
+    inviteCode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Find the team first
+    const teams = await ctx.db.query("capstoneProjects").collect();
+    const team = teams.find(t => t.inviteCode === args.inviteCode);
+    if (!team) throw new Error("Team not found for code: " + args.inviteCode);
+
+    // Find the user
+    const users = await ctx.db.query("users").collect();
+    const user = users.find(u => u.clerkId === args.clerkId);
+    if (!user) throw new Error("User not found for clerkId: " + args.clerkId);
+
+    // Add to members
+    const alreadyMember = (team.members ?? []).includes(user._id);
+    if (!alreadyMember) {
+      await ctx.db.patch(team._id, {
+        members: [...(team.members ?? []), user._id],
+      });
+    }
+  },
+});

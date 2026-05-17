@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSignUp } from "@clerk/nextjs/legacy";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,10 +31,20 @@ export default function SignUpPage() {
   const [studentNo, setStudentNo] = useState("");
   const [program, setProgram] = useState("");
   const [section, setSection] = useState("");
-  const [verifyCode, setVerifyCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+
+  //for code 
+  const [verifyCode, setVerifyCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+
+
+  const joinTeamByInviteCode = useMutation(api.dashboard.joinTeamByInviteCode);
+
+
+    const ValidateInviteCode = useQuery(api.dashboard.validateInviteCode, inviteCode ? { inviteCode } : "skip");
 
   useEffect(() => {
     if (isSignedIn) router.push("/dashboard/student");
@@ -47,6 +57,13 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
+      if(!ValidateInviteCode) {
+        setError("Invalid invite code.");
+        setLoading(false);
+        return;
+      }
+
+
       await signUp.create({ firstName, lastName, emailAddress: email, password });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("verify");
@@ -75,6 +92,12 @@ export default function SignUpPage() {
           studentNo,
           program,
           section,
+          inviteCode,
+        });
+
+        await joinTeamByInviteCode({
+          clerkId: result.createdUserId!,
+          inviteCode,
         });
 
         await setActive({ session: result.createdSessionId });
@@ -242,7 +265,7 @@ export default function SignUpPage() {
 
           <div className="space-y-1"> 
             <Label className="text-xs">Invite Code( not functional yet )</Label>
-            <Input placeholder="e.g. ECAP-ABCD-EFGH" className="text-xs mb-3" onChange={(e) => setVerifyCode(e.target.value)} />
+            <Input placeholder="e.g. ECAP-ABCD-EFGH" className="text-xs mb-3" onChange={(e) => setInviteCode(e.target.value.toUpperCase())} />
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash, Trash2 } from "lucide-react";
+import { Check, Copy, Key, Pencil, Trash, Trash2 } from "lucide-react";
 import { EditTask } from "@/app/components/editTask";
 import { DeleteTask } from "./deleteTask";
 import { InstructorProgress } from "@/app/components/TeamsProgress";
@@ -17,6 +17,7 @@ import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
 import dynamic from "next/dynamic";
 import { MoreVertical, EyeIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,16 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
   const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
   const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
+
+  //for Code
+  const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
+
+
+  const copyInviteCode = (code: string, teamId: string) => {
+  navigator.clipboard.writeText(code);
+  setCopiedTeamId(teamId);
+  setTimeout(() => setCopiedTeamId(null), 2000);
+};
 
 
   const allDeliverables = useQuery(api.dashboard.getAllDeliverables, {});
@@ -113,6 +124,44 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
   <span className="inline-flex items-center justify-center rounded-full px-2.5 py-0.5 bg-blue-500 text-white text-xs font-medium">
     {team.phase}
   </span>
+
+  {/* ── invite code key button ──
+      only shown if the team has an invite code saved.
+      clicking reveals the code in a popover with a copy button.
+      this is the fallback for instructors who forgot to copy
+      the code from the Step 2 success screen. */}
+  {team.inviteCode && (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="View invite code">
+          <Key className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3">
+        <p className="text-xs text-muted-foreground mb-2">
+          Share this code with students. They enter it at sign-up to join this team.
+        </p>
+        <div className="flex items-center justify-between bg-muted rounded-md px-3 py-2">
+          <span className="font-mono text-sm tracking-widest font-semibold">
+            {team.inviteCode}
+          </span>
+          <button
+            onClick={() => copyInviteCode(team.inviteCode!, team._id)}
+            className="text-muted-foreground hover:text-foreground transition-colors ml-2"
+            aria-label="Copy invite code"
+          >
+            {copiedTeamId === team._id
+              ? <Check className="w-4 h-4 text-green-500" />
+              : <Copy className="w-4 h-4" />
+            }
+          </button>
+        </div>
+        {copiedTeamId === team._id && (
+          <p className="text-xs text-green-500 text-right mt-1">Copied!</p>
+        )}
+      </PopoverContent>
+    </Popover>
+  )}
 
   <DropdownMenu>
     <DropdownMenuTrigger asChild>

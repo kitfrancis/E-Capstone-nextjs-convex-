@@ -1,4 +1,3 @@
-
 "use client"  
 import { Button } from "@/components/ui/button"
 import {
@@ -8,207 +7,171 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus } from "lucide-react"
+import { Plus, Copy, Check, CheckCircle2 } from "lucide-react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { useState, useMemo } from "react"
-import { X } from "lucide-react"
+import { useState, useRef } from "react"
 
 export function DialogDemo() {
   const advisers = useQuery(api.users.getAdvisers);
-  const students = useQuery(api.users.getStudents);
-  const allProjects = useQuery(api.dashboard.getTeams);
   const createProject = useMutation(api.dashboard.createCapstoneProject);
+  const isSubmitting = useRef(false);
 
   const [open, setOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [projectTitle, setProjectTitle] = useState("");
   const [adviserId, setAdviserId] = useState("");
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  const [searchStudent, setSearchStudent] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [createdCode, setCreatedCode] = useState("");
+  const [createdTeamName, setCreatedTeamName] = useState("");
+  const [copied, setCopied] = useState(false);
 
-  // Check which students already have teams
-  const studentsWithTeams = useMemo(() => {
-    const withTeams = new Set<string>();
-    if (allProjects) {
-      allProjects.forEach(project => {
-        if (project.members) {
-          project.members.forEach(memberId => {
-            withTeams.add(memberId);
-          });
-        }
-      });
-    }
-    return withTeams;
-  }, [allProjects]);
-
-  const filteredStudents = students?.filter(s =>
-    s.name.toLowerCase().includes(searchStudent.toLowerCase()) &&
-    !selectedStudents.includes(s._id) &&
-    !studentsWithTeams.has(s._id)
-  ) ?? [];
-
-  const addStudent = (id: string) => {
-    if (studentsWithTeams.has(id)) {
-      alert("You are already a member of a team. To join a new one, you must leave your current team first.");
-      return;
-    }
-    setSelectedStudents(prev => [...prev, id]);
-    setSearchStudent("");
+  const copyCode = () => {
+    navigator.clipboard.writeText(createdCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const removeStudent = (id: string) => {
-    setSelectedStudents(prev => prev.filter(s => s !== id));
+  const resetForm = () => {
+    setTeamName("");
+    setProjectTitle("");
+    setAdviserId("");
+    setCreatedCode("");
+    setCreatedTeamName("");
+    setCopied(false);
   };
 
-  const getStudentName = (id: string) => {
-    return students?.find(s => s._id === id)?.name ?? id;
+  const handleDone = () => {
+    resetForm();
+    setOpen(false);
   };
 
   const handleSubmit = async () => {
-    if (!teamName || !projectTitle || !adviserId || selectedStudents.length === 0) {
-      alert("Please fill all fields and select at least one member");
+    console.log("Submit clicked");
+    if (isSubmitting.current) return;
+    if (!teamName || !projectTitle || !adviserId) {
+      alert("Please fill all fields");
       return;
     }
 
-    // Validate that no selected students already have teams
-    const studentAlreadyInTeam = selectedStudents.some(id => studentsWithTeams.has(id));
-    if (studentAlreadyInTeam) {
-      alert("One or more selected students is already in a team. Each student can only be in one team.");
-      return;
-    }
-
+    isSubmitting.current = true;
     setIsLoading(true);
     try {
-      await createProject({
+      const code = await createProject({
         teamName,
         projectTitle,
         adviserId,
       });
-      // Reset form
-      setTeamName("");
-      setProjectTitle("");
-      setAdviserId("");
-      setSelectedStudents([]);
-      setOpen(false);
-      alert("Team created successfully!");
+      setCreatedTeamName(teamName);
+      setCreatedCode(code);
     } catch (error) {
-      console.error("Failed to create team:", error);
-      alert("Failed to create team");
+      console.error("Failed to create project:", error);
+      alert("Failed to create project");
     } finally {
       setIsLoading(false);
+      isSubmitting.current = false;
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) resetForm(); }}>
       <DialogTrigger asChild>
         <Button variant="outline" className="text-xs lg:text-sm flex items-center justify-center px-1.5 lg:px-3 bg-black dark:bg-gray-50 text-background hover:bg-gray-800 hover:text-background dark:hover:bg-gray-200">
           <Plus /> Create Team
         </Button>
       </DialogTrigger>
+
       <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Create New Team</DialogTitle>
-          <DialogDescription>
-            Setup a new project team with members and adviser. Each student can only be in one team.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="TeamName">Team Name</Label>
-            <Input id="TeamName" placeholder="e.g. Project Alpha" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="projectTitle">Project Title</Label>
-            <Input id="projectTitle" placeholder="e.g. Thesis Management System" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="adviser">Adviser</Label>
-             <Select value={adviserId} onValueChange={setAdviserId}>
-              <SelectTrigger className="w-full py-3 text-xs">
-                <SelectValue placeholder="Select adviser" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {advisers === undefined ? (
-                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                  ) : advisers.length === 0 ? (
-                    <SelectItem value="none" disabled>No advisers found</SelectItem>
-                  ) : (
-                    advisers.map((adviser) => (
-                      <SelectItem key={adviser._id} value={adviser._id}>
-                        {adviser.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="">Members <span className="text-muted-foreground">(Shows unassigned students only.)</span> </Label>
-            {selectedStudents.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-1">
-                {selectedStudents.map(id => (
-                  <span key={id} className="inline-flex items-center gap-1 bg-sidebar-accent text-xs rounded-full px-2 py-0.5">
-                    {getStudentName(id)}
-                    <button onClick={() => removeStudent(id)}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
+        {createdCode ? (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                <DialogTitle>Team Created!</DialogTitle>
               </div>
-            )}
-            <Input
-              placeholder="Search student by name..."
-              value={searchStudent}
-              onChange={e => setSearchStudent(e.target.value)}
-              onFocus={() => setShowDropdown(true)}
-              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-              disabled={selectedStudents.length >= 1}
-            />
-            {selectedStudents.length > 0 && (selectedStudents.length < 3 || selectedStudents.length > 4) && (
-                <p className="text-xs text-amber-600 mt-1 font-medium">
-                  {selectedStudents.length < 3 
-                    ? `Add ${3 - selectedStudents.length} more to meet the 3-4 student requirement.`
-                    : "Please remove students to stay within the 4-student limit."}
+              <DialogDescription>
+                <span className="font-medium text-foreground">{createdTeamName}</span> has been set up successfully.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3 py-2">
+              <div className="flex flex-col gap-1.5 p-4 rounded-lg border bg-muted/50">
+                <p className="text-xs text-muted-foreground">
+                  Share this invite code with your students. They'll enter it during sign-up to join this team.
                 </p>
-              )}
-            {showDropdown && filteredStudents.length > 0 && selectedStudents.length < 1 && (
-              <div className="border border-gray-200 rounded-lg max-h-32 overflow-y-auto mt-1">
-                {filteredStudents.map(student => (
-                  <div
-                    key={student._id}
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => addStudent(student._id)}
-                    className=" px-2 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-950 cursor-pointer"
-                  >
-                    {student.name}
-                    <span className="text-xs text-gray-400 ml-2">{student.email}</span>
-                  </div>
-                ))}
+                <div className="flex items-center justify-between bg-background border rounded-md px-4 py-3 mt-1">
+                  <span className="font-mono text-base tracking-widest font-semibold">
+                    {createdCode}
+                  </span>
+                  <button onClick={copyCode} className="text-muted-foreground hover:text-foreground transition-colors ml-3">
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+                {copied && <p className="text-xs text-green-500 text-right">Copied to clipboard!</p>}
               </div>
-            )}
-            {searchStudent && filteredStudents.length === 0 && selectedStudents.length < 1 && (
-              <p className="text-xs text-gray-400 mt-1">No available students found</p>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={isLoading}>Cancel</Button>
-          </DialogClose>
-          <Button onClick={handleSubmit} disabled={isLoading || selectedStudents.length !== 1}>
-            {isLoading ? "Creating..." : "Create Team"}
-          </Button>
-        </DialogFooter>
+              <p className="text-xs text-muted-foreground text-center">
+                You can also find this code later on the team card.
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button onClick={handleDone} className="w-full">Done</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Create New Team</DialogTitle>
+              <DialogDescription>
+                Setup a new project team with an adviser. Students join via invite code at sign-up.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="TeamName">Team Name</Label>
+                <Input id="TeamName" placeholder="e.g. Project Alpha" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="projectTitle">Project Title</Label>
+                <Input id="projectTitle" placeholder="e.g. Thesis Management System" value={projectTitle} onChange={(e) => setProjectTitle(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="adviser">Adviser</Label>
+                <Select value={adviserId} onValueChange={setAdviserId}>
+                  <SelectTrigger className="w-full py-3 text-xs">
+                    <SelectValue placeholder="Select adviser" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {advisers === undefined ? (
+                        <SelectItem value="loading" disabled>Loading...</SelectItem>
+                      ) : advisers.length === 0 ? (
+                        <SelectItem value="none" disabled>No advisers found</SelectItem>
+                      ) : (
+                        advisers.map((adviser) => (
+                          <SelectItem key={adviser._id} value={adviser._id}>
+                            {adviser.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" disabled={isLoading}>Cancel</Button>
+              </DialogClose>
+              <Button type="button" onClick={handleSubmit} disabled={isLoading}>
+                {isLoading ? "Creating..." : "Create Team"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
-  )
+  );
 }
-
-
-
