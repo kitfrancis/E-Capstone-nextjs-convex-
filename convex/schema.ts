@@ -18,7 +18,8 @@ export default defineSchema({
     ),
 
     course: v.optional(v.string()),
-  }).index("by_clerk_id", ["clerkId"]),
+  }).index("by_clerk_id", ["clerkId"])
+    .index("by_studentno", ["studentNo"]),
 
   projects: defineTable({
     title: v.string(),

@@ -18,6 +18,7 @@ export default function StudentProfile() {
   const [program, setProgram] = useState("");
   const [section, setSection] = useState("");
   const [saving, setSaving] = useState(false);
+  const [studentNoError, setStudentNoError] = useState("");
 
   useEffect(() => {
     if (me) {
@@ -29,11 +30,27 @@ export default function StudentProfile() {
   }, [me]);
 
   async function handleSave() {
-    setSaving(true);
+  setSaving(true);
+  setStudentNoError("");
+  try {
     await updateProfile({ name, studentNo, program, section });
-    setSaving(false);
     toast("Profile updated successfully", { position: "top-center" });
+  } catch (err: any) {
+
+  console.log("Error object:", err);
+  console.log("err.message:", err.message);
+  console.log("err.data:", err.data);
+  console.log("err.toString():", err.toString());
+  const message = err.data ?? err.message ?? "";
+    if (message.includes("Student number")) {
+      setStudentNoError("This student number is already registered.");
+    } else {
+      toast.error("Failed to save changes.");
+    }
+  } finally {
+    setSaving(false);
   }
+}
 
   return (
     <>
@@ -82,10 +99,18 @@ export default function StudentProfile() {
                 <Input
                   type="text"
                   value={studentNo}
-                  onChange={(e) => setStudentNo(e.target.value)}
+                  onChange={(e) => {
+                    setStudentNo(e.target.value);
+                    setStudentNoError("");
+                  }}
                   placeholder="e.g. 2023-1309-A"
-                  className="bg-sidebar-accent border text-foreground text-sm rounded-lg px-4 py-2 h-9 sm:h-10"
+                  className={`bg-sidebar-accent border text-foreground text-sm rounded-lg px-4 py-2 h-9 sm:h-10 ${
+    studentNoError ? "border-red-500 focus-visible:ring-red-500" : ""
+  }`}
                 />
+                {studentNoError && (
+  <p className="text-red-500 text-xs mt-1">{studentNoError}</p>
+)}
 
                 <Label className="mt-2 font-semibold text-base">Program</Label>
                 <Select value={program} onValueChange={setProgram}>

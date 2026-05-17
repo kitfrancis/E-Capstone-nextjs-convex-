@@ -23,6 +23,16 @@ export const upsertUser = mutation({
       .first();
 
     if (!existing) {
+      if (args.studentNo) {
+        const duplicate = await ctx.db
+          .query("users")
+          .withIndex("by_studentno", (q) => q.eq("studentNo", args.studentNo))
+          .first();
+
+        if (duplicate) {
+          throw new Error("Student number is already registered.");
+        }
+      }
       await ctx.db.insert("users", args);
     } else {
       await ctx.db.patch(existing._id, {
@@ -54,6 +64,23 @@ export const updateProfile = mutation({
       .first();
 
     if (!user) throw new Error("User not found");
+
+     if (args.studentNo && args.studentNo.trim() !== "") {
+  const allUsers = await ctx.db.query("users").collect();
+  console.log("All studentNos in DB:", allUsers.map(u => u.studentNo));
+  
+  const duplicate = await ctx.db
+    .query("users")
+    .filter((q) => q.eq(q.field("studentNo"), args.studentNo))
+    .first();
+
+  console.log("Looking for:", args.studentNo);
+  console.log("Duplicate found:", duplicate);
+
+  if (duplicate && duplicate._id !== user._id) {
+    throw new Error("Student number is already registered.");
+  }
+}
 
     await ctx.db.patch(user._id, {
       name: args.name,
