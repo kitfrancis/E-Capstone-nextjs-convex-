@@ -12,6 +12,9 @@ export const upsertUser = mutation({
       v.literal("instructor"),
       v.literal("adviser")
     ),
+    studentNo: v.optional(v.string()),
+    program: v.optional(v.string()),
+    section: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -23,8 +26,12 @@ export const upsertUser = mutation({
       await ctx.db.insert("users", args);
     } else {
       await ctx.db.patch(existing._id, {
+        name: args.name,
         email: args.email,
         image: args.image,
+        studentNo: args.studentNo,
+        program: args.program,
+        section: args.section,
       });
     }
   },
@@ -33,8 +40,9 @@ export const upsertUser = mutation({
 export const updateProfile = mutation({
   args: {
     name: v.string(),
-    studentId: v.optional(v.string()),
-    course: v.optional(v.string()),
+    studentNo: v.optional(v.string()),
+    program: v.optional(v.string()),
+    section: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -49,7 +57,9 @@ export const updateProfile = mutation({
 
     await ctx.db.patch(user._id, {
       name: args.name,
-      course: args.course,
+      studentNo: args.studentNo,
+      program: args.program,
+      section: args.section,
     });
   },
 });
@@ -67,13 +77,12 @@ export const getMe = query({
   },
 });
 
-
 export const getAdvisers = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db
       .query("users")
-      .filter(q => q.eq(q.field("role"), "adviser"))
+      .filter((q) => q.eq(q.field("role"), "adviser"))
       .collect();
   },
 });
@@ -83,7 +92,7 @@ export const getStudents = query({
   handler: async (ctx) => {
     return await ctx.db
       .query("users")
-      .filter(q => q.eq(q.field("role"), "student"))
+      .filter((q) => q.eq(q.field("role"), "student"))
       .collect();
   },
 });

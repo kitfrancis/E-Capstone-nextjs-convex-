@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
@@ -156,9 +156,17 @@ export const createCapstoneProject = mutation({
     teamName: v.string(),
     projectTitle: v.string(),
     adviserId: v.string(),
-    members: v.array(v.string()),
   },
+
   handler: async (ctx, args) => {
+    // Generate invite code
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "ECAP-";
+    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    code += "-";
+    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+
+
     const projectId = await ctx.db.insert("capstoneProjects", {
       teamName: args.teamName,
       projectTitle: args.projectTitle,
@@ -168,17 +176,9 @@ export const createCapstoneProject = mutation({
       underReview: 0,
       needsRevision: 0,
       adviserId: args.adviserId,
-      members: args.members,
+      members: [],
+      inviteCode: code,
     });
-
-    for (const memberId of args.members) {
-      await ctx.runMutation(api.notifications.sendNotification, {
-        userId: memberId,
-        message: `You have been added to team "${args.teamName}" for project "${args.projectTitle}".`,
-        type: "team_created",
-        relatedId: projectId,
-      });
-    }
 
     await ctx.runMutation(api.notifications.sendNotification, {
       userId: args.adviserId,
@@ -187,7 +187,7 @@ export const createCapstoneProject = mutation({
       relatedId: projectId,
     });
 
-    return projectId;
+    return code;
   },
 });
 
@@ -496,3 +496,7 @@ export const updateTaskStatus = mutation({
     await ctx.db.patch(args.taskId, { status: args.status });
   },
 });
+
+
+
+// make sure this exists in convex/dashboard.ts

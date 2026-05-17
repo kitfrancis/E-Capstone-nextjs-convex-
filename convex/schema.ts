@@ -6,6 +6,9 @@ export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
     name: v.string(),
+    studentNo: v.optional(v.string()),
+  program: v.optional(v.string()),
+  section: v.optional(v.string()),
     email: v.string(),
     image: v.optional(v.string()),
     role: v.union(
@@ -13,6 +16,7 @@ export default defineSchema({
       v.literal("instructor"),
       v.literal("adviser")
     ),
+
     course: v.optional(v.string()),
   }).index("by_clerk_id", ["clerkId"]),
 
@@ -39,7 +43,8 @@ export default defineSchema({
     needsRevision: v.number(),
     adviserId: v.optional(v.string()),
     members: v.optional(v.array(v.string())),
-  }),
+    inviteCode: v.string(),
+  }).index("by_inviteCode", ["inviteCode"]),
 
   deliverables: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),

@@ -86,7 +86,6 @@ export function DialogDemo() {
         teamName,
         projectTitle,
         adviserId,
-        members: selectedStudents,
       });
       // Reset form
       setTeamName("");
