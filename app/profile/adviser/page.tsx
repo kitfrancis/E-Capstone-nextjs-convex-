@@ -14,20 +14,25 @@ export default function AdviserProfile() {
   const updateProfile = useMutation(api.users.updateProfile);
 
   const [name, setName] = useState("");
-  const [studentId, setStudentId] = useState("");
+  const [studentNo, setStudentNo] = useState("");
+  const [program, setProgram] = useState("");
+  const [section, setSection] = useState("");
   const [course, setCourse] = useState("computer-science");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (me) {
       setName(me.name || "");
+      setStudentNo(me.studentNo || "");
+      setProgram(me.program || "");
+      setSection(me.section || "");
       setCourse(me.course || "computer-science");
     }
   }, [me]);
 
   async function handleSave() {
     setSaving(true);
-    await updateProfile({ name, studentId, course });
+    await updateProfile({ name, studentNo, program, section });
     setSaving(false);
     toast("Profile updated successfully", { position: "top-center" });
   }
