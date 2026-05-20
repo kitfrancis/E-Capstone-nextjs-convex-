@@ -28,6 +28,8 @@ import {
 import { useQuery } from "convex/react";
 import { useClerk } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
+import { useNotification } from "./notification-context";
+import { useRouter } from "next/navigation"; 
 
 
 const roleColors: Record<string, string> = {
@@ -37,9 +39,19 @@ const roleColors: Record<string, string> = {
 };
 
 
+const profileHref: Record<string, string> = { 
+  student: "/profile/student",
+  instructor: "/profile/instructor",
+  adviser: "/profile/adviser",
+};
+
+
+
 export function DropdownMenuAvatar() {
   const me = useQuery(api.users.getMe);
+  const { setOpen } = useNotification();
   const { signOut } = useClerk();
+  const router = useRouter();
 
    const initials = me?.name
   ? me.name
@@ -51,6 +63,9 @@ export function DropdownMenuAvatar() {
   : "?";
 
   const bgColor = me?.role ? roleColors[me.role] : "bg-gray-400";
+  const profileUrl = me?.role ? profileHref[me.role] : "/";
+
+
 
   return (
     <DropdownMenu>
@@ -64,11 +79,11 @@ export function DropdownMenuAvatar() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push(profileUrl)}>
             <User />
             Edit Profile
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setOpen(true)}>
             <BellIcon />
             Notifications
           </DropdownMenuItem>

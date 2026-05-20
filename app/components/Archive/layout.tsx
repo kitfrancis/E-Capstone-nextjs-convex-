@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
 import Notification from "@/app/components/notification-sidebar";
+import { NotificationProvider } from "@/app/components/notification-context";
+import { DropdownMenuAvatar } from "@/app/components/avatar";
 
 export default function ArchiveLayout({
   children,
@@ -26,6 +28,7 @@ export default function ArchiveLayout({
   const formatted = page.charAt(0).toUpperCase() + page.slice(1);
 
   return (
+    <NotificationProvider>
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
@@ -40,13 +43,17 @@ export default function ArchiveLayout({
             </BreadcrumbList>
           </Breadcrumb>
               <div className="ml-auto flex items-center gap-3 pr-2">
+               <div className=" flex items-center gap-2  ">
                 <Notification />
-             </div>
+                 <DropdownMenuAvatar />
+               </div>
+              </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           {children}
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </NotificationProvider>
   );
 }

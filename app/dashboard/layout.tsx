@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
 import Notification from "../components/notification-sidebar";
+import { DropdownMenuAvatar } from "@/app/components/avatar";
+import { NotificationProvider } from "@/app/components/notification-context";
 
 export default function DashboardLayout({
   children,
@@ -26,6 +28,7 @@ export default function DashboardLayout({
   const formatted = page.charAt(0).toUpperCase() + page.slice(1);
 
   return (
+    <NotificationProvider>
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
@@ -40,7 +43,10 @@ export default function DashboardLayout({
             </BreadcrumbList>
           </Breadcrumb>
               <div className="ml-auto flex items-center gap-3 pr-2">
+                <div className=" flex items-center gap-2  ">
                 <Notification />
+                <DropdownMenuAvatar />
+                </div>
              </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
@@ -48,5 +54,6 @@ export default function DashboardLayout({
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </NotificationProvider>
   );
 }

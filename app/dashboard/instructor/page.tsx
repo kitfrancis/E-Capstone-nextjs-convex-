@@ -10,8 +10,9 @@ import { InstructorTabsDemo } from "@/app/components/instructorDashboard-tabs";
 
 export default function InstructorDashboard() {
   const me = useQuery(api.users.getMe);
+  const myId = me?._id as string | undefined;
   const router = useRouter();
-  const dashboardData = useQuery(api.dashboard.getInstructorDashboardData);
+  const dashboardData = useQuery(api.dashboard.getInstructorDashboardData, myId ? { instructorId: myId } : "skip");
 
 
 useEffect(() => {

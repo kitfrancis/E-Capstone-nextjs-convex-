@@ -10,6 +10,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter, usePathname } from "next/navigation";
+import { DropdownMenuAvatar } from "@/app/components/avatar";
 import {
   LayoutDashboard,
   Upload,

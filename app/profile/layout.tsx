@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
 import Notification from "../components/notification-sidebar";
+import { NotificationProvider } from "../components/notification-context";
+import { DropdownMenuAvatar } from "../components/avatar";
 export default function ProfileLayout({
   children,
 }: {
@@ -25,11 +27,12 @@ export default function ProfileLayout({
   const formatted = page.charAt(0).toUpperCase() + page.slice(1);
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 w-full items-center gap-2 border-b bg-background px-4">
-          <SidebarTrigger className="-ml-1 scale-150" />
+    <NotificationProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="sticky top-0 z-10 flex h-16 w-full items-center gap-2 border-b bg-background px-4">
+            <SidebarTrigger className="-ml-1 scale-150" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <Breadcrumb>
             <BreadcrumbList>
@@ -39,13 +42,17 @@ export default function ProfileLayout({
             </BreadcrumbList>
           </Breadcrumb>
               <div className="ml-auto flex items-center gap-3 pr-2">
-                <Notification />
-              </div>
+                  <div className=" flex items-center gap-2  ">
+                  <Notification />
+                  <DropdownMenuAvatar />
+                 </div>
+               </div>  
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
           {children}
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </NotificationProvider>
   );
 }

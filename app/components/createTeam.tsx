@@ -14,6 +14,7 @@ import { useState, useRef } from "react"
 
 export function DialogDemo() {
   const advisers = useQuery(api.users.getAdvisers);
+  const me = useQuery(api.users.getMe);
   const createProject = useMutation(api.dashboard.createCapstoneProject);
   const isSubmitting = useRef(false);
 
@@ -61,6 +62,7 @@ export function DialogDemo() {
         teamName,
         projectTitle,
         adviserId,
+        instructorId: me!._id,
       });
       setCreatedTeamName(teamName);
       setCreatedCode(code);
@@ -165,7 +167,7 @@ export function DialogDemo() {
               <DialogClose asChild>
                 <Button variant="outline" disabled={isLoading}>Cancel</Button>
               </DialogClose>
-              <Button type="button" onClick={handleSubmit} disabled={isLoading}>
+              <Button type="button" onClick={handleSubmit} disabled={isLoading || !me?._id}>
                 {isLoading ? "Creating..." : "Create Team"}
               </Button>
             </DialogFooter>

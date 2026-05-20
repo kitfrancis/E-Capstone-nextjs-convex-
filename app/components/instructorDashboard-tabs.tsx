@@ -26,22 +26,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
-  const { user } = useUser();
-    const [progress, setProgress] = useState(13)
 
-    const PDFViewer = dynamic(
+      const PDFViewer = dynamic(
   () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
   { ssr: false, loading: () => <div>Loading PDF viewer...</div> }
 );
 
+
+  const me = useQuery(api.users.getMe);
+  const myId = me?._id as string | undefined; 
+  
+  
+
     //for pdf viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string} | null>(null);
+
+  
+  //for Code
+  const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
+
+
   const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
   const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
-
-  //for Code
-  const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
 
 
   const copyInviteCode = (code: string, teamId: string) => {
@@ -51,9 +58,9 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
 };
 
 
-  const allDeliverables = useQuery(api.dashboard.getAllDeliverables, {});
-  const allTeams = useQuery(api.dashboard.getTeams, {});
-  const allTasks = useQuery(api.dashboard.getAllTasks, {});
+  const allDeliverables = useQuery(api.dashboard.getInstructorDeliverables, myId ? { instructorId: myId } : "skip");
+  const allTeams = useQuery(api.dashboard.getInstructorTeams, myId ? { instructorId: myId } : "skip");
+  const allTasks = useQuery(api.dashboard.getInstructorTasks, myId ? { instructorId: myId } : "skip");
   const projectTasks = useQuery(
     api.dashboard.getTasks,
     capstoneProjectId ? { capstoneProjectId } : "skip"
@@ -125,11 +132,6 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
     {team.phase}
   </span>
 
-  {/* ── invite code key button ──
-      only shown if the team has an invite code saved.
-      clicking reveals the code in a popover with a copy button.
-      this is the fallback for instructors who forgot to copy
-      the code from the Step 2 success screen. */}
   {team.inviteCode && (
     <Popover>
       <PopoverTrigger asChild>
@@ -199,6 +201,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
 
 
           
+
         </div>
 
         <Separator />
@@ -297,7 +300,9 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           <p className="text-center py-4 text-gray-500">Loading...</p>
         ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <p className="text-gray-500">No tasks yet</p>
+            <div className=" ">
+            <p className="text-gray-500">You haven't created any tasks yet</p>
+            </div>
           </div>
         ) : (
           tasks.map((task, i) => (

@@ -42,6 +42,7 @@ export default defineSchema({
     underReview: v.number(),
     needsRevision: v.number(),
     adviserId: v.optional(v.string()),
+    instructorId: v.optional(v.string()),
     members: v.optional(v.array(v.string())),
     inviteCode: v.optional(v.string()),
   }).index("by_inviteCode", ["inviteCode"]),

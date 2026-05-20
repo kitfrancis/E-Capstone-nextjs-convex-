@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useNotification } from "./notification-context";
 
 export default function Notification() {
-    const [open, setOpen] = useState(false);
+    const { open, setOpen } = useNotification();
     const notifications = useQuery(api.notifications.myUnreadNotifications);
     const markAsRead = useMutation(api.notifications.markNotificationAsRead);
 

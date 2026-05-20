@@ -1,12 +1,29 @@
   "use client";
-  import { useQuery } from "convex/react";
+  import { useQuery, useMutation } from "convex/react";
   import { api } from "@/convex/_generated/api";
   import { TabsDemo } from "@/app/components/dashboard-tabs";
   import { Separator } from "@/components/ui/separator"
   import { Id } from "@/convex/_generated/dataModel";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
   
   export default function Dashboard() {
+
+
+    //for code
+    const [code, setCode] = useState("");
+    const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+
+    
     const me = useQuery(api.users.getMe);
+
+
+  const joinTeam = useMutation(api.dashboard.joinTeamByInviteCode);
+
+
     const project = useQuery(
       api.dashboard.getMyProject,
       me ? { clerkId: me.clerkId } : "skip"
@@ -25,6 +42,28 @@
       api.dashboard.getProjectAdviser,
       project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
     );
+
+    const handleJoin = async () => {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) {
+      setError("Please enter an invite code.");
+      return;
+    }
+    if (!me?.clerkId) {
+      setError("Could not identify your account. Please try again.");
+      return;
+    }
+    setIsLoading(true);
+    setError("");
+    try {
+      await joinTeam({ clerkId: me.clerkId, inviteCode: trimmed });
+      // Convex reactivity will auto-refresh the project query — no manual reload needed
+    } catch {
+      setError("Invalid invite code. Please check and try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
     return (
       <div className="scroll-smooth font-Poppins bg-background min-h-screen">
@@ -64,11 +103,39 @@
               <h2 className="text-lg font-semibold text-foreground">
                 You're not in a team yet
               </h2>
-              <p className="text-sm text-muted-foreground max-w-sm">
-                You haven't been assigned to a capstone team. Please wait for
-                your instructor to assign you, or contact your adviser.
+               <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                Enter the invite code your instructor gave you to join your capstone team.
+              </p>
+
+               <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+              <Input
+                type="text"
+                placeholder="e.g. ECAP-XXXX-XXXX"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.toUpperCase());
+                  setError("");
+                }}
+                className="w-full text-center font-mono tracking-widest text-sm px-4 py-2.5 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              {error && (
+                <p className="text-xs text-red-500">{error}</p>
+              )}
+              <Button
+                onClick={handleJoin}
+                disabled={isLoading || !me?.clerkId}
+                className="w-full py-2.5 rounded-lg bg-black dark:bg-white text-white dark:text-black text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50"
+              >
+                {isLoading ? "Joining..." : "Join Team"}
+              </Button>
+            </div>
+              <p className="text-xs text-muted-foreground">
+                Don't have a code? Contact your instructor.
               </p>
             </div>
+            
+
+            
   
           ) : project === undefined ? (
             <div className="border border-border rounded-2xl p-10 mt-4 flex items-center justify-center bg-muted/30">

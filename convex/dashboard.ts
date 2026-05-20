@@ -156,10 +156,10 @@ export const createCapstoneProject = mutation({
     teamName: v.string(),
     projectTitle: v.string(),
     adviserId: v.string(),
+    instructorId: v.string(),
   },
 
   handler: async (ctx, args) => {
-    // Generate invite code
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let code = "ECAP-";
     for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
@@ -176,6 +176,7 @@ export const createCapstoneProject = mutation({
       underReview: 0,
       needsRevision: 0,
       adviserId: args.adviserId,
+      instructorId: args.instructorId,
       members: [],
       inviteCode: code,
     });
@@ -230,6 +231,55 @@ export const createTask = mutation({
     return taskId;
   },  
 });
+
+export const getInstructorTeams = query({
+  args: { instructorId: v.string() },
+  handler: async (ctx, args) => {
+    const allProjects = await ctx.db.query("capstoneProjects").collect();
+    return allProjects.filter(p => p.instructorId === args.instructorId);
+  },
+});
+
+
+export const getInstructorDeliverables = query({
+  args: { instructorId: v.string() },
+  handler: async (ctx, args) => {
+    const projects = await ctx.db.query("capstoneProjects").collect();
+    const myProjectIds = new Set(
+      projects.filter(p => p.instructorId === args.instructorId).map(p => p._id)
+    );
+    const deliverables = await ctx.db.query("deliverables").collect();
+    return await Promise.all(
+      deliverables
+        .filter(d => myProjectIds.has(d.capstoneProjectId))
+        .map(async (d) => {
+          const project = await ctx.db.get(d.capstoneProjectId);
+          return { ...d, teamName: project?.teamName ?? "Unknown Team" };
+        })
+    );
+  },
+});
+
+export const getInstructorTasks = query({
+  args: { instructorId: v.string() },
+  handler: async (ctx, args) => {
+    const projects = await ctx.db.query("capstoneProjects").collect();
+    const myProjectIds = new Set(
+      projects.filter(p => p.instructorId === args.instructorId).map(p => p._id)
+    );
+    const tasks = await ctx.db.query("tasks").collect();
+    return await Promise.all(
+      tasks
+        .filter(t => myProjectIds.has(t.capstoneProjectId))
+        .map(async (t) => {
+          const project = await ctx.db.get(t.capstoneProjectId);
+          return { ...t, teamName: project?.teamName ?? "Unknown Team" };
+        })
+    );
+  },
+});
+
+
 
 export const getProjectMembers = query({
   args: { capstoneProjectId: v.id("capstoneProjects") },
@@ -460,25 +510,28 @@ export const getDashboardData = query({
 });
 
 export const getInstructorDashboardData = query({
-  args: {},
-  handler: async (ctx) => {
-    const projects = await ctx.db.query("capstoneProjects").collect();
-    const tasks = await ctx.db.query("tasks").collect();
-    const deliverables = await ctx.db.query("deliverables").collect();
-    const approvedCount = deliverables.filter(d => d.status === "approved").length;
-    const underReviewCount = deliverables.filter(d => d.status === "under_review").length;
-    const needsRevisionCount = deliverables.filter(d => d.status === "needs_revision").length;
+  args: { instructorId: v.string() },
+  handler: async (ctx, args) => {
+    const allProjects = await ctx.db.query("capstoneProjects").collect();
+    const myProjects = allProjects.filter(p => p.instructorId === args.instructorId);
+    const myProjectIds = new Set(myProjects.map(p => p._id));
+
+    const allTasks = await ctx.db.query("tasks").collect();
+    const tasks = allTasks.filter(t => myProjectIds.has(t.capstoneProjectId));
+
+    const allDeliverables = await ctx.db.query("deliverables").collect();
+    const deliverables = allDeliverables.filter(d => myProjectIds.has(d.capstoneProjectId));
 
     const now = new Date().toISOString();
 
     return {
-      totalTeams: projects.length,
-      activeProjects: projects.length,
+      totalTeams: myProjects.length,
+      activeProjects: myProjects.length,
       pendingReviews: deliverables.filter(d => d.status === "under_review").length,
       overdueTasks: tasks.filter(t => t.dueDate < now && t.status !== "completed").length,
-      approvedCount,
-      underReviewCount,
-      needsRevisionCount,
+      approvedCount: deliverables.filter(d => d.status === "approved").length,
+      underReviewCount: deliverables.filter(d => d.status === "under_review").length,
+      needsRevisionCount: deliverables.filter(d => d.status === "needs_revision").length,
     };
   },
 });
@@ -535,17 +588,14 @@ export const joinTeamByInviteCode = mutation({
     inviteCode: v.string(),
   },
   handler: async (ctx, args) => {
-    // Find the team first
     const teams = await ctx.db.query("capstoneProjects").collect();
     const team = teams.find(t => t.inviteCode === args.inviteCode);
     if (!team) throw new Error("Team not found for code: " + args.inviteCode);
 
-    // Find the user
     const users = await ctx.db.query("users").collect();
     const user = users.find(u => u.clerkId === args.clerkId);
     if (!user) throw new Error("User not found for clerkId: " + args.clerkId);
 
-    // Add to members
     const alreadyMember = (team.members ?? []).includes(user._id);
     if (!alreadyMember) {
       await ctx.db.patch(team._id, {
