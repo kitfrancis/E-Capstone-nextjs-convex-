@@ -29,7 +29,7 @@ export default function AdviserProfile() {
   }, [me]);
 
   async function handleSave() {
-    setSaving(true);
+    setSaving(true); 
     await updateProfile({ name, studentNo, program, section });
     setSaving(false);
     toast("Profile updated successfully", { position: "top-center" });
