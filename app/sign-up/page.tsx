@@ -264,7 +264,7 @@ export default function SignUpPage() {
           </div>
 
           <div className="space-y-1"> 
-            <Label className="text-xs">Invite Code( not functional yet )</Label>
+            <Label className="text-xs">Invite Code</Label>
             <Input placeholder="e.g. ECAP-ABCD-EFGH" className="text-xs mb-3" onChange={(e) => setInviteCode(e.target.value.toUpperCase())} />
           </div>
 
