@@ -32,8 +32,7 @@ export function SyncUser() {
           user.emailAddresses[0].emailAddress.split("@")[0], 
         email: user.emailAddresses[0].emailAddress,
         image: user.imageUrl,
-        role: me.role, 
-        
+        role: me.role,
         studentNo: me.studentNo ,
         program: me.program ,
         section: me.section ,

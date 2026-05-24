@@ -578,7 +578,7 @@ export const validateInviteCode = query({
   handler: async (ctx, args): Promise<boolean> => {
     const teams = await ctx.db.query("capstoneProjects").collect();
     const team = teams.find(t => t.inviteCode === args.inviteCode);
-    return team !== null;
+    return team !== undefined;
   },
 });
 

@@ -32,37 +32,41 @@ export default function SignUpPage() {
   const [program, setProgram] = useState("");
   const [section, setSection] = useState("");
   const [error, setError] = useState("");
+  const [inviteCodeError, setInviteCodeError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-
-  //for code 
   const [verifyCode, setVerifyCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
 
-
   const joinTeamByInviteCode = useMutation(api.dashboard.joinTeamByInviteCode);
-
-
-    const ValidateInviteCode = useQuery(api.dashboard.validateInviteCode, inviteCode ? { inviteCode } : "skip");
+  const ValidateInviteCode = useQuery(api.dashboard.validateInviteCode, inviteCode ? { inviteCode } : "skip");
 
   useEffect(() => {
     if (isSignedIn) router.push("/dashboard/student");
   }, [isSignedIn]);
 
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
     setError("");
+    setInviteCodeError("");
     setLoading(true);
 
     try {
-      if(!ValidateInviteCode) {
-        setError("Invalid invite code.");
+      if (ValidateInviteCode === undefined) {
+        setInviteCodeError("Still validating code, please try again.");
         setLoading(false);
         return;
       }
 
+      if (!ValidateInviteCode) {
+        setInviteCodeError("Invalid or expired invite code.");
+        setLoading(false);
+        return;
+      }
 
       await signUp.create({ firstName, lastName, emailAddress: email, password });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
@@ -74,40 +78,51 @@ export default function SignUpPage() {
     }
   };
 
+  
+
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
     setError("");
     setLoading(true);
 
+    let result;
     try {
-      const result = await signUp.attemptEmailAddressVerification({ code: verifyCode });
-
-      if (result.status === "complete") {
-        await upsertUser({
-          clerkId: result.createdUserId!,
-          name: `${firstName} ${lastName}`,
-          email,
-          role: "student",
-          studentNo,
-          program,
-          section,
-          inviteCode,
-        });
-
-        await joinTeamByInviteCode({
-          clerkId: result.createdUserId!,
-          inviteCode,
-        });
-
-        await setActive({ session: result.createdSessionId });
-        router.push("/dashboard/student");
-      } else {
-        setError("Verification incomplete. Please try again.");
-      }
+      const code = verifyCode.trim().replace(/\s+/g, "");
+      result = await signUp.attemptEmailAddressVerification({ code });
     } catch (err: any) {
-      setError(err.errors?.[0]?.message ?? "Invalid code.");
-    } finally {
+      setError(err.errors?.[0]?.message ?? "Invalid verification code.");
+      setLoading(false);
+      return;
+    }
+
+    if (result.status !== "complete") {
+      setError("Verification incomplete. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await upsertUser({
+        clerkId: result.createdUserId!,
+        name: `${firstName} ${lastName}`,
+        email,
+        role: "student",
+        studentNo,
+        program,
+        section,
+        inviteCode,
+      });
+
+      await joinTeamByInviteCode({
+        clerkId: result.createdUserId!,
+        inviteCode,
+      });
+
+      await setActive({ session: result.createdSessionId });
+      router.push("/dashboard/student");
+    } catch (err: any) {
+      setError(err.message ?? "Account created but setup failed. Please contact support.");
       setLoading(false);
     }
   };
@@ -263,9 +278,19 @@ export default function SignUpPage() {
             <hr className="flex-1" />
           </div>
 
-          <div className="space-y-1"> 
+          <div className="space-y-1">
             <Label className="text-xs">Invite Code</Label>
-            <Input placeholder="e.g. ECAP-ABCD-EFGH" className="text-xs mb-3" onChange={(e) => setInviteCode(e.target.value.toUpperCase())} />
+            <Input
+              placeholder="e.g. ECAP-ABCD-EFGH"
+              className={`text-xs mb-1 ${inviteCodeError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+              onChange={(e) => {
+                setInviteCode(e.target.value.toUpperCase());
+                setInviteCodeError("");
+              }}
+            />
+            {inviteCodeError && (
+              <p className="text-red-500 text-xs mt-1">{inviteCodeError}</p>
+            )}
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}
