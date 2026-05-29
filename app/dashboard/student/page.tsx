@@ -8,8 +8,9 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation"; 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-  
-  export default function Dashboard() {
+import { Suspense } from "react";
+
+ function DashboardContent() {
 
 
   const searchParams = useSearchParams();                                       
@@ -321,3 +322,15 @@ console.log("highlightPageFromUrl:", highlightPageFromUrl); // 👈
       </div>
     );
   }
+
+  export default function Dashboard() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  );
+}
