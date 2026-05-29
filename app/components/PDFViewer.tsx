@@ -27,9 +27,10 @@ interface Props {
   userName?: string;
   open: boolean;
   onClose: () => void;
+  initialPage?: number;
 }
 
-export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, open, onClose }: Props) {
+export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, open, onClose, initialPage }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageWidth, setPageWidth] = useState(500);
@@ -49,7 +50,7 @@ export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, 
     if (!open) return;
 
     // reset on open
-    setPageNumber(1);
+    setPageNumber(initialPage || 1);
     setNumPages(0);
     setCommentMode(false);
     setNewComment("");
@@ -68,7 +69,13 @@ export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, 
       clearTimeout(timeout);
       window.removeEventListener("resize", updateWidth);
     };
-  }, [open]);
+  }, [open, initialPage]);
+
+  useEffect(() => {
+  if (open && initialPage && initialPage > 1) {
+    setPageNumber(initialPage);
+  }
+}, [initialPage, open]);
 
   const handlePageClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!commentMode || !deliverableId || !userId || !userName) return;

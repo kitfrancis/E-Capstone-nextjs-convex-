@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -6,10 +7,31 @@ import { useNotification } from "./notification-context";
 
 export default function Notification() {
     const { open, setOpen } = useNotification();
+    const router = useRouter();
     const notifications = useQuery(api.notifications.myUnreadNotifications);
     const markAsRead = useMutation(api.notifications.markNotificationAsRead);
 
     const unreadCount = notifications?.length || 0;
+
+    const handleNotificationClick = async (notification: {
+        _id: Id<"notifications">;
+        read: boolean;
+        link?: string;
+        type: string;
+    }) => {
+        try {
+            if (!notification.read) {
+                await markAsRead({ notificationId: notification._id });
+            }
+            // Navigate and close panel if there's a link
+            if (notification.link) {
+                setOpen(false);
+                router.push(notification.link);
+            }
+        } catch (error) {
+            console.error("Failed to handle notification click:", error);
+        }
+    };
 
     const handleMarkAsRead = async (notificationId: Id<"notifications">) => {
         try {
@@ -28,6 +50,17 @@ export default function Notification() {
             );
         } catch (error) {
             console.error("Failed to mark all notifications as read:", error);
+        }
+    };
+
+
+    const getNotificationTitle = (type: string) => {
+        switch (type) {
+            case "team_created":       return "Team Created";
+            case "task_assigned":      return "New Task";
+            case "comment_added":      return "New Comment";        // 👈 added
+            case "deliverable_uploaded": return "New Deliverable";  // 👈 added
+            default:                   return "Notification";
         }
     };
 
@@ -74,15 +107,24 @@ return (
                 <div className="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
                     {notifications && notifications.length > 0 ? (
                         notifications.map(n => (
-                         <div key={n._id} className={`px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer ${ !n.read ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`} onClick={() => !n.read && handleMarkAsRead(n._id)} >
+                         <div key={n._id} className={`px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer ${ !n.read ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`} onClick={() => handleNotificationClick(n)}  >
                             <div className="flex items-start gap-3">
                               {!n.read && (
                                  <span className="mt-1.5 w-2 h-2 shrink-0 bg-blue-500 rounded-full" />
                                )}
                                 <div className={!n.read ? "" : "pl-5"}>
-                                   <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                   {/* <p className="text-sm font-medium text-gray-900 dark:text-white">
                                       {n.type === "team_created" ? "Team Created" : n.type === "task_assigned" ? "New Task" : "Notification"}
-                                  </p>
+                                  </p> */}
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {getNotificationTitle(n.type)} 
+                                </p>
+                                    {n.link && (
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            )}
+
                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.message}</p>
                                    
                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{formatTime(n._creationTime)}</p>

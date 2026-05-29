@@ -1,5 +1,6 @@
 "use client";
-import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -26,15 +27,17 @@ const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod =>
 });
 
 
-export function TabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
+export function TabsDemo({ capstoneProjectId, highlightDeliverableId, highlightPage }: { capstoneProjectId?: Id<"capstoneProjects">; highlightDeliverableId?: Id<"deliverables"> | null; highlightPage?: number | null }) {
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState("");
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
 
   //for pdf viewer
-  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string} | null>(null);
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string, initialPage: number} | null>(null);
   const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
   const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
@@ -47,6 +50,26 @@ const [activeTab, setActiveTab] = useState("deliverables");
     api.dashboard.getDeliverables,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
+
+  useEffect(() => {
+  if (!highlightDeliverableId || !deliverables) return;
+  const match = deliverables.find(d => d._id === highlightDeliverableId);
+  if (match && match.storageId && isPdf(match.fileName)) {
+
+  console.log("highlightPage:", highlightPage);        // 👈
+  console.log("match:", match);    
+    setSelectedDeliverable({
+      fileName: match.fileName,
+      storageId: match.storageId,
+      deliverableId: match._id,
+      initialPage: highlightPage || 1,
+    });
+     setTimeout(() => {
+      router.replace(window.location.pathname, { scroll: false });
+    }, 500);
+  }
+}, [highlightDeliverableId, deliverables]);
+
   const tasks = useQuery(
     api.dashboard.getTasks,
     capstoneProjectId ? { capstoneProjectId } : "skip"
@@ -175,10 +198,10 @@ const handleUpload = async () => {
                   )}
                   {isPdf(d.fileName) ? (
                     <DropdownMenuItem
-                      onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
+                      onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id, initialPage: 1 })}
                     >
                       View File
-                     
+                    
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem asChild>
@@ -330,6 +353,7 @@ const handleUpload = async () => {
   fileUrl={fileUrl ?? ""}
   fileName={selectedDeliverable?.fileName ?? ""}
   deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
+  initialPage={selectedDeliverable?.initialPage?? 1}
   onClose={() => setSelectedDeliverable(null)}
 />
     </Tabs>

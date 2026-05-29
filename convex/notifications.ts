@@ -7,6 +7,7 @@ export const sendNotification = mutation({
     message: v.string(),
     type: v.string(),
     relatedId: v.optional(v.string()),
+      link: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("notifications", {
@@ -15,6 +16,7 @@ export const sendNotification = mutation({
       read: false,
       type: args.type,
       relatedId: args.relatedId,
+      link: args.link,
     });
   },
 });

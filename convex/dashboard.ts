@@ -96,7 +96,7 @@ export const saveDeliverable = mutation({
     capstoneProjectId: v.id("capstoneProjects"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("deliverables", {
+    const deliverableId = await ctx.db.insert("deliverables", {
       capstoneProjectId: args.capstoneProjectId,
       fileName: args.fileName,
       phase: args.phase,
@@ -107,6 +107,17 @@ export const saveDeliverable = mutation({
       comments: 0,
       storageId: args.storageId,
     });
+
+    const project = await ctx.db.get(args.capstoneProjectId);
+    if (project?.adviserId) {
+       await ctx.runMutation(api.notifications.sendNotification, {
+        userId: project.adviserId,
+        message: `Team "${project.teamName}" uploaded a new deliverable: "${args.fileName}".`,
+        type: "deliverable_uploaded",
+        relatedId: deliverableId,
+        link: `/dashboard/adviser?projectId=${args.capstoneProjectId}&deliverableId=${deliverableId}`, 
+      });
+    }
   },
 });
 
@@ -186,10 +197,13 @@ export const createCapstoneProject = mutation({
       message: `You have been assigned as adviser for team "${args.teamName}" on project "${args.projectTitle}".`,
       type: "team_created",
       relatedId: projectId,
+      
     });
 
     return code;
   },
+
+  
 });
 
 export const createTask = mutation({
@@ -459,6 +473,23 @@ export const addPdfComment = mutation({
       await ctx.db.patch(args.deliverableId, {
         comments: (deliverable.comments || 0) + 1,
       });
+
+       const project = await ctx.db.get(deliverable.capstoneProjectId);
+    if (project && project.members) {
+      for (const memberId of project.members) {
+        if(memberId === args.userId) continue; 
+
+        await ctx.runMutation(api.notifications.sendNotification, {
+          userId: memberId,
+          message: `A new comment has been added to the deliverable "${deliverable.fileName}" : "${args.comment.slice(0, 80)}${args.comment.length > 80 ? '...' : ""}".`,
+          type: "comment_added",
+          relatedId: commentId,
+          link: `/dashboard/student?deliverableId=${args.deliverableId}`,
+        });
+      }
+    }
+
+   
     }
 
     return commentId;

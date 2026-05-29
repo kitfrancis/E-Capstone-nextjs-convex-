@@ -72,7 +72,7 @@ export function DropdownMenuAvatar() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="rounded-full">
           <Avatar>
-            <AvatarImage  src={me?.image ?? ""} alt={me?.name ?? "User"} />
+            <AvatarImage  src={me?.image ?? undefined} alt={me?.name ?? "User"} />
             <AvatarFallback className={`text-white text-sm font-semibold ${bgColor}`}>{initials}</AvatarFallback>
           </Avatar>
         </Button>

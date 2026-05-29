@@ -93,5 +93,6 @@ export default defineSchema({
     read: v.boolean(),
     type: v.string(),
     relatedId: v.optional(v.string()),
+    link: v.optional(v.string()), 
   }).index("by_user", ["userId"]).index("by_user_read", ["userId", "read"]),
 });

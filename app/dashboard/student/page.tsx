@@ -4,13 +4,22 @@
   import { TabsDemo } from "@/app/components/dashboard-tabs";
   import { Separator } from "@/components/ui/separator"
   import { Id } from "@/convex/_generated/dataModel";
-import { useState } from "react";
+import { useState, useEffect } from "react";          
+import { useSearchParams } from "next/navigation"; 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
   
   export default function Dashboard() {
 
 
+  const searchParams = useSearchParams();                                       
+  const deliverableIdFromUrl = searchParams.get("deliverableId") as Id<"deliverables"> | null;
+  const pageFromUrl = searchParams.get("page") || "1";
+  const highlightPageFromUrl = pageFromUrl ? parseInt(pageFromUrl) : null;
+
+
+console.log("pageFromUrl:", pageFromUrl);              // 👈
+console.log("highlightPageFromUrl:", highlightPageFromUrl); // 👈
     //for code
     const [code, setCode] = useState("");
     const [error, setError] = useState("");
@@ -57,7 +66,6 @@ import { Button } from "@/components/ui/button";
     setError("");
     try {
       await joinTeam({ clerkId: me.clerkId, inviteCode: trimmed });
-      // Convex reactivity will auto-refresh the project query — no manual reload needed
     } catch {
       setError("Invalid invite code. Please check and try again.");
     } finally {
@@ -305,7 +313,7 @@ import { Button } from "@/components/ui/button";
               </div>
               </div>
   
-              <TabsDemo capstoneProjectId={project._id} />
+              <TabsDemo capstoneProjectId={project._id} highlightDeliverableId={deliverableIdFromUrl} highlightPage={highlightPageFromUrl} />
               
             </>
           )}
