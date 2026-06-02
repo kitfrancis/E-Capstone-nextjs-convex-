@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 const studentLinks = [
-  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard,  },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/student", icon: User },
 ];
@@ -69,6 +69,7 @@ export function AppSidebar() {
       : me?.role === "adviser"
       ? adviserLinks
       : [];
+
 
   return (
     <Sidebar side="left">

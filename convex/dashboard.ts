@@ -484,7 +484,7 @@ export const addPdfComment = mutation({
           message: `A new comment has been added to the deliverable "${deliverable.fileName}" : "${args.comment.slice(0, 80)}${args.comment.length > 80 ? '...' : ""}".`,
           type: "comment_added",
           relatedId: commentId,
-          link: `/dashboard/student?deliverableId=${args.deliverableId}`,
+          link: `/dashboard/student?deliverableId=${args.deliverableId}&page=${args.pageNumber}`,
         });
       }
     }
@@ -584,7 +584,6 @@ export const updateTaskStatus = mutation({
 
 
 //for invite code
-
 export const getTeamByInviteCode = query({
   args: { inviteCode: v.string() },
   handler: async (ctx, args) => {

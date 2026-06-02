@@ -56,7 +56,7 @@ const [activeTab, setActiveTab] = useState("deliverables");
   const match = deliverables.find(d => d._id === highlightDeliverableId);
   if (match && match.storageId && isPdf(match.fileName)) {
 
-  console.log("highlightPage:", highlightPage);        // 👈
+  console.log("highlightPage:", highlightPage); 
   console.log("match:", match);    
     setSelectedDeliverable({
       fileName: match.fileName,
@@ -271,12 +271,12 @@ const handleUpload = async () => {
                   toast.success("Upload Successfully!")
                   )}
 
-
                   <div className="border-t border-gray-300 mt-1 lg:mt-3">
-                    <button onClick={handleUpload} disabled={!file || !phase || uploading} className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                      {uploading ? "Uploading..." : "Upload Deliverable"}
-                    </button>
+                  <button onClick={handleUpload} disabled={!file || !phase || uploading}
+                    className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    {uploading ? "Uploading..." : "Upload Deliverable"}
+                  </button>
                   </div>
                 </div>
               </div>

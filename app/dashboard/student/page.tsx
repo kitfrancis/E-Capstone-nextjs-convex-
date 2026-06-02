@@ -19,8 +19,8 @@ import { Suspense } from "react";
   const highlightPageFromUrl = pageFromUrl ? parseInt(pageFromUrl) : null;
 
 
-console.log("pageFromUrl:", pageFromUrl);              // 👈
-console.log("highlightPageFromUrl:", highlightPageFromUrl); // 👈
+console.log("pageFromUrl:", pageFromUrl);  
+console.log("highlightPageFromUrl:", highlightPageFromUrl);
     //for code
     const [code, setCode] = useState("");
     const [error, setError] = useState("");

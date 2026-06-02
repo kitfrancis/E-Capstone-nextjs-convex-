@@ -9,7 +9,7 @@ import { Toaster } from "sonner"
 import { Toast } from "radix-ui";
 
 export const metadata: Metadata = {
-  title: "E-capstone",
+  title: "E-Research",
   description: "Thesis Management System for Students, Instructors, and Advisers",
 };
 
@@ -19,7 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+  signInUrl="/sign-in">
       <html lang="en" suppressHydrationWarning>
         <body className="min-h-full flex flex-col">
           <ThemeProviderWrapper>

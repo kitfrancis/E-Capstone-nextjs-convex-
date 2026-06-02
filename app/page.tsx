@@ -24,7 +24,11 @@ export default function LandingPage() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("intendedRole", role);
     }
-    router.push("/auth-callback");
+
+    
+  router.push(`/sign-in?role=${role}`);
+
+    // router.push("/auth-callback");
   };
 
   if (!isLoaded) {
