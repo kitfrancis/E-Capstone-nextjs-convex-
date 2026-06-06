@@ -14,9 +14,20 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox"
+import { File } from "lucide-react"
+import dynamic from "next/dynamic";
+import { Id } from "@/convex/_generated/dataModel";
+
+const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
+  ssr: false,
+});
 
 export default function Archive() {
+
+
   const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [viewingFile, setViewingFile] = useState<{ storageId: string; fileName: string } | null>(null);
+const archiveFileUrl = useQuery(api.archive.getFileUrl, viewingFile ? { storageId: viewingFile.storageId as Id<"_storage"> } : "skip");
   const projectsData = useQuery(api.archive.getAll);
 
   const Year = ["All Year", "2025", "2026", "2027", "2028"]
@@ -70,6 +81,7 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
 };
 
   return (
+    <>
     <div className="scroll-smooth font-Poppins">
       <div className="lg:ml-1 max-h-auto ">
         <h1 className="text-3xl font-semibold text-foreground mt-10 px-1">Project Archive and Repository</h1>
@@ -247,9 +259,19 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                     <p className="text-xs text-foreground">{selectedProject.archivedDate}</p>
                   </div>
 
+                  <div>
+                    <button
+                     onClick={() => setViewingFile({ storageId: selectedProject.storageId, fileName: selectedProject.title })}
+                    className="flex flex-row items-center justify-center bg-background text-foreground w-full border-2  rounded-lg mt-5 py-1">
+                      <File className="h-4 w-4 mr-2" />
+                      View Project Files
+                    </button>
+                  </div>
+
                   <div className="border-t border-border mt-3">
                     <button 
-  onClick={() => handleDownload(selectedProject)} className="flex flex-row items-center justify-center bg-primary text-primary-foreground w-full rounded-lg mt-5 py-1">
+    onClick={() => handleDownload(selectedProject)}
+  className="flex flex-row items-center justify-center bg-primary text-primary-foreground w-full rounded-lg mt-5 py-1">
                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                       Download All Files
                     </button>
@@ -266,5 +288,12 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
         </div>
       </div>
     </div>
+    <PDFViewer
+        open={!!viewingFile && !!archiveFileUrl}
+        fileUrl={archiveFileUrl ?? ""}
+        fileName={viewingFile?.fileName ?? ""}
+        onClose={() => setViewingFile(null)}
+      />
+</>
   );
 }

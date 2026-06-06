@@ -17,7 +17,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Input } from "@/components/ui/input";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface Props {
   fileUrl: string;
@@ -144,10 +144,11 @@ export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, 
               file={fileUrl}
               onLoadSuccess={({ numPages }) => setNumPages(numPages)}
               loading={
-                <div className="flex items-center justify-center h-40">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                </div>
-              }
+  <div className="flex flex-col items-center justify-center h-64 gap-3">
+    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+    <p className="text-sm text-muted-foreground">Loading PDF, please wait...</p>
+  </div>
+}
               error={
                 <div className="flex items-center justify-center h-40">
                   <p className="text-sm text-destructive">Failed to load PDF.</p>
@@ -157,11 +158,16 @@ export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, 
             >
               <div className="relative" onClick={handlePageClick}>
                 <Page
-                  pageNumber={pageNumber}
-                  width={pageWidth}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
-                />
+  pageNumber={pageNumber}
+  width={pageWidth}
+  renderTextLayer={false}
+  renderAnnotationLayer={false}
+  loading={
+    <div className="flex items-center justify-center" style={{ width: pageWidth, height: 500 }}>
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  }
+/>
                 {currentPageComments.map((comment) => (
                   <div
                     key={comment._id}

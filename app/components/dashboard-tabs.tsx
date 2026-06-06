@@ -113,6 +113,7 @@ const handleUpload = async () => {
     toast.success("Uploaded successfully!");
     setFile(null);
     setPhase("");
+setActiveTab("deliverables");
   } catch (err) {
     console.error(err);
     toast.error(`Upload failed: ${err}`);
@@ -349,7 +350,7 @@ const handleUpload = async () => {
       </TabsContent>
       {/* for pdf viewer */}
       <PDFViewer
-  open={!!selectedDeliverable && !!fileUrl}
+  open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
   fileUrl={fileUrl ?? ""}
   fileName={selectedDeliverable?.fileName ?? ""}
   deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}

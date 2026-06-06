@@ -31,6 +31,7 @@ export default defineSchema({
     keywords: v.array(v.string()),
     members: v.array(v.string()),
     adviser: v.string(),
+    storageId: v.optional(v.id("_storage")),
   }),
 
   capstoneProjects: defineTable({
