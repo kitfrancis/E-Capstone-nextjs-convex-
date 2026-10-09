@@ -55,21 +55,27 @@ export function TaskDialogDemo() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
+
       <DialogTrigger asChild>
         <Button variant="outline" className="text-xs lg:text-sm flex items-center justify-center px-1.5 lg:px-3 bg-muted  text-foreground">
           <CalendarX2Icon /> Create Task
         </Button>
       </DialogTrigger>
+
       <DialogContent className="sm:max-w-sm ">
+
         <DialogHeader>
           <DialogTitle>Create New Task</DialogTitle>
           <DialogDescription>
             Assign a task to a team with a deadline.
           </DialogDescription>
         </DialogHeader>
+
         <div className="flex flex-col gap-3">
+
           <div className="space-y-1">
             <Label htmlFor="TeamName">Team</Label>
+
             <Select onValueChange={setSelectedTeamId}>
               <SelectTrigger className="w-full ">
                 <SelectValue placeholder="Select a team" />
@@ -95,6 +101,41 @@ export function TaskDialogDemo() {
             </Select>
             
           </div>
+
+          {/* Need to implement role selection */}
+          <div className="space-y-1">
+            <Label htmlFor="TeamName">Role</Label>
+
+            <Select onValueChange={setSelectedTeamId}>
+              <SelectTrigger className="w-full ">
+                <SelectValue placeholder="Select a role to assign task" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem key={"projectmanager"} value={"projectmanager"} className="text-xs">
+                      Project Manager
+                  </SelectItem>
+                  <SelectItem key={"programmer"} value={"programmer"} className="text-xs">
+                      Programmer
+                  </SelectItem>
+                  <SelectItem key={"designer"} value={"designer"} className="text-xs">
+                      Designer
+                  </SelectItem>
+                  <SelectItem key={"systemanalyst"} value={"systemanalyst"} className="text-xs">
+                      System Analyst
+                  </SelectItem>
+                  <SelectItem key={"systemarchitect"} value={"systemarchitect"} className="text-xs">
+                      System Architect
+                  </SelectItem>
+                  {/* <SelectItem key={"all"} value={"all"} className="text-xs">
+                    All
+                  </SelectItem> */}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            
+          </div>
+
           <div className="space-y-1">
             <Label htmlFor="projectTitle">Task Title</Label>
             <Input  id="projectTitle"  placeholder="e.g. Complete UI design" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
@@ -108,11 +149,15 @@ export function TaskDialogDemo() {
             <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}/>
           </div>
         </div>
+
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
           <Button onClick={handleSubmit}>Create Task</Button>
+
+          {/* Need to implement the "Send to All" functionality */}
+          <Button onClick={handleSubmit}>Send to All</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

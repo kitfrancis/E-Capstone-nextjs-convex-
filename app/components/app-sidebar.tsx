@@ -11,6 +11,7 @@ import { api } from "@/convex/_generated/api";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter, usePathname } from "next/navigation";
 import { DropdownMenuAvatar } from "@/app/components/avatar";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Upload,
@@ -78,8 +79,8 @@ export function AppSidebar() {
           <SidebarMenuItem>
           <SidebarMenuButton size="lg" asChild>
             <div className="cursor-default">
-             <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <LayoutDashboard className="size-4" />
+             <div className="">
+              <Image src="/CCS.png" alt="Logo" width={36} height={36} className="rounded-md border-white " />
              </div>
 
             <div className="flex flex-col gap-0.5 leading-none">

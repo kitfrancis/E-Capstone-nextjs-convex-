@@ -1,0 +1,25 @@
+service:
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: capstone-onlyoffice
+    restart: unless-stopped
+    port:
+      - "${ONLYOFFICE_PORT:-8080}:80"
+    environment:
+      JWT-ENABLED: "${JWT_ENABLED:-false}"
+      JWT-SECRET: "${JWT-SECERET:to-change}"
+      JWT-HEADER: AuthorizationJwt
+      JWT_IN_BODY: "true"
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+      ALLOW_META_IP_ADDRESS: "true"
+    extra-hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "onlyoffice_data:/var/www/onlyoffice/data"
+      - "onlyoffice_log:/var/log/onlyoffice"
+      - "onlyoffice_lib:/var/lib/pnlyoffice"
+
+volumes:
+  onlyoffice_data:
+  onlyoffice_log:
+  onlyoffice_lib:

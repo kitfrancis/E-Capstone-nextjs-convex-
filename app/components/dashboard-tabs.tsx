@@ -1,18 +1,18 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SelectDemo } from "@/app/components/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
-import { Button } from "@/components/ui/button";
-import { Calendar, MoreVertical } from "lucide-react";
+import { MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,55 +20,104 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const PDFViewer = dynamic(
+  () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
+  {
+    ssr: false,
+    loading: () => <div className="flex items-center justify-center h-64">Loading PDF viewer...</div>,
+  }
+);
 
-const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
+const OnlyOfficeEditor = dynamic(() => import("@/app/components/editor/document-editor"), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center h-64">Loading PDF viewer...</div>
 });
 
+const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
+// Office files open in OnlyOffice; PDFs stay in your own PDFViewer (it supports highlightPage)
+const OFFICE_EXTENSIONS = ["doc", "docx", "odt", "xls", "xlsx", "ods", "ppt", "pptx", "odp"];
+const isOffice = (fileName: string) =>
+  OFFICE_EXTENSIONS.includes(fileName.split(".").pop()?.toLowerCase() ?? "");
 
-export function TabsDemo({ capstoneProjectId, highlightDeliverableId, highlightPage }: { capstoneProjectId?: Id<"capstoneProjects">; highlightDeliverableId?: Id<"deliverables"> | null; highlightPage?: number | null }) {
+// Each row gets its own URL, so "Download File" always points to the right file.
+function DownloadItem({ storageId }: { storageId?: string }) {
+  const url = useQuery(
+    api.dashboard.getFileUrl,
+    storageId ? { storageId: storageId as Id<"_storage"> } : "skip"
+  );
+  return (
+    <DropdownMenuItem asChild disabled={!url}>
+      <a href={url ?? "#"} target="_blank" rel="noopener noreferrer">
+        Download File
+      </a>
+    </DropdownMenuItem>
+  );
+}
+
+export function TabsDemo({
+  capstoneProjectId,
+  highlightDeliverableId,
+  highlightPage,
+}: {
+  capstoneProjectId?: Id<"capstoneProjects">;
+  highlightDeliverableId?: Id<"deliverables"> | null;
+  highlightPage?: number | null;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { user } = useUser();
 
+  // PDF viewer
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{
+    fileName: string;
+    storageId: string;
+    deliverableId: string;
+    initialPage: number;
+  } | null>(null);
+  const fileUrl = useQuery(
+    api.dashboard.getFileUrl,
+    selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage"> } : "skip"
+  );
 
-  //for pdf viewer
-  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string, initialPage: number} | null>(null);
-  const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
-  const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
+  // OnlyOffice editor (Word / Excel / PowerPoint)
+  const [officeDoc, setOfficeDoc] = useState<{
+    fileName: string;
+    storageId: string;
+    deliverableId: string;
+    mode: "edit" | "view";
+  } | null>(null);
+  const officeUrl = useQuery(
+    api.dashboard.getFileUrl,
+    officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
+  );
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
-const updateTaskStatus = useMutation(api.dashboard.updateTaskStatus);
+  const updateTaskStatus = useMutation(api.dashboard.updateTaskStatus);
 
-const [activeTab, setActiveTab] = useState("deliverables");
-   const deliverables = useQuery(
+  const [activeTab, setActiveTab] = useState("deliverables");
+  const deliverables = useQuery(
     api.dashboard.getDeliverables,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
 
   useEffect(() => {
-  if (!highlightDeliverableId || !deliverables) return;
-  const match = deliverables.find(d => d._id === highlightDeliverableId);
-  if (match && match.storageId && isPdf(match.fileName)) {
-
-  console.log("highlightPage:", highlightPage); 
-  console.log("match:", match);    
-    setSelectedDeliverable({
-      fileName: match.fileName,
-      storageId: match.storageId,
-      deliverableId: match._id,
-      initialPage: highlightPage || 1,
-    });
-     setTimeout(() => {
-      router.replace(window.location.pathname, { scroll: false });
-    }, 500);
-  }
-}, [highlightDeliverableId, deliverables]);
+    if (!highlightDeliverableId || !deliverables) return;
+    const match = deliverables.find((d) => d._id === highlightDeliverableId);
+    if (match && match.storageId && isPdf(match.fileName)) {
+      setSelectedDeliverable({
+        fileName: match.fileName,
+        storageId: match.storageId,
+        deliverableId: match._id,
+        initialPage: highlightPage || 1,
+      });
+      setTimeout(() => {
+        router.replace(window.location.pathname, { scroll: false });
+      }, 500);
+    }
+  }, [highlightDeliverableId, deliverables]);
 
   const tasks = useQuery(
     api.dashboard.getTasks,
@@ -76,53 +125,51 @@ const [activeTab, setActiveTab] = useState("deliverables");
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (e.target.files?.[0]) setFile(e.target.files[0]);
-};
+    if (e.target.files?.[0]) setFile(e.target.files[0]);
+  };
 
-const handleUpload = async () => {
-  if (!file || !phase || !capstoneProjectId) {
-    toast.error("Please select a file and phase first.");
-    return;
-  }
-  setUploading(true);
-  try {
-    const uploadUrl = await generateUploadUrl();
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const result = await fetch(uploadUrl, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!result.ok) {
-      throw new Error(`Upload failed with status ${result.status}`);
+  const handleUpload = async () => {
+    if (!file || !phase || !capstoneProjectId) {
+      toast.error("Please select a file and phase first.");
+      return;
     }
+    setUploading(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
 
-    const { storageId } = await result.json();
+      const formData = new FormData();
+      formData.append("file", file);
 
-    await saveDeliverable({
-      storageId,
-      fileName: file.name,
-      phase,
-      fileSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
-      capstoneProjectId,
-    });
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+      });
 
-    toast.success("Uploaded successfully!");
-    setFile(null);
-    setPhase("");
-setActiveTab("deliverables");
-  } catch (err) {
-    console.error(err);
-    toast.error(`Upload failed: ${err}`);
-  } finally {
-    setUploading(false);
-  }
-};
+      if (!result.ok) {
+        throw new Error(`Upload failed with status ${result.status}`);
+      }
 
+      const { storageId } = await result.json();
 
+      await saveDeliverable({
+        storageId,
+        fileName: file.name,
+        phase,
+        fileSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        capstoneProjectId,
+      });
+
+      toast.success("Uploaded successfully!");
+      setFile(null);
+      setPhase("");
+      setActiveTab("deliverables");
+    } catch (err) {
+      console.error(err);
+      toast.error(`Upload failed: ${err}`);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
@@ -137,15 +184,15 @@ setActiveTab("deliverables");
   };
 
   const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab}  className="w-full">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
       <div className="flex justify-center items-center">
         <TabsList className="gap-6 w-full">
           <TabsTrigger value="deliverables" className="md:text-sm">Deliverables</TabsTrigger>
@@ -155,81 +202,112 @@ setActiveTab("deliverables");
       </div>
 
       <TabsContent value="deliverables">
-        
-              {deliverables === undefined ? (
-                <p className="text-center py-4 text-gray-500">Loading...</p>
-              ) : deliverables.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-                  <p className="text-gray-500">No deliverables yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Upload your first deliverable in the Upload tab</p>
-                </div>
-              ) : (
-                deliverables.map((d, i) => (
+        {deliverables === undefined ? (
+          <p className="text-center py-4 text-gray-500">Loading...</p>
+        ) : deliverables.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+            <p className="text-gray-500">No deliverables yet</p>
+            <p className="text-xs text-gray-400 mt-1">Upload your first deliverable in the Upload tab</p>
+          </div>
+        ) : (
+          deliverables.map((d) => (
             <Card key={d._id} className="mb-5">
-          <CardHeader>
-            <CardDescription>
-                  <div  className="flex flex-col mt-0 lg:mt-2 border-b  last:border-0">
+              <CardHeader>
+                <CardDescription>
+                  <div className="flex flex-col mt-0 lg:mt-2 border-b last:border-0">
                     <div className="flex justify-between">
                       <div className="flex flex-col">
                         <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
                         <p className="text-muted-foreground text-xs font-medium">Phase: {d.phase} • Version {d.version}</p>
                       </div>
-                      <span className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium  h-5 lg:h-6`}>
+                      <span className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium h-5 lg:h-6`}>
                         {getStatusLabel(d.status)}
                       </span>
                     </div>
                     <Separator className="mt-3" />
-                    <div className="flex justify-between items-center mt-4 ">
+                    <div className="flex justify-between items-center mt-4">
                       <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
-                     
 
-                      <div className="flex  ">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
-                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                  {d.status === "needs_revision" && (
-                    <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
-                      Resubmit
-                    </DropdownMenuItem>
-                  )}
-                  {isPdf(d.fileName) ? (
-                    <DropdownMenuItem
-                      onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id, initialPage: 1 })}
-                    >
-                      View File
-                    
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem asChild>
-                      <a href={fileUrl ?? "#"} target="_blank" rel="noopener noreferrer">
-                        Download File
-                      </a>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <DeleteDeliverable deliverableId={d._id} fileName={d.fileName} 
-                    trigger={<span className="w-full text-sm">Delete</span>} />
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-                     
+                      <div className="flex">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
+                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="flex flex-col justify-center">
+                            {d.status === "needs_revision" && (
+                              <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
+                                Resubmit
+                              </DropdownMenuItem>
+                            )}
+
+                            {isPdf(d.fileName) ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setSelectedDeliverable({
+                                      fileName: d.fileName,
+                                      storageId: d.storageId!,
+                                      deliverableId: d._id,
+                                      initialPage: 1,
+                                    })
+                                  }
+                                >
+                                  View File
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setOfficeDoc({
+                                      fileName: d.fileName,
+                                      storageId: d.storageId!,
+                                      deliverableId: d._id,
+                                      mode: d.status === "approved" ? "view" : "edit",
+                                    })
+                                  }
+                                >
+                                  Open in OnlyOffice
+                                </DropdownMenuItem>
+                              </>
+                            ) : isOffice(d.fileName) ? (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setOfficeDoc({
+                                    fileName: d.fileName,
+                                    storageId: d.storageId!,
+                                    deliverableId: d._id,
+                                    mode: d.status === "approved" ? "view" : "edit",
+                                  })
+                                }
+                              >
+                                {d.status === "approved" ? "View in Editor" : "Open in Editor"}
+                              </DropdownMenuItem>
+                            ) : null}
+
+                            {/* Download is available for every file type */}
+                            {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
+
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onSelect={(e) => e.preventDefault()}
+                            >
+                              <DeleteDeliverable
+                                deliverableId={d._id}
+                                fileName={d.fileName}
+                                trigger={<span className="w-full text-sm">Delete</span>}
+                              />
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
-                  </CardDescription>
-          </CardHeader>
-        </Card>
-                ))
-              )}
-            
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ))
+        )}
       </TabsContent>
 
       {/* Upload */}
@@ -261,23 +339,28 @@ setActiveTab("deliverables");
                       ) : (
                         <>
                           <p className="text-foreground text-xs">Click to select a file</p>
-                          <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, or ZIP (max 50MB)</p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)</p>
                         </>
                       )}
                     </div>
-                    <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.zip" onChange={handleFileChange} className="hidden" />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xlsx,.pptx,.zip"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
                   </div>
 
-                  {success && (
-                  toast.success("Upload Successfully!")
-                  )}
-
                   <div className="border-t border-gray-300 mt-1 lg:mt-3">
-                  <button onClick={handleUpload} disabled={!file || !phase || uploading}
-                    className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed" >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                    {uploading ? "Uploading..." : "Upload Deliverable"}
-                  </button>
+                    <button
+                      onClick={handleUpload}
+                      disabled={!file || !phase || uploading}
+                      className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                      {uploading ? "Uploading..." : "Upload Deliverable"}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -286,21 +369,21 @@ setActiveTab("deliverables");
         </Card>
       </TabsContent>
 
-      {/* task*/}
+      {/* Tasks */}
       <TabsContent value="tasks">
-              {tasks === undefined ? (
-                <p className="text-center py-4 text-gray-500">Loading...</p>
-              ) : tasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-gray-500">No tasks yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Tasks will be created by your instructor</p>
-                </div>
-              ) : (
-                tasks.map((task) => (
-        <Card key={task._id} className="mb-3">
-          <CardHeader>
-            <CardDescription>
-                  <div  className="rounded-lg">
+        {tasks === undefined ? (
+          <p className="text-center py-4 text-gray-500">Loading...</p>
+        ) : tasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <p className="text-gray-500">No tasks yet</p>
+            <p className="text-xs text-gray-400 mt-1">Tasks will be created by your instructor</p>
+          </div>
+        ) : (
+          tasks.map((task) => (
+            <Card key={task._id} className="mb-3">
+              <CardHeader>
+                <CardDescription>
+                  <div className="rounded-lg">
                     <div className="flex flex-col">
                       <div className="flex justify-between">
                         <div className="flex flex-col">
@@ -312,18 +395,18 @@ setActiveTab("deliverables");
                         </span>
                       </div>
                     </div>
-                    <Separator className="mt-3"/>
-                      <div className="grid grid-cols-1 gap-1 mt-3 ">
-                      
-                  <div className="flex items-center justify-between w-full">
-                    <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word"><span className="text-xs  font-medium text-popover-foreground">Description: </span><br />
-                      {task.description}</p>
-                    </div>                    
-                      
-                      
+                    <Separator className="mt-3" />
+                    <div className="grid grid-cols-1 gap-1 mt-3">
                       <div className="flex items-center justify-between w-full">
-                     <p className="text-muted-foreground text-xs "><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
-                    <button
+                        <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word">
+                          <span className="text-xs font-medium text-popover-foreground">Description: </span><br />
+                          {task.description}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between w-full">
+                        <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
+                        <button
                           disabled={task.status === "completed"}
                           onClick={() => {
                             if (task.status === "pending") updateTaskStatus({ taskId: task._id, status: "in_progress" });
@@ -335,30 +418,42 @@ setActiveTab("deliverables");
                               "bg-gray-400 cursor-not-allowed"}`}
                         >
                           {task.status === "pending" ? "Start Task" :
-                          task.status === "in_progress" ? "Done" : "Completed"}
+                            task.status === "in_progress" ? "Done" : "Completed"}
                         </button>
-                    </div>   
-                     
+                      </div>
                     </div>
                   </div>
-                  </CardDescription>
-          </CardHeader>
-        </Card>
-                ))
-              )}
-            
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ))
+        )}
       </TabsContent>
-      {/* for pdf viewer */}
-      <PDFViewer
-  open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
-  fileUrl={fileUrl ?? ""}
-  fileName={selectedDeliverable?.fileName ?? ""}
-  deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
-  initialPage={selectedDeliverable?.initialPage?? 1}
-  onClose={() => setSelectedDeliverable(null)}
-/>
-    </Tabs>
-    
 
+      {/* PDF viewer */}
+      <PDFViewer
+        open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
+        fileUrl={fileUrl ?? ""}
+        fileName={selectedDeliverable?.fileName ?? ""}
+        deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
+        initialPage={selectedDeliverable?.initialPage ?? 1}
+        onClose={() => setSelectedDeliverable(null)}
+      />
+
+      {/* OnlyOffice editor */}
+      {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
+        <OnlyOfficeEditor
+          // key changes after every save, so OnlyOffice never serves a stale cached copy
+          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
+          deliverableId={officeDoc.deliverableId}
+          fileName={officeDoc.fileName}
+          fileUrl={officeUrl}
+          mode={officeDoc.mode}
+          userId={user?.id}
+          userName={user?.fullName ?? undefined}
+          onClose={() => setOfficeDoc(null)}
+        />
+      )}
+    </Tabs>
   );
 }

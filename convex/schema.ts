@@ -72,6 +72,7 @@ export default defineSchema({
     pageNumber: v.number(),
     x: v.number(),
     y: v.number(), 
+    
     createdAt: v.string(),
   }).index("by_deliverable", ["deliverableId"]),
 
@@ -86,6 +87,7 @@ export default defineSchema({
       v.literal("in_progress"),
       v.literal("pending")
     ),
+    batchId: v.optional(v.string()),
   }),
 
   notifications: defineTable({

@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Users, MoreVertical, EyeIcon } from "lucide-react";
+import { MoreHorizontal, Users, EyeIcon } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -33,7 +33,14 @@ const PDFViewer = dynamic(
   { ssr: false, loading: () => <div className="flex items-center justify-center h-64">Loading PDF viewer...</div> }
 );
 
+const OnlyOfficeEditor = dynamic(
+  () => import("@/app/components/editor/document-editor"),
+  { ssr: false }
+);
+
 type StatusFilter = "all" | "under_review" | "approved" | "needs_revision" | "pending";
+
+const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
 function NoTeamState() {
   return (
@@ -43,7 +50,7 @@ function NoTeamState() {
       </div>
       <h3 className="font-semibold text-sm md:text-base text-foreground mb-1">No team assigned yet</h3>
       <p className="text-xs md:text-sm text-muted-foreground max-w-xs">
-        You haven't been assigned to any capstone group yet. Check back later or contact your coordinator.
+        You haven&apos;t been assigned to any capstone group yet. Check back later or contact your coordinator.
       </p>
     </div>
   );
@@ -51,7 +58,21 @@ function NoTeamState() {
 
 export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [selectedDeliverable, setSelectedDeliverable] = useState<{ fileName: string; storageId: string; deliverableId: string } | null>(null);
+
+  // PDF viewer
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{
+    fileName: string;
+    storageId: string;
+    deliverableId: string;
+  } | null>(null);
+
+  // OnlyOffice editor: advisers can only comment (no editing); approved files are read-only
+  const [officeDoc, setOfficeDoc] = useState<{
+    fileName: string;
+    storageId: string;
+    deliverableId: string;
+    mode: "comment" | "view";
+  } | null>(null);
 
   const me = useQuery(api.users.getMe);
   const hasTeam = !!capstoneProjectId;
@@ -66,7 +87,24 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
     selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage"> } : "skip"
   );
 
+  const officeUrl = useQuery(
+    api.dashboard.getFileUrl,
+    officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
+  );
+
   const updateStatus = useMutation(api.dashboard.adviserDeliverableStatus);
+
+  const openInOffice = (
+    d: { fileName: string; storageId?: string; _id: string; status: string }
+  ) => {
+    if (!d.storageId) return;
+    setOfficeDoc({
+      fileName: d.fileName,
+      storageId: d.storageId,
+      deliverableId: d._id,
+      mode: d.status === "approved" ? "view" : "comment",
+    });
+  };
 
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
@@ -168,8 +206,8 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
               ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3">
-                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-                    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
                   </svg>
                   <p className="text-gray-500">No deliverables found</p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -199,11 +237,21 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                           <Separator className="mt-3" />
 
                           <div className="flex justify-between items-center mt-3 gap-2">
+                            {/* PDFs open in your viewer (its Comment button goes to OnlyOffice).
+                                Word / Excel / PowerPoint go straight to OnlyOffice. */}
                             <button
-                              onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
+                              onClick={() =>
+                                isPdf(d.fileName)
+                                  ? setSelectedDeliverable({
+                                      fileName: d.fileName,
+                                      storageId: d.storageId!,
+                                      deliverableId: d._id,
+                                    })
+                                  : openInOffice(d)
+                              }
                               className="text-xs outline rounded-md py-1 px-2 transition-colors hover:bg-muted flex items-center gap-1"
                             >
-                             <EyeIcon className="h-4 w-4" /> View Document
+                              <EyeIcon className="h-4 w-4" /> View Document
                             </button>
 
                             <DropdownMenu>
@@ -216,7 +264,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                                 <DropdownMenuGroup>
                                   {d.status === "under_review" && (
                                     <>
-                                      <DropdownMenuItem onClick={() => {}}>Add Comment</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openInOffice(d)}>Add Comment</DropdownMenuItem>
                                       <DropdownMenuItem
                                         onClick={() => updateStatus({ deliverableId: d._id, status: "needs_revision" })}
                                         className="text-yellow-600 focus:text-yellow-600"
@@ -233,12 +281,12 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                                   )}
                                   {d.status === "needs_revision" && (
                                     <>
-                                      <DropdownMenuItem onClick={() => {}}>View Feedback</DropdownMenuItem>
-                                      <DropdownMenuItem onClick={() => {}}>Add Comment</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openInOffice(d)}>View Feedback</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => openInOffice(d)}>Add Comment</DropdownMenuItem>
                                     </>
                                   )}
                                   {d.status === "approved" && (
-                                    <DropdownMenuItem onClick={() => {}}>View Comments</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => openInOffice(d)}>View Comments</DropdownMenuItem>
                                   )}
                                 </DropdownMenuGroup>
                               </DropdownMenuContent>
@@ -274,6 +322,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
         </TabsContent>
       </Tabs>
 
+      {/* PDF viewer: its Comment button hands the file over to OnlyOffice */}
       <PDFViewer
         open={!!selectedDeliverable && typeof fileUrl === "string" && fileUrl.startsWith("http")}
         fileUrl={fileUrl ?? ""}
@@ -282,7 +331,30 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
         userId={me?.clerkId}
         userName={me?.name ?? ""}
         onClose={() => setSelectedDeliverable(null)}
+        onComment={() => {
+          if (!selectedDeliverable) return;
+          const current = deliverables?.find((x) => x._id === selectedDeliverable.deliverableId);
+          setOfficeDoc({
+            ...selectedDeliverable,
+            mode: current?.status === "approved" ? "view" : "comment",
+          });
+          setSelectedDeliverable(null);
+        }}
       />
+
+      {/* OnlyOffice editor */}
+      {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
+        <OnlyOfficeEditor
+          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
+          deliverableId={officeDoc.deliverableId}
+          fileName={officeDoc.fileName}
+          fileUrl={officeUrl}
+          mode="comment"
+          userId={me?.clerkId}
+          userName={me?.name ?? undefined}
+          onClose={() => setOfficeDoc(null)}
+        />
+      )}
     </>
   );
 }

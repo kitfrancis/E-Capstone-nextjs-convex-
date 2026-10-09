@@ -28,9 +28,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialPage?: number;
+  onComment?: () => void;
 }
 
-export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, open, onClose, initialPage }: Props) {
+export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, open, onClose, initialPage, onComment }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageWidth, setPageWidth] = useState(500);
@@ -118,16 +119,21 @@ export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, 
         <DialogHeader className="px-4 py-3 border-b shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-sm truncate pr-6">{fileName}</DialogTitle>
-            {deliverableId && userId && (
-              <Button
-                variant={commentMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => setCommentMode(!commentMode)}
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                {commentMode ? "Cancel Comment" : "Add Comment"}
-              </Button>
-            )}
+            {onComment ? (
+  <Button variant="outline" size="sm" onClick={onComment}>
+    <MessageSquare className="h-4 w-4 mr-2" />
+    Comment
+  </Button>
+) : deliverableId && userId ? (
+  <Button
+    variant={commentMode ? "default" : "outline"}
+    size="sm"
+    onClick={() => setCommentMode(!commentMode)}
+  >
+    <MessageSquare className="h-4 w-4 mr-2" />
+    {commentMode ? "Cancel Comment" : "Add Comment"}
+  </Button>
+) : null}
           </div>
         </DialogHeader>
 

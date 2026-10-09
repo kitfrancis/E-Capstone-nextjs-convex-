@@ -79,6 +79,11 @@ export function DropdownMenuAvatar() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
+          {/* <DropdownMenuItem disabled >
+                  <span className="text-sm font-semibold ">
+                    {me?.email ?? "—"}
+                   </span>
+           </DropdownMenuItem> */}
           <DropdownMenuItem onClick={() => router.push(profileUrl)}>
             <User />
             Edit Profile

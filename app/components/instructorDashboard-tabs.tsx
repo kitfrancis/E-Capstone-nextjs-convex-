@@ -1,62 +1,74 @@
 "use client";
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useUser } from "@clerk/nextjs";
-import { Button } from "@/components/ui/button";
-import { Check, Copy, Key, Pencil, Trash, Trash2 } from "lucide-react";
+import { Check, Copy, Key } from "lucide-react";
 import { EditTask } from "@/app/components/editTask";
 import { DeleteTask } from "./deleteTask";
 import { InstructorProgress } from "@/app/components/TeamsProgress";
-import { Progress } from "@/components/ui/progress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
 import dynamic from "next/dynamic";
-import { MoreVertical, EyeIcon } from "lucide-react";
+import { MoreVertical } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
-
-      const PDFViewer = dynamic(
+const PDFViewer = dynamic(
   () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
   { ssr: false, loading: () => <div>Loading PDF viewer...</div> }
 );
 
+const OnlyOfficeEditor = dynamic(
+  () => import("@/app/components/editor/document-editor"),
+  { ssr: false }
+);
 
+const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
+
+export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
+  const { user } = useUser();
   const me = useQuery(api.users.getMe);
-  const myId = me?._id as string | undefined; 
-  
-  
+  const myId = me?._id as string | undefined;
 
-    //for pdf viewer
-  const [selectedDeliverable, setSelectedDeliverable] = useState<{fileName: string, storageId: string, deliverableId: string} | null>(null);
+  // PDF viewer
+  const [selectedDeliverable, setSelectedDeliverable] = useState<{
+    fileName: string;
+    storageId: string;
+    deliverableId: string;
+  } | null>(null);
+  const fileUrl = useQuery(
+    api.dashboard.getFileUrl,
+    selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage"> } : "skip"
+  );
 
-  
-  //for Code
+  // OnlyOffice editor (comment-only mode)
+  const [officeDoc, setOfficeDoc] = useState<{
+    fileName: string;
+    storageId: string;
+    deliverableId: string;
+  } | null>(null);
+  const officeUrl = useQuery(
+    api.dashboard.getFileUrl,
+    officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
+  );
+
+  // Invite code
   const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
 
-
-  const fileUrl = useQuery(api.dashboard.getFileUrl,selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage">} : "skip");
-  const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
-
-
-
   const copyInviteCode = (code: string, teamId: string) => {
-  navigator.clipboard.writeText(code);
-  setCopiedTeamId(teamId);
-  setTimeout(() => setCopiedTeamId(null), 2000);
-};
-
+    navigator.clipboard.writeText(code);
+    setCopiedTeamId(teamId);
+    setTimeout(() => setCopiedTeamId(null), 2000);
+  };
 
   const allDeliverables = useQuery(api.dashboard.getInstructorDeliverables, myId ? { instructorId: myId } : "skip");
   const allTeams = useQuery(api.dashboard.getInstructorTeams, myId ? { instructorId: myId } : "skip");
@@ -66,8 +78,6 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
   const tasks = capstoneProjectId ? projectTasks : allTasks;
-
-  
 
   const getStatusColor = (status: string) => {
     if (status === "approved") return "bg-green-500";
@@ -109,142 +119,126 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           </div>
         ) : (
           allTeams.map((team) => {
-  const teamDeliverables = allDeliverables?.filter(d => d.capstoneProjectId === team._id) ?? [];
-  const teamTasks = allTasks?.filter(t => t.capstoneProjectId === team._id) ?? [];
-  const completedTasks = teamTasks.filter(t => t.status === "completed").length;
+            const teamDeliverables = allDeliverables?.filter((d) => d.capstoneProjectId === team._id) ?? [];
+            const teamTasks = allTasks?.filter((t) => t.capstoneProjectId === team._id) ?? [];
+            const completedTasks = teamTasks.filter((t) => t.status === "completed").length;
 
-            
-            
-              return(
-                   <Card key={team._id} className="mb-4">
-  <CardHeader>
-    <CardDescription>
-      <div className="flex flex-col gap-3">
-        <div className="flex justify-between items-center gap-3 mb-5">
-          <div className="flex flex-col">
-            <h1 className="font-semibold text-foreground text-sm lg:text-base">{team.teamName}</h1>
-            <p className="text-muted-foreground text-xs mt-0.5">{team.projectTitle}</p>
-            
-          </div>
-          
-          <div className="flex items-center gap-0 md:gap-2 shrink-0">
-  <span className="inline-flex items-center justify-center rounded-full px-2.5 py-0.5 bg-blue-500 text-white text-xs font-medium">
-    {team.phase}
-  </span>
+            return (
+              <Card key={team._id} className="mb-4">
+                <CardHeader>
+                  <CardDescription>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex justify-between items-center gap-3 mb-5">
+                        <div className="flex flex-col">
+                          <h1 className="font-semibold text-foreground text-sm lg:text-base">{team.teamName}</h1>
+                          <p className="text-muted-foreground text-xs mt-0.5">{team.projectTitle}</p>
+                        </div>
 
-  {team.inviteCode && (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="View invite code">
-          <Key className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-3">
-        <p className="text-xs text-muted-foreground mb-2">
-          Share this code with students. They enter it at sign-up to join this team.
-        </p>
-        <div className="flex items-center justify-between bg-muted rounded-md px-3 py-2">
-          <span className="font-mono text-sm tracking-widest font-semibold">
-            {team.inviteCode}
-          </span>
-          <button
-            onClick={() => copyInviteCode(team.inviteCode!, team._id)}
-            className="text-muted-foreground hover:text-foreground transition-colors ml-2"
-            aria-label="Copy invite code"
-          >
-            {copiedTeamId === team._id
-              ? <Check className="w-4 h-4 text-green-500" />
-              : <Copy className="w-4 h-4" />
-            }
-          </button>
-        </div>
-        {copiedTeamId === team._id && (
-          <p className="text-xs text-green-500 text-right mt-1">Copied!</p>
-        )}
-      </PopoverContent>
-    </Popover>
-  )}
+                        <div className="flex items-center gap-0 md:gap-2 shrink-0">
+                          <span className="inline-flex items-center justify-center rounded-full px-2.5 py-0.5 bg-blue-500 text-white text-xs font-medium">
+                            {team.phase}
+                          </span>
 
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
-        <MoreVertical className="h-4 w-4 text-muted-foreground" />
-      </button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="space-y-1 p-1">
-      <EditTeam
-        teamId={team._id}
-        initialTeamName={team.teamName}
-        initialProjectTitle={team.projectTitle}
-        initialPhase={team.phase}
-        initialMembers={team.members ?? []}
-        trigger={
-          <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
-            Edit Team
-          </button>
-        }
-      />
-      <DeleteTeam
-        teamId={team._id}
-        teamName={team.teamName}
-        trigger={
-          <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
-            Delete Team
-          </button>
-        }
-      />
-    </DropdownMenuContent>
-  </DropdownMenu>
-</div>
-          
+                          {team.inviteCode && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="View invite code">
+                                  <Key className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent align="end" className="w-72 p-3">
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  Share this code with students. They enter it at sign-up to join this team.
+                                </p>
+                                <div className="flex items-center justify-between bg-muted rounded-md px-3 py-2">
+                                  <span className="font-mono text-sm tracking-widest font-semibold">
+                                    {team.inviteCode}
+                                  </span>
+                                  <button
+                                    onClick={() => copyInviteCode(team.inviteCode!, team._id)}
+                                    className="text-muted-foreground hover:text-foreground transition-colors ml-2"
+                                    aria-label="Copy invite code"
+                                  >
+                                    {copiedTeamId === team._id
+                                      ? <Check className="w-4 h-4 text-green-500" />
+                                      : <Copy className="w-4 h-4" />}
+                                  </button>
+                                </div>
+                                {copiedTeamId === team._id && (
+                                  <p className="text-xs text-green-500 text-right mt-1">Copied!</p>
+                                )}
+                              </PopoverContent>
+                            </Popover>
+                          )}
 
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="space-y-1 p-1">
+                              <EditTeam
+                                teamId={team._id}
+                                initialTeamName={team.teamName}
+                                initialProjectTitle={team.projectTitle}
+                                initialPhase={team.phase}
+                                initialMembers={team.members ?? []}
+                                trigger={
+                                  <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
+                                    Edit Team
+                                  </button>
+                                }
+                              />
+                              <DeleteTeam
+                                teamId={team._id}
+                                teamName={team.teamName}
+                                trigger={
+                                  <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
+                                    Delete Team
+                                  </button>
+                                }
+                              />
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
 
+                      <Separator />
 
-          
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Members</p>
+                          <p className="text-sm font-semibold text-foreground">{team.members?.length ?? 0}</p>
+                        </div>
 
-        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Deliverables</p>
+                          <p className="text-sm font-semibold text-foreground">{teamDeliverables.length}</p>
+                        </div>
 
-        <Separator />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Tasks</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {completedTasks}/{teamTasks.length}
+                            <span className="text-xs font-normal text-muted-foreground ml-1">complete</span>
+                          </p>
+                        </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="">
-            <p className="text-xs text-muted-foreground">Members</p>
-            <p className="text-sm font-semibold text-foreground">{team.members?.length ?? 0}</p>
-          </div>
-
-          <div className="">
-            <p className="text-xs text-muted-foreground">Deliverables</p>
-            <p className="text-sm font-semibold text-foreground">{teamDeliverables.length}</p>
-          </div>
-
-          <div className="">
-            <p className="text-xs text-muted-foreground">Tasks</p>
-            <p className="text-sm font-semibold text-foreground">
-              {completedTasks}/{teamTasks.length}
-              <span className="text-xs font-normal text-muted-foreground ml-1">complete</span>
-            </p>
-          </div>
-
-          <div className="">
-            <p className="text-xs text-muted-foreground">Progress</p>
-            <p className="text-sm font-semibold text-foreground">{team.progress ?? 0}%</p>
-          </div>
-        </div>
-        <div className="w-full">
-          <InstructorProgress progress={team.progress ?? 0} />
-        </div>
-
-        
-        <div>
-          
-        </div>
-      </div>
-    </CardDescription>
-  </CardHeader>
-</Card>
-              );
-           
-       })
+                        <div>
+                          <p className="text-xs text-muted-foreground">Progress</p>
+                          <p className="text-sm font-semibold text-foreground">{team.progress ?? 0}%</p>
+                        </div>
+                      </div>
+                      <div className="w-full">
+                        <InstructorProgress progress={team.progress ?? 0} />
+                      </div>
+                    </div>
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            );
+          })
         )}
       </TabsContent>
 
@@ -255,8 +249,8 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
         ) : allDeliverables.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3">
-              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-              <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
             </svg>
             <p className="text-gray-500">No submissions yet</p>
           </div>
@@ -280,11 +274,34 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                     <Separator className="mt-3" />
                     <div className="flex justify-between items-center mt-4">
                       <h1 className="text-foreground text-xs">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
-                      <button
-                    onClick={() => setSelectedDeliverable({ fileName: d.fileName, storageId: d.storageId!, deliverableId: d._id })}
-                    className="text-xs outline rounded-md py-1 px-2 transition-colors"
-                  > View File
-                  </button>
+
+                      {isPdf(d.fileName) ? (
+                        <button
+                          onClick={() =>
+                            setSelectedDeliverable({
+                              fileName: d.fileName,
+                              storageId: d.storageId!,
+                              deliverableId: d._id,
+                            })
+                          }
+                          className="text-xs outline rounded-md py-1 px-2 transition-colors"
+                        >
+                          View File
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() =>
+                            setOfficeDoc({
+                              fileName: d.fileName,
+                              storageId: d.storageId!,
+                              deliverableId: d._id,
+                            })
+                          }
+                          className="text-xs outline rounded-md py-1 px-2 transition-colors"
+                        >
+                          Open &amp; Comment
+                        </button>
+                      )}
                     </div>
                   </div>
                 </CardDescription>
@@ -300,9 +317,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           <p className="text-center py-4 text-gray-500">Loading...</p>
         ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className=" ">
-            <p className="text-gray-500">You haven't created any tasks yet</p>
-            </div>
+            <p className="text-gray-500">You haven&apos;t created any tasks yet</p>
           </div>
         ) : (
           tasks.map((task, i) => (
@@ -316,75 +331,63 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                           <h1 className="text-foreground font-medium text-sm lg:text-base">{task.title}</h1>
                           <p className="text-muted-foreground text-xs">Team: {task.assignedTo}</p>
                         </div>
-                        
 
                         <div className="flex items-center gap-2">
-
-                            <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
-                          {task.status === "completed" ? "Completed" : task.status === "in_progress" ? "In Progress" : "Pending"}
-                        </span>
+                          <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
+                            {task.status === "completed" ? "Completed" : task.status === "in_progress" ? "In Progress" : "Pending"}
+                          </span>
                           <div className="flex items-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
-                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="space-y-1 p-1">
-                            <div>
-                              <EditTask
-                                taskId={task._id}
-                                initialTitle={task.title}
-                                initialDescription={task.description}
-                                initialDueDate={task.dueDate}
-                                initialTeamId={task.capstoneProjectId}
-                                trigger={
-                                  <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
-                                    Edit Task
-                                  </button>
-                                }
-                              />
-                            </div>
-                            <div>
-                              <DeleteTask
-                                taskId={task._id}
-                                taskTitle={task.title}
-                                trigger={
-                                  <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
-                                    Delete Task
-                                  </button>
-                                }
-                              />
-                            </div>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
+                                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="space-y-1 p-1">
+                                <div>
+                                  <EditTask
+                                    taskId={task._id}
+                                    initialTitle={task.title}
+                                    initialDescription={task.description}
+                                    initialDueDate={task.dueDate}
+                                    initialTeamId={task.capstoneProjectId}
+                                    trigger={
+                                      <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
+                                        Edit Task
+                                      </button>
+                                    }
+                                  />
+                                </div>
+                                <div>
+                                  <DeleteTask
+                                    taskId={task._id}
+                                    taskTitle={task.title}
+                                    trigger={
+                                      <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
+                                        Delete Task
+                                      </button>
+                                    }
+                                  />
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
-                        
-
-
-
-
                       </div>
                     </div>
                     <Separator className="mt-3" />
                     <div className="grid grid-cols-1 gap-1 mt-3">
                       <div>
                         <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word">
-                        <span className="text-xs font-medium text-popover-foreground">Description: </span><br />
-                        {task.description}
-                      </p>
+                          <span className="text-xs font-medium text-popover-foreground">Description: </span><br />
+                          {task.description}
+                        </p>
                       </div>
                       <div className="flex items-center justify-between">
-                          <p className="text-muted-foreground text-xs">
-                        <span className="font-medium">Due:</span> {formatDate(task.dueDate)}
-                      </p>
-                      
+                        <p className="text-muted-foreground text-xs">
+                          <span className="font-medium">Due:</span> {formatDate(task.dueDate)}
+                        </p>
                       </div>
-
-                      
                     </div>
                   </div>
                 </CardDescription>
@@ -393,14 +396,34 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
           ))
         )}
       </TabsContent>
-      {/* for pdf viewer */}
-            <PDFViewer
+
+      {/* PDF viewer: its Comment button hands the file over to OnlyOffice */}
+      <PDFViewer
         open={!!selectedDeliverable && !!fileUrl}
         fileUrl={fileUrl ?? ""}
         fileName={selectedDeliverable?.fileName ?? ""}
         deliverableId={selectedDeliverable?.deliverableId as Id<"deliverables"> | undefined}
         onClose={() => setSelectedDeliverable(null)}
+        onComment={() => {
+          if (!selectedDeliverable) return;
+          setOfficeDoc(selectedDeliverable);
+          setSelectedDeliverable(null);
+        }}
       />
+
+      {/* OnlyOffice editor, comment-only */}
+      {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
+        <OnlyOfficeEditor
+          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
+          deliverableId={officeDoc.deliverableId}
+          fileName={officeDoc.fileName}
+          fileUrl={officeUrl}
+          mode="comment"
+          userId={user?.id}
+          userName={user?.fullName ?? undefined}
+          onClose={() => setOfficeDoc(null)}
+        />
+      )}
     </Tabs>
   );
 }
