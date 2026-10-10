@@ -45,6 +45,7 @@ export const getDeliverables = query({
     return await ctx.db
       .query("deliverables")
       .filter(q => q.eq(q.field("capstoneProjectId"), args.capstoneProjectId))
+      .order("desc")
       .collect();
   },
 });
@@ -96,11 +97,23 @@ export const saveDeliverable = mutation({
     capstoneProjectId: v.id("capstoneProjects"),
   },
   handler: async (ctx, args) => {
+    // Next version = highest existing version for this chapter in this project, plus 1
+    const existing = await ctx.db
+      .query("deliverables")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("capstoneProjectId"), args.capstoneProjectId),
+          q.eq(q.field("phase"), args.phase)
+        )
+      )
+      .collect();
+    const version = existing.reduce((max, d) => Math.max(max, d.version), 0) + 1;
+
     const deliverableId = await ctx.db.insert("deliverables", {
       capstoneProjectId: args.capstoneProjectId,
       fileName: args.fileName,
       phase: args.phase,
-      version: 1,
+      version,
       status: "under_review",
       fileSize: args.fileSize,
       uploadedAt: new Date().toISOString(),
@@ -110,12 +123,14 @@ export const saveDeliverable = mutation({
 
     const project = await ctx.db.get(args.capstoneProjectId);
     if (project?.adviserId) {
-       await ctx.runMutation(api.notifications.sendNotification, {
+      await ctx.runMutation(api.notifications.sendNotification, {
         userId: project.adviserId,
-        message: `Team "${project.teamName}" uploaded a new deliverable: "${args.fileName}".`,
+        message: `Team "${project.teamName}" uploaded ${
+          version > 1 ? `version ${version} of ` : ""
+        }a deliverable: "${args.fileName}".`,
         type: "deliverable_uploaded",
         relatedId: deliverableId,
-        link: `/dashboard/adviser?projectId=${args.capstoneProjectId}&deliverableId=${deliverableId}`, 
+        link: `/dashboard/adviser?projectId=${args.capstoneProjectId}&deliverableId=${deliverableId}`,
       });
     }
   },
@@ -127,7 +142,7 @@ export const saveDeliverable = mutation({
 export const getAllDeliverables = query({
   args: {},
   handler: async (ctx) => {
-    const deliverables = await ctx.db.query("deliverables").collect();
+    const deliverables = await ctx.db.query("deliverables").order("desc").collect();
     return await Promise.all(
       deliverables.map(async (d) => {
         const project = await ctx.db.get(d.capstoneProjectId);
@@ -258,7 +273,7 @@ export const getInstructorTeams = query({
 export const getInstructorDeliverables = query({
   args: { instructorId: v.string() },
   handler: async (ctx, args) => {
-    const projects = await ctx.db.query("capstoneProjects").collect();
+    const projects = await ctx.db.query("capstoneProjects").order("desc").collect();
     const myProjectIds = new Set(
       projects.filter(p => p.instructorId === args.instructorId).map(p => p._id)
     );

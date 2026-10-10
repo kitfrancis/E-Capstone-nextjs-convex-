@@ -1,34 +1,34 @@
+"use client"
+
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/select";
 
+const CHAPTERS = ["Chapter 1", "Chapter 2", "Chapter 3", "Chapter 4", "Chapter 5"];
 
-interface SelectDemoProps {
+export function SelectDemo({
+  value,
+  onValueChange,
+}: {
+  value?: string;
   onValueChange?: (value: string) => void;
-}
-
-
-export function SelectDemo({ onValueChange }: SelectDemoProps) {
+}) {
   return (
-    <Select onValueChange={onValueChange}>
-      <SelectTrigger className="w-full py-3 text-xs">
-        <SelectValue placeholder="Proposal" />
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Select a chapter" />
       </SelectTrigger>
       <SelectContent>
-        <SelectGroup>
-          <SelectItem value="Proposal">Proposal</SelectItem>
-          <SelectItem value="Development">Development</SelectItem>
-          <SelectItem value="Testing">Testing</SelectItem>
-          <SelectItem value="Documents">Documents</SelectItem>
-          <SelectItem value="Defense">Defense</SelectItem>
-        </SelectGroup>
+        {CHAPTERS.map((c) => (
+          <SelectItem key={c} value={c}>
+            {c}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
-  )
+  );
 }

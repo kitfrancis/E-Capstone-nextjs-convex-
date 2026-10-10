@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -11,6 +11,7 @@ import { SelectDemo } from "@/app/components/select";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
+import { chapterOf, computeProgress, CHAPTER_MAX, TOTAL_CHAPTERS } from "@/lib/progress";
 import {
   MoreVertical,
   FileText,
@@ -78,6 +79,12 @@ const TAB_COPY: Record<string, { title: string; description: string }> = {
 const rowClass =
   "rounded-2xl border bg-card p-4 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
 
+const progressBarColor = (status: string | null) => {
+  if (status === "approved") return "bg-green-600";
+  if (status === "needs_revision") return "bg-amber-500";
+  return "bg-blue-600";
+};
+
 // Each row gets its own URL, so "Download File" always points to the right file.
 function DownloadItem({ storageId }: { storageId?: string }) {
   const url = useQuery(
@@ -144,6 +151,22 @@ export function TabsDemo({
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
 
+  // Progress is computed from the latest version of each chapter
+  const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
+  const chosenChapter = chapterOf(phase);
+  const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
+  const alreadyApproved = chosen?.status === "approved";
+
+  let uploadHint = "";
+  if (chosenChapter && chosen) {
+    if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
+    else if (chosen.status === "needs_revision")
+      uploadHint = `Resubmitting keeps Chapter ${chosenChapter} at 15% until your adviser approves it.`;
+    else if (chosen.status === "under_review")
+      uploadHint = `This replaces the version under review. Chapter ${chosenChapter} stays at ${chosen.points}%.`;
+    else uploadHint = `Chapter ${chosenChapter} moves to 10% when you upload.`;
+  }
+
   useEffect(() => {
     if (!highlightDeliverableId || !deliverables) return;
     const match = deliverables.find((d) => d._id === highlightDeliverableId);
@@ -177,7 +200,11 @@ export function TabsDemo({
 
   const handleUpload = async () => {
     if (!file || !phase || !capstoneProjectId) {
-      toast.error("Please select a file and phase first.");
+      toast.error("Please select a file and chapter first.");
+      return;
+    }
+    if (alreadyApproved) {
+      toast.error("This chapter is already approved.");
       return;
     }
     setUploading(true);
@@ -252,6 +279,37 @@ export function TabsDemo({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      {/* Project progress (visible on every tab) */}
+      {deliverables !== undefined && (
+        <div className="rounded-2xl border bg-card p-5 lg:p-6 mb-6">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Project progress</h2>
+              <p className="text-sm text-muted-foreground">
+                {progress.approved} of {TOTAL_CHAPTERS} chapters approved
+              </p>
+            </div>
+            <span className="text-3xl font-semibold text-foreground tabular-nums">{progress.total}%</span>
+          </div>
+          {/* grid-cols-5 matches TOTAL_CHAPTERS = 5 */}
+          <div className="mt-4 grid grid-cols-5 gap-1.5">
+            {progress.chapters.map((c) => (
+              <div key={c.chapter}>
+                <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${progressBarColor(c.status)}`}
+                    style={{ width: `${(c.points / CHAPTER_MAX) * 100}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-center text-[11px] text-muted-foreground">
+                  Ch {c.chapter} · {c.points}%
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Section heading + pill tabs */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end  sm:justify-between mb-4">
         <div >
@@ -296,8 +354,11 @@ export function TabsDemo({
           deliverables.map((d) => {
             const fs = fileStyle(d.fileName);
             const FileTypeIcon = fs.icon;
+            const chNum = chapterOf(d.phase);
+            const cp = chNum ? progress.chapters[chNum - 1] : null;
+            const isLatest = !!cp && cp.latestId === d._id;
             return (
-              <div key={d._id} className={rowClass}>
+              <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
@@ -306,7 +367,7 @@ export function TabsDemo({
                     <div className="min-w-0">
                       <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
                       <p className="text-muted-foreground text-xs">
-                        Phase: {d.phase} • Version {d.version}
+                        {d.phase} • Version {d.version}
                       </p>
                       <p className="text-muted-foreground text-xs mt-0.5">
                         {formatDate(d.uploadedAt)} • {d.fileSize}
@@ -388,6 +449,26 @@ export function TabsDemo({
                     </DropdownMenu>
                   </div>
                 </div>
+
+                {/* Chapter progress (latest version only) */}
+                {cp && isLatest && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${progressBarColor(cp.status)}`}
+                        style={{ width: `${(cp.points / CHAPTER_MAX) * 100}%` }}
+                      />
+                    </div>
+                    <span className="min-w-18 text-right text-xs text-muted-foreground">
+                      {cp.points}% of {CHAPTER_MAX}%
+                    </span>
+                  </div>
+                )}
+                {!chNum && (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    Saved under an older phase, so it is not counted in progress.
+                  </p>
+                )}
               </div>
             );
           })
@@ -398,8 +479,19 @@ export function TabsDemo({
       <TabsContent value="uploads">
         <div className="rounded-2xl border bg-card p-5 lg:p-6 space-y-5">
           <div className="space-y-1.5">
-            <label className="text-foreground text-sm font-medium">Project phase</label>
-            <SelectDemo onValueChange={setPhase} />
+            <label className="text-foreground text-sm font-medium">Chapter </label>
+            <SelectDemo value={phase} onValueChange={setPhase} />
+            {uploadHint && (
+              <p
+                className={`rounded-lg px-3 py-2 text-xs ${
+                  alreadyApproved
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                }`}
+              >
+                {uploadHint}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -451,7 +543,7 @@ export function TabsDemo({
 
           <Button
             onClick={handleUpload}
-            disabled={!file || !phase || uploading}
+            disabled={!file || !phase || uploading || alreadyApproved}
             className="h-11 w-full rounded-xl gap-2 bg-blue-600 text-white hover:bg-blue-700"
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
