@@ -3,12 +3,16 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import Link from "next/link";
-import { Users, FileText, Clock, Calendar, ChevronRight, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Users, Clock, Calendar, RotateCcw, ChevronRight, ArrowRight } from "lucide-react";
 import { DialogDemo } from "@/app/components/createTeam";
 import { TaskDialogDemo } from "@/app/components/createTask";
-import { InstructorTabsDemo } from "@/app/components/instructorDashboard-tabs";
+import {
+  InstructorTabsDemo,
+  type InstructorTab,
+  type SubmissionFilter,
+  type TaskFilter,
+} from "@/app/components/instructorDashboard-tabs";
 
 export default function InstructorDashboard() {
   const me = useQuery(api.users.getMe);
@@ -18,6 +22,11 @@ export default function InstructorDashboard() {
     api.dashboard.getInstructorDashboardData,
     myId ? { instructorId: myId } : "skip"
   );
+
+  // The cards control which tab and filter the list below shows
+  const [tab, setTab] = useState<InstructorTab>("teams");
+  const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>("all");
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>("all");
 
   useEffect(() => {
     if (me === undefined || me === null) return;
@@ -34,44 +43,53 @@ export default function InstructorDashboard() {
 
   const firstName = me?.name?.split(" ")[0] ?? "";
 
-  // TODO: change the hrefs to your real routes
+  const openView = (t: InstructorTab, sub?: SubmissionFilter, task?: TaskFilter) => {
+    setTab(t);
+    if (sub) setSubmissionFilter(sub);
+    if (task) setTaskFilter(task);
+    setTimeout(
+      () => document.getElementById("instructor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      50
+    );
+  };
+
   const stats = [
     {
       label: "Total Teams",
       value: dashboardData.totalTeams,
       icon: Users,
-      href: "/instructor/teams",
       linkText: "View all teams",
+      onClick: () => openView("teams"),
       card: "bg-blue-50 dark:bg-blue-950/30",
       iconWrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
       link: "text-blue-700 dark:text-blue-300",
     },
     {
-      label: "Active Projects",
-      value: dashboardData.activeProjects,
-      icon: FileText,
-      href: "/instructor/projects",
-      linkText: "View projects",
-      card: "bg-green-50 dark:bg-green-950/30",
-      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
-      link: "text-green-700 dark:text-green-300",
-    },
-    {
       label: "Pending Review",
       value: dashboardData.pendingReviews,
       icon: Clock,
-      href: "/instructor/tasks",
-      linkText: "View tasks",
+      linkText: "View submissions",
+      onClick: () => openView("submissions", "under_review"),
       card: "bg-amber-50 dark:bg-amber-950/30",
       iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
       link: "text-amber-700 dark:text-amber-300",
     },
     {
+      label: "Needs Revision",
+      value: dashboardData.needsRevisionCount,
+      icon: RotateCcw,
+      linkText: "View revisions",
+      onClick: () => openView("submissions", "needs_revision"),
+      card: "bg-violet-50 dark:bg-violet-950/30",
+      iconWrap: "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400",
+      link: "text-violet-700 dark:text-violet-300",
+    },
+    {
       label: "Overdue Tasks",
       value: dashboardData.overdueTasks,
       icon: Calendar,
-      href: "/instructor/tasks",
-      linkText: "View tasks",
+      linkText: "View overdue tasks",
+      onClick: () => openView("tasks", undefined, "overdue"),
       card: "bg-red-50 dark:bg-red-950/30",
       iconWrap: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400",
       link: "text-red-700 dark:text-red-300",
@@ -106,10 +124,11 @@ export default function InstructorDashboard() {
           {stats.map((s) => {
             const Icon = s.icon;
             return (
-              <Link
+              <button
                 key={s.label}
-                href={s.href}
-                className={`${s.card} rounded-2xl p-4 lg:p-5 flex flex-col gap-3 transition hover:shadow-md hover:-translate-y-0.5`}
+                type="button"
+                onClick={s.onClick}
+                className={`${s.card} rounded-2xl p-4 lg:p-5 flex flex-col gap-3 text-left transition hover:shadow-md hover:-translate-y-0.5`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -126,14 +145,21 @@ export default function InstructorDashboard() {
                 <span className={`${s.link} text-xs font-medium inline-flex items-center gap-1`}>
                   {s.linkText} <ArrowRight className="h-3 w-3" />
                 </span>
-              </Link>
+              </button>
             );
           })}
         </div>
 
         {/* Teams / Submissions / Tasks */}
-        <div>
-          <InstructorTabsDemo />
+        <div id="instructor-tabs" className="scroll-mt-4">
+          <InstructorTabsDemo
+            tab={tab}
+            onTabChange={setTab}
+            submissionFilter={submissionFilter}
+            onSubmissionFilterChange={setSubmissionFilter}
+            taskFilter={taskFilter}
+            onTaskFilterChange={setTaskFilter}
+          />
         </div>
       </div>
     </div>

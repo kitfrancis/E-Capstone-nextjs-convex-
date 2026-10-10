@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -27,6 +27,7 @@ import { DeleteTask } from "./deleteTask";
 import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
+import { computeProgress } from "@/lib/progress";
 import dynamic from "next/dynamic";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -47,6 +48,10 @@ const OnlyOfficeEditor = dynamic(
 
 const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
+export type InstructorTab = "teams" | "submissions" | "tasks";
+export type SubmissionFilter = "all" | "under_review" | "needs_revision" | "approved";
+export type TaskFilter = "all" | "overdue";
+
 // Icon + color combos, cycled per team row
 const TEAM_STYLES = [
   { icon: Users, wrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300" },
@@ -64,12 +69,73 @@ const TAB_COPY: Record<string, { title: string; description: string }> = {
   tasks: { title: "Tasks", description: "Tasks you've assigned across your teams." },
 };
 
-export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<"capstoneProjects"> }) {
+const isOverdue = (t: { dueDate: string; status: string }) =>
+  t.status !== "completed" && new Date(t.dueDate).getTime() < Date.now();
+
+function FilterChips<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: T; count?: number }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            value === o.value
+              ? "border-blue-600 bg-blue-600 text-white"
+              : "bg-card text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {o.label}
+          {o.count !== undefined && <span className="ml-1.5 opacity-70">{o.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+type Props = {
+  capstoneProjectId?: Id<"capstoneProjects">;
+  // Optional: lets the dashboard cards control the tab and filters
+  tab?: InstructorTab;
+  onTabChange?: (t: InstructorTab) => void;
+  submissionFilter?: SubmissionFilter;
+  onSubmissionFilterChange?: (f: SubmissionFilter) => void;
+  taskFilter?: TaskFilter;
+  onTaskFilterChange?: (f: TaskFilter) => void;
+};
+
+export function InstructorTabsDemo({
+  capstoneProjectId,
+  tab: tabProp,
+  onTabChange,
+  submissionFilter: submissionFilterProp,
+  onSubmissionFilterChange,
+  taskFilter: taskFilterProp,
+  onTaskFilterChange,
+}: Props) {
   const { user } = useUser();
   const me = useQuery(api.users.getMe);
   const myId = me?._id as string | undefined;
 
-  const [tab, setTab] = useState("teams");
+  // Works controlled (from the dashboard) or on its own
+  const [localTab, setLocalTab] = useState<InstructorTab>("teams");
+  const [localSubmissionFilter, setLocalSubmissionFilter] = useState<SubmissionFilter>("all");
+  const [localTaskFilter, setLocalTaskFilter] = useState<TaskFilter>("all");
+  const tab = tabProp ?? localTab;
+  const setTab = onTabChange ?? setLocalTab;
+  const submissionFilter = submissionFilterProp ?? localSubmissionFilter;
+  const setSubmissionFilter = onSubmissionFilterChange ?? setLocalSubmissionFilter;
+  const taskFilter = taskFilterProp ?? localTaskFilter;
+  const setTaskFilter = onTaskFilterChange ?? setLocalTaskFilter;
 
   // PDF viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{
@@ -111,6 +177,25 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
   );
   const tasks = capstoneProjectId ? projectTasks : allTasks;
 
+  // Chapter-based progress per team, computed from the latest version of each chapter
+  const progressByTeam = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!allTeams) return map;
+    for (const team of allTeams) {
+      const items = (allDeliverables ?? []).filter((d) => d.capstoneProjectId === team._id);
+      map.set(team._id, computeProgress(items).total);
+    }
+    return map;
+  }, [allTeams, allDeliverables]);
+
+  // Filtered lists
+  const shownDeliverables = allDeliverables?.filter(
+    (d) => submissionFilter === "all" || d.status === submissionFilter
+  );
+  const countStatus = (s: string) => allDeliverables?.filter((d) => d.status === s).length ?? 0;
+  const shownTasks = tasks?.filter((t) => taskFilter === "all" || isOverdue(t));
+  const overdueCount = tasks?.filter(isOverdue).length ?? 0;
+
   const getStatusBadge = (status: string) => {
     if (status === "approved") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
     if (status === "under_review") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
@@ -147,7 +232,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
     "rounded-2xl border bg-card p-4 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="w-full">
+    <Tabs value={tab} onValueChange={(v) => setTab(v as InstructorTab)} className="w-full">
       {/* Section heading + pill tabs */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-4">
         <div>
@@ -182,6 +267,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
             const completedTasks = teamTasks.filter((t) => t.status === "completed").length;
             const style = TEAM_STYLES[index % TEAM_STYLES.length];
             const TeamIcon = style.icon;
+            const teamProgress = progressByTeam.get(team._id) ?? 0;
 
             return (
               <div key={team._id} className={rowClass}>
@@ -230,10 +316,10 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                     <p className="text-xs text-muted-foreground mb-1">Progress</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <InstructorProgress progress={team.progress ?? 0} />
+                        <InstructorProgress progress={teamProgress} />
                       </div>
                       <span className="text-xs font-semibold text-foreground w-9 text-right">
-                        {team.progress ?? 0}%
+                        {teamProgress}%
                       </span>
                     </div>
                   </div>
@@ -242,7 +328,7 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
                   <div className="flex items-center gap-1 justify-between lg:justify-end">
                     {/* TODO: change to your real team page route */}
                     <Button asChild size="sm" className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700">
-                      <Link href={`/instructor/teams/${team._id}`}>
+                      <Link href={`/dashboard/instructor/teams/${team._id}`}>
                         View Team <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
@@ -329,59 +415,77 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
             <p className="text-muted-foreground">No submissions yet</p>
           </div>
         ) : (
-          allDeliverables.map((d) => (
-            <div key={d._id} className={rowClass}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-300">
-                    <FileText className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
-                    <p className="text-muted-foreground text-xs">
-                      Team: {d.teamName} • Phase: {d.phase} • Version {d.version}
-                    </p>
-                    <p className="text-muted-foreground text-xs mt-0.5">
-                      {formatDate(d.uploadedAt)} • {d.fileSize}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 justify-between sm:justify-end">
-                  <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
-                  {isPdf(d.fileName) ? (
-                    <Button
-                      size="sm"
-                      className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
-                      onClick={() =>
-                        setSelectedDeliverable({
-                          fileName: d.fileName,
-                          storageId: d.storageId!,
-                          deliverableId: d._id,
-                        })
-                      }
-                    >
-                      View File
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
-                      onClick={() =>
-                        setOfficeDoc({
-                          fileName: d.fileName,
-                          storageId: d.storageId!,
-                          deliverableId: d._id,
-                        })
-                      }
-                    >
-                      Open &amp; Comment
-                    </Button>
-                  )}
-                </div>
+          <>
+            <FilterChips<SubmissionFilter>
+              value={submissionFilter}
+              onChange={setSubmissionFilter}
+              options={[
+                { label: "All", value: "all", count: allDeliverables.length },
+                { label: "Under Review", value: "under_review", count: countStatus("under_review") },
+                { label: "Needs Revision", value: "needs_revision", count: countStatus("needs_revision") },
+                { label: "Approved", value: "approved", count: countStatus("approved") },
+              ]}
+            />
+            {shownDeliverables && shownDeliverables.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
+                <p className="text-muted-foreground">No submissions match this filter</p>
               </div>
-            </div>
-          ))
+            ) : (
+              shownDeliverables?.map((d) => (
+                <div key={d._id} className={rowClass}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-300">
+                        <FileText className="h-6 w-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
+                        <p className="text-muted-foreground text-xs">
+                          Team: {d.teamName} • Phase: {d.phase} • Version {d.version}
+                        </p>
+                        <p className="text-muted-foreground text-xs mt-0.5">
+                          {formatDate(d.uploadedAt)} • {d.fileSize}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 justify-between sm:justify-end">
+                      <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
+                      {isPdf(d.fileName) ? (
+                        <Button
+                          size="sm"
+                          className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
+                          onClick={() =>
+                            setSelectedDeliverable({
+                              fileName: d.fileName,
+                              storageId: d.storageId!,
+                              deliverableId: d._id,
+                            })
+                          }
+                        >
+                          View File
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
+                          onClick={() =>
+                            setOfficeDoc({
+                              fileName: d.fileName,
+                              storageId: d.storageId!,
+                              deliverableId: d._id,
+                            })
+                          }
+                        >
+                          Open &amp; Comment
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </>
         )}
       </TabsContent>
 
@@ -394,65 +498,81 @@ export function InstructorTabsDemo({ capstoneProjectId }: { capstoneProjectId?: 
             <p className="text-muted-foreground">You haven&apos;t created any tasks yet</p>
           </div>
         ) : (
-          tasks.map((task, i) => (
-            <div key={task._id ?? i} className={rowClass}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                    <CheckSquare className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
-                    <p className="text-muted-foreground text-xs mt-0.5 wrap-break-word">{task.description}</p>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                      <span>Team: {task.assignedTo}</span>
-                      <span className="inline-flex items-center gap-1">
-                        <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
-                      </span>
+          <>
+            <FilterChips<TaskFilter>
+              value={taskFilter}
+              onChange={setTaskFilter}
+              options={[
+                { label: "All", value: "all", count: tasks.length },
+                { label: "Overdue", value: "overdue", count: overdueCount },
+              ]}
+            />
+            {shownTasks && shownTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
+                <p className="text-muted-foreground">No overdue tasks</p>
+              </div>
+            ) : (
+              shownTasks?.map((task, i) => (
+                <div key={task._id ?? i} className={rowClass}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                        <CheckSquare className="h-6 w-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
+                        <p className="text-muted-foreground text-xs mt-0.5 wrap-break-word">{task.description}</p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
+                          <span>Team: {task.assignedTo}</span>
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>{getTaskLabel(task.status)}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="Task options">
+                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="space-y-1 p-1">
+                          <div>
+                            <EditTask
+                              taskId={task._id}
+                              initialTitle={task.title}
+                              initialDescription={task.description}
+                              initialDueDate={task.dueDate}
+                              initialTeamId={task.capstoneProjectId}
+                              trigger={
+                                <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
+                                  Edit Task
+                                </button>
+                              }
+                            />
+                          </div>
+                          <div>
+                            <DeleteTask
+                              taskId={task._id}
+                              taskTitle={task.title}
+                              trigger={
+                                <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
+                                  Delete Task
+                                </button>
+                              }
+                            />
+                          </div>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>{getTaskLabel(task.status)}</span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="Task options">
-                        <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="space-y-1 p-1">
-                      <div>
-                        <EditTask
-                          taskId={task._id}
-                          initialTitle={task.title}
-                          initialDescription={task.description}
-                          initialDueDate={task.dueDate}
-                          initialTeamId={task.capstoneProjectId}
-                          trigger={
-                            <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
-                              Edit Task
-                            </button>
-                          }
-                        />
-                      </div>
-                      <div>
-                        <DeleteTask
-                          taskId={task._id}
-                          taskTitle={task.title}
-                          trigger={
-                            <button className="w-full text-left text-xs text-destructive rounded-md px-2 py-2 hover:bg-destructive/10 transition-colors">
-                              Delete Task
-                            </button>
-                          }
-                        />
-                      </div>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </div>
-          ))
+              ))
+            )}
+          </>
         )}
       </TabsContent>
 

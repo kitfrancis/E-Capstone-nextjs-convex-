@@ -3,10 +3,11 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { TabsDemo } from "@/app/components/dashboard-tabs";
 import { Id } from "@/convex/_generated/dataModel";
-import { useState, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { computeProgress } from "@/lib/progress";
 import {
   CheckCircle2,
   Clock,
@@ -57,6 +58,13 @@ function DashboardContent() {
     api.dashboard.getProjectAdviser,
     project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
   );
+  const deliverables = useQuery(
+    api.dashboard.getDeliverables,
+    project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
+  );
+
+  // Chapter-based progress, computed from the latest version of each chapter
+  const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
 
   const handleJoin = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -186,12 +194,12 @@ function DashboardContent() {
                     Current phase:{" "}
                     <span className="font-medium text-foreground">{project.phase}</span>
                   </p>
-                  <span className="text-sm font-semibold text-foreground">{project.progress}%</span>
+                  <span className="text-sm font-semibold text-foreground">{progress.total}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-2 rounded-full bg-blue-600 transition-all duration-500"
-                    style={{ width: `${project.progress}%` }}
+                    className={`h-2 rounded-full transition-all duration-500 ${progress.total >= 100 ? "bg-green-600" : "bg-blue-600"}`}
+                    style={{ width: `${progress.total}%` }}
                   />
                 </div>
               </div>

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AdviserTabsDemo } from "@/app/components/adviserDashboard-Tabs";
+import { computeProgress } from "@/lib/progress";
 
 const initialsOf = (name?: string) =>
   (name ?? "")
@@ -77,11 +78,13 @@ type TeamFilter = "all" | "in_progress" | "completed";
 function TeamRow({
   proj,
   index,
+  progress,
   selected,
   onView,
 }: {
   proj: any;
   index: number;
+  progress: number;
   selected: boolean;
   onView: () => void;
 }) {
@@ -92,7 +95,6 @@ function TeamRow({
 
   const style = TEAM_STYLES[index % TEAM_STYLES.length];
   const TeamIcon = style.icon;
-  const progress = proj.progress ?? 0;
   const status = statusOf(progress);
   const completedTasks = tasks?.filter((t) => t.status === "completed").length ?? 0;
 
@@ -207,16 +209,29 @@ export default function AdviserDashboard() {
   const approved = allDeliverables?.filter((d) => d.status === "approved").length ?? 0;
   const needRevision = allDeliverables?.filter((d) => d.status === "needs_revision").length ?? 0;
 
+  // Chapter-based progress per team, computed from the latest version of each chapter
+  const progressByProject = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!adviserProjects) return map;
+    for (const p of adviserProjects) {
+      const items = (allDeliverables ?? []).filter((d) => d.capstoneProjectId === p._id);
+      map.set(p._id, computeProgress(items).total);
+    }
+    return map;
+  }, [adviserProjects, allDeliverables]);
+
+  const projectProgress = project ? progressByProject.get(project._id) ?? 0 : 0;
+
   const visibleProjects = useMemo(() => {
     if (!adviserProjects) return [];
     return adviserProjects
       .map((proj, index) => ({ proj, index }))
       .filter(({ proj }) => {
-        const key = statusOf(proj.progress ?? 0).key;
+        const key = statusOf(progressByProject.get(proj._id) ?? 0).key;
         if (teamFilter === "all") return true;
         return key === teamFilter;
       });
-  }, [adviserProjects, teamFilter]);
+  }, [adviserProjects, teamFilter, progressByProject]);
 
   // Recent activity, built from the newest deliverables
   const recentActivity = useMemo(() => {
@@ -268,9 +283,9 @@ export default function AdviserDashboard() {
       icon: FileText,
       linkText: "View Deliverables",
       target: "reviews",
-      card: "bg-green-50 dark:bg-green-950/30",
-      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
-      link: "text-green-700 dark:text-green-300",
+      card: "bg-purple-50 dark:bg-purple-950/30",
+      iconWrap: "bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400",
+      link: "text-purple-700 dark:text-purple-300",
     },
     {
       label: "Approved",
@@ -278,9 +293,9 @@ export default function AdviserDashboard() {
       icon: CheckCircle2,
       linkText: "View Approved",
       target: "reviews",
-      card: "bg-amber-50 dark:bg-amber-950/30",
-      iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
-      link: "text-amber-700 dark:text-amber-300",
+      card: "bg-green-50 dark:bg-green-950/30",
+      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
+      link: "text-green-700 dark:text-green-300",
     },
     {
       label: "Needs revision",
@@ -288,9 +303,9 @@ export default function AdviserDashboard() {
       icon: RotateCcw,
       linkText: "View Revision",
       target: "reviews",
-      card: "bg-red-50 dark:bg-red-950/30",
-      iconWrap: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400",
-      link: "text-red-700 dark:text-red-300",
+      card: "bg-yellow-50 dark:bg-yellow-950/30",
+      iconWrap: "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/50 dark:text-yellow-400",
+      link: "text-yellow-700 dark:text-yellow-300",
     },
   ];
 
@@ -332,24 +347,24 @@ export default function AdviserDashboard() {
       sub: "Check pending work",
       icon: FileText,
       target: "reviews",
-      card: "bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50",
-      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
+      card: "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-950/50",
+      iconWrap: "bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400",
     },
     {
       label: "Approve",
       sub: "Give final approval",
       icon: ClipboardCheck,
       target: "reviews",
-      card: "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50",
-      iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
+      card: "bg-green-50 hover:bg-green-100 dark:bg-green-950/30 dark:hover:bg-green-950/50",
+      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
     },
     {
       label: "View Revision",
       sub: "See what needs changes",
       icon: RotateCcw,
       target: "reviews",
-      card: "bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50",
-      iconWrap: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400",
+      card: "bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/30 dark:hover:bg-yellow-950/50",
+      iconWrap: "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/50 dark:text-yellow-400",
     },
   ];
 
@@ -466,6 +481,7 @@ export default function AdviserDashboard() {
                   key={proj._id}
                   proj={proj}
                   index={index}
+                  progress={progressByProject.get(proj._id) ?? 0}
                   selected={selectedTeamIndex === index}
                   onView={() => {
                     setSelectedTeamIndex(index);
@@ -549,12 +565,12 @@ export default function AdviserDashboard() {
                   <p className="text-sm text-muted-foreground">
                     Current phase: <span className="font-medium text-foreground">{project.phase}</span>
                   </p>
-                  <span className="text-sm font-semibold text-foreground">{project.progress}%</span>
+                  <span className="text-sm font-semibold text-foreground">{projectProgress}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-2 rounded-full bg-blue-600 transition-all duration-500"
-                    style={{ width: `${project.progress}%` }}
+                    className={`h-2 rounded-full transition-all duration-500 ${projectProgress >= 100 ? "bg-green-600" : "bg-blue-600"}`}
+                    style={{ width: `${projectProgress}%` }}
                   />
                 </div>
               </div>
