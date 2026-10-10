@@ -5,14 +5,26 @@ import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Card, CardDescription, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { SelectDemo } from "@/app/components/select";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
-import { MoreVertical } from "lucide-react";
+import {
+  MoreVertical,
+  FileText,
+  FileSpreadsheet,
+  Presentation,
+  FileArchive,
+  File as FileIcon,
+  UploadCloud,
+  CheckSquare,
+  CalendarDays,
+  Loader2,
+  Play,
+  Check,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +49,34 @@ const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 const OFFICE_EXTENSIONS = ["doc", "docx", "odt", "xls", "xlsx", "ods", "ppt", "pptx", "odp"];
 const isOffice = (fileName: string) =>
   OFFICE_EXTENSIONS.includes(fileName.split(".").pop()?.toLowerCase() ?? "");
+
+// Icon + color per file type
+const fileStyle = (fileName: string) => {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf")
+    return { icon: FileText, wrap: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300" };
+  if (["doc", "docx", "odt"].includes(ext))
+    return { icon: FileText, wrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300" };
+  if (["xls", "xlsx", "ods"].includes(ext))
+    return { icon: FileSpreadsheet, wrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-300" };
+  if (["ppt", "pptx", "odp"].includes(ext))
+    return { icon: Presentation, wrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-300" };
+  if (ext === "zip")
+    return { icon: FileArchive, wrap: "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-300" };
+  return { icon: FileIcon, wrap: "bg-muted text-muted-foreground" };
+};
+
+const BADGE_BASE =
+  "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
+
+const TAB_COPY: Record<string, { title: string; description: string }> = {
+  deliverables: { title: "Deliverables", description: "Your submitted files and their review status." },
+  uploads: { title: "Upload new", description: "Upload a new version of your project deliverable." },
+  tasks: { title: "Tasks", description: "Tasks your instructor assigned to your team." },
+};
+
+const rowClass =
+  "rounded-2xl border bg-card p-4 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
 
 // Each row gets its own URL, so "Download File" always points to the right file.
 function DownloadItem({ storageId }: { storageId?: string }) {
@@ -65,6 +105,7 @@ export function TabsDemo({
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { user } = useUser();
@@ -128,6 +169,12 @@ export function TabsDemo({
     if (e.target.files?.[0]) setFile(e.target.files[0]);
   };
 
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0]);
+  };
+
   const handleUpload = async () => {
     if (!file || !phase || !capstoneProjectId) {
       toast.error("Please select a file and phase first.");
@@ -171,16 +218,28 @@ export function TabsDemo({
     }
   };
 
-  const getStatusColor = (status: string) => {
-    if (status === "approved") return "bg-green-500";
-    if (status === "under_review") return "bg-blue-500";
-    return "bg-yellow-500";
+  const getStatusBadge = (status: string) => {
+    if (status === "approved") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+    if (status === "under_review") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
   };
 
   const getStatusLabel = (status: string) => {
     if (status === "approved") return "Approved";
-    if (status === "under_review") return "Under_Review";
-    return "Needs_Revision";
+    if (status === "under_review") return "Under Review";
+    return "Needs Revision";
+  };
+
+  const getTaskBadge = (status: string) => {
+    if (status === "completed") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+    if (status === "in_progress") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+    return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+  };
+
+  const getTaskLabel = (status: string) => {
+    if (status === "completed") return "Completed";
+    if (status === "in_progress") return "In Progress";
+    return "Pending";
   };
 
   const formatDate = (dateStr: string) => {
@@ -193,239 +252,278 @@ export function TabsDemo({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <div className="flex justify-center items-center">
-        <TabsList className="gap-6 w-full">
-          <TabsTrigger value="deliverables" className="md:text-sm">Deliverables</TabsTrigger>
-          <TabsTrigger value="uploads" className="md:text-sm">Upload New</TabsTrigger>
-          <TabsTrigger value="tasks" className="md:text-sm">Tasks</TabsTrigger>
+      {/* Section heading + pill tabs */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end  sm:justify-between mb-4">
+        <div >
+          <h2 className="text-xl font-semibold text-foreground">{TAB_COPY[activeTab].title}</h2>
+          <p className="text-sm text-muted-foreground">{TAB_COPY[activeTab].description}</p>
+        </div>
+        <TabsList className="h-auto gap-1 rounded-full bg-muted p-1 self-start sm:self-auto">
+          {[
+            { v: "deliverables", label: "Deliverables" },
+            { v: "uploads", label: "Upload New" },
+            { v: "tasks", label: "Tasks" },
+          ].map((t) => (
+            <TabsTrigger
+              key={t.v}
+              value={t.v}
+              className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow"
+            >
+              {t.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
       </div>
 
+      {/* DELIVERABLES */}
       <TabsContent value="deliverables">
         {deliverables === undefined ? (
-          <p className="text-center py-4 text-gray-500">Loading...</p>
+          <p className="text-center py-4 text-muted-foreground">Loading...</p>
         ) : deliverables.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 text-gray-300 mb-3"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-            <p className="text-gray-500">No deliverables yet</p>
-            <p className="text-xs text-gray-400 mt-1">Upload your first deliverable in the Upload tab</p>
+          <div className="flex flex-col items-center justify-center py-10 text-center rounded-2xl border border-dashed bg-card">
+            <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
+            <p className="font-medium text-foreground">No deliverables yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Upload your first deliverable in the Upload New tab.</p>
+            <Button
+              onClick={() => setActiveTab("uploads")}
+              className="mt-4 rounded-full bg-blue-600 px-5 text-white hover:bg-blue-700"
+              size="sm"
+            >
+              Upload now
+            </Button>
           </div>
         ) : (
-          deliverables.map((d) => (
-            <Card key={d._id} className="mb-5">
-              <CardHeader>
-                <CardDescription>
-                  <div className="flex flex-col mt-0 lg:mt-2 border-b last:border-0">
-                    <div className="flex justify-between">
-                      <div className="flex flex-col">
-                        <h1 className="font-medium text-foreground text-sm lg:text-base">{d.fileName}</h1>
-                        <p className="text-muted-foreground text-xs font-medium">Phase: {d.phase} • Version {d.version}</p>
-                      </div>
-                      <span className={`inline-flex items-center justify-center rounded-lg border px-1 lg:px-2 ${getStatusColor(d.status)} text-white text-xs font-medium h-5 lg:h-6`}>
-                        {getStatusLabel(d.status)}
-                      </span>
+          deliverables.map((d) => {
+            const fs = fileStyle(d.fileName);
+            const FileTypeIcon = fs.icon;
+            return (
+              <div key={d._id} className={rowClass}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
+                      <FileTypeIcon className="h-6 w-6" />
                     </div>
-                    <Separator className="mt-3" />
-                    <div className="flex justify-between items-center mt-4">
-                      <h1 className="text-foreground text-xs items-center flex">{formatDate(d.uploadedAt)} • {d.fileSize}</h1>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
+                      <p className="text-muted-foreground text-xs">
+                        Phase: {d.phase} • Version {d.version}
+                      </p>
+                      <p className="text-muted-foreground text-xs mt-0.5">
+                        {formatDate(d.uploadedAt)} • {d.fileSize}
+                      </p>
+                    </div>
+                  </div>
 
-                      <div className="flex">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded-md hover:bg-muted transition-colors">
-                              <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                            {d.status === "needs_revision" && (
-                              <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
-                                Resubmit
-                              </DropdownMenuItem>
-                            )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="File options">
+                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="flex flex-col justify-center">
+                        {d.status === "needs_revision" && (
+                          <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
+                            Resubmit
+                          </DropdownMenuItem>
+                        )}
 
-                            {isPdf(d.fileName) ? (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    setSelectedDeliverable({
-                                      fileName: d.fileName,
-                                      storageId: d.storageId!,
-                                      deliverableId: d._id,
-                                      initialPage: 1,
-                                    })
-                                  }
-                                >
-                                  View File
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    setOfficeDoc({
-                                      fileName: d.fileName,
-                                      storageId: d.storageId!,
-                                      deliverableId: d._id,
-                                      mode: d.status === "approved" ? "view" : "edit",
-                                    })
-                                  }
-                                >
-                                  Open in OnlyOffice
-                                </DropdownMenuItem>
-                              </>
-                            ) : isOffice(d.fileName) ? (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  setOfficeDoc({
-                                    fileName: d.fileName,
-                                    storageId: d.storageId!,
-                                    deliverableId: d._id,
-                                    mode: d.status === "approved" ? "view" : "edit",
-                                  })
-                                }
-                              >
-                                {d.status === "approved" ? "View in Editor" : "Open in Editor"}
-                              </DropdownMenuItem>
-                            ) : null}
-
-                            {/* Download is available for every file type */}
-                            {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
-
+                        {isPdf(d.fileName) ? (
+                          <>
                             <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onSelect={(e) => e.preventDefault()}
+                              onClick={() =>
+                                setSelectedDeliverable({
+                                  fileName: d.fileName,
+                                  storageId: d.storageId!,
+                                  deliverableId: d._id,
+                                  initialPage: 1,
+                                })
+                              }
                             >
-                              <DeleteDeliverable
-                                deliverableId={d._id}
-                                fileName={d.fileName}
-                                trigger={<span className="w-full text-sm">Delete</span>}
-                              />
+                              View File
                             </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  </div>
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          ))
-        )}
-      </TabsContent>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setOfficeDoc({
+                                  fileName: d.fileName,
+                                  storageId: d.storageId!,
+                                  deliverableId: d._id,
+                                  mode: d.status === "approved" ? "view" : "edit",
+                                })
+                              }
+                            >
+                              Open in OnlyOffice
+                            </DropdownMenuItem>
+                          </>
+                        ) : isOffice(d.fileName) ? (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setOfficeDoc({
+                                fileName: d.fileName,
+                                storageId: d.storageId!,
+                                deliverableId: d._id,
+                                mode: d.status === "approved" ? "view" : "edit",
+                              })
+                            }
+                          >
+                            {d.status === "approved" ? "View in Editor" : "Open in Editor"}
+                          </DropdownMenuItem>
+                        ) : null}
 
-      {/* Upload */}
-      <TabsContent value="uploads">
-        <Card>
-          <CardHeader>
-            <CardDescription>
-              <div className="flex flex-col max-h-auto bg-sidebar rounded-lg mt-1 lg:p-5">
-                <div className="flex flex-col gap-1">
-                  <h1 className="text-foreground text-sm lg:text-base font-semibold">Upload Project Deliverable</h1>
-                  <p className="text-xs lg:text-sm text-muted-foreground">Upload a new version of your project deliverable for review</p>
-                </div>
+                        {/* Download is available for every file type */}
+                        {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
 
-                <div className="space-y-1 mt-3 lg:mt-5 flex flex-col w-full">
-                  <label className="text-foreground text-xs lg:text-sm font-semibold">Project Phase</label>
-                  <SelectDemo onValueChange={setPhase} />
-                </div>
-
-                <div className="space-y-2 mt-2">
-                  <label className="font-semibold text-foreground items-center text-xs lg:text-sm">Select File</label>
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="cursor-pointer border-2 border-dashed border-gray-400 hover:border-gray-600 rounded-lg flex items-center justify-center p-5 lg:p-7 mt-1"
-                  >
-                    <div className="flex flex-col items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-12 w-12 mx-auto mb-3 text-gray-400"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                      {file ? (
-                        <p className="text-gray-800 font-medium">{file.name}</p>
-                      ) : (
-                        <>
-                          <p className="text-foreground text-xs">Click to select a file</p>
-                          <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)</p>
-                        </>
-                      )}
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xlsx,.pptx,.zip"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-                  </div>
-
-                  <div className="border-t border-gray-300 mt-1 lg:mt-3">
-                    <button
-                      onClick={handleUpload}
-                      disabled={!file || !phase || uploading}
-                      className="text-xs lg:text-sm flex flex-row items-center justify-center bg-black text-gray-100 w-full rounded-lg mt-3 lg:mt-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                      {uploading ? "Uploading..." : "Upload Deliverable"}
-                    </button>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          <DeleteDeliverable
+                            deliverableId={d._id}
+                            fileName={d.fileName}
+                            trigger={<span className="w-full text-sm">Delete</span>}
+                          />
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </div>
-            </CardDescription>
-          </CardHeader>
-        </Card>
+            );
+          })
+        )}
       </TabsContent>
 
-      {/* Tasks */}
+      {/* UPLOAD */}
+      <TabsContent value="uploads">
+        <div className="rounded-2xl border bg-card p-5 lg:p-6 space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-foreground text-sm font-medium">Project phase</label>
+            <SelectDemo onValueChange={setPhase} />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-foreground text-sm font-medium">Select file</label>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              className={`cursor-pointer rounded-2xl border-2 border-dashed flex items-center justify-center p-8 transition-colors ${
+                dragging
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                  : "border-border hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
+              }`}
+            >
+              <div className="flex flex-col items-center justify-center text-center">
+                {file ? (
+                  <>
+                    <div className={`flex h-14 w-14 items-center justify-center rounded-full ${fileStyle(file.name).wrap}`}>
+                      <FileText className="h-7 w-7" />
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-foreground break-all">{file.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {(file.size / (1024 * 1024)).toFixed(2)}MB • Click to choose a different file
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                      <UploadCloud className="h-7 w-7" />
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-foreground">Click to select a file, or drag it here</p>
+                    <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)</p>
+                  </>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.xlsx,.pptx,.zip"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          <Button
+            onClick={handleUpload}
+            disabled={!file || !phase || uploading}
+            className="h-11 w-full rounded-xl gap-2 bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+            {uploading ? "Uploading..." : "Upload deliverable"}
+          </Button>
+        </div>
+      </TabsContent>
+
+      {/* TASKS */}
       <TabsContent value="tasks">
         {tasks === undefined ? (
-          <p className="text-center py-4 text-gray-500">Loading...</p>
+          <p className="text-center py-4 text-muted-foreground">Loading...</p>
         ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <p className="text-gray-500">No tasks yet</p>
-            <p className="text-xs text-gray-400 mt-1">Tasks will be created by your instructor</p>
+          <div className="flex flex-col items-center justify-center py-10 text-center rounded-2xl border border-dashed bg-card">
+            <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
+            <p className="font-medium text-foreground">No tasks yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Tasks will be created by your instructor.</p>
           </div>
         ) : (
           tasks.map((task) => (
-            <Card key={task._id} className="mb-3">
-              <CardHeader>
-                <CardDescription>
-                  <div className="rounded-lg">
-                    <div className="flex flex-col">
-                      <div className="flex justify-between">
-                        <div className="flex flex-col">
-                          <h1 className="text-foreground font-medium text-sm lg:text-base">{task.title}</h1>
-                          <p className="text-muted-foreground text-xs">{task.assignedTo}</p>
-                        </div>
-                        <span className={`inline-flex items-center justify-center rounded-lg border px-2 ${task.status === "completed" ? "bg-green-500" : task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"} text-white text-xs font-medium gap-1 h-6`}>
-                          {task.status === "completed" ? "Completed" : task.status === "in_progress" ? "In Progress" : "Pending"}
-                        </span>
-                      </div>
-                    </div>
-                    <Separator className="mt-3" />
-                    <div className="grid grid-cols-1 gap-1 mt-3">
-                      <div className="flex items-center justify-between w-full">
-                        <p className="text-muted-foreground text-xs lg:text-sm mb-2 wrap-break-word">
-                          <span className="text-xs font-medium text-popover-foreground">Description: </span><br />
-                          {task.description}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between w-full">
-                        <p className="text-muted-foreground text-xs"><span className="font-medium">Due:</span> {formatDate(task.dueDate)}</p>
-                        <button
-                          disabled={task.status === "completed"}
-                          onClick={() => {
-                            if (task.status === "pending") updateTaskStatus({ taskId: task._id, status: "in_progress" });
-                            else if (task.status === "in_progress") updateTaskStatus({ taskId: task._id, status: "completed" });
-                          }}
-                          className={`text-xs px-3 py-1 rounded-md text-white font-medium
-                            ${task.status === "pending" ? "bg-blue-500 hover:bg-blue-600" :
-                              task.status === "in_progress" ? "bg-green-500 hover:bg-green-600" :
-                              "bg-gray-400 cursor-not-allowed"}`}
-                        >
-                          {task.status === "pending" ? "Start Task" :
-                            task.status === "in_progress" ? "Done" : "Completed"}
-                        </button>
-                      </div>
+            <div key={task._id} className={rowClass}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                    <CheckSquare className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
+                    <p className="text-muted-foreground text-xs mt-0.5 wrap-break-word">{task.description}</p>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
+                      <span>Assigned to: {task.assignedTo}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
+                      </span>
                     </div>
                   </div>
-                </CardDescription>
-              </CardHeader>
-            </Card>
+                </div>
+                <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>{getTaskLabel(task.status)}</span>
+              </div>
+
+              <div className="flex justify-end mt-3">
+                <Button
+                  size="sm"
+                  disabled={task.status === "completed"}
+                  onClick={() => {
+                    if (task.status === "pending") updateTaskStatus({ taskId: task._id, status: "in_progress" });
+                    else if (task.status === "in_progress") updateTaskStatus({ taskId: task._id, status: "completed" });
+                  }}
+                  className={`rounded-full px-4 gap-1.5 text-white ${
+                    task.status === "pending"
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : task.status === "in_progress"
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {task.status === "pending" ? (
+                    <>
+                      <Play className="h-3.5 w-3.5" /> Start task
+                    </>
+                  ) : task.status === "in_progress" ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Mark as done
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" /> Completed
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           ))
         )}
       </TabsContent>

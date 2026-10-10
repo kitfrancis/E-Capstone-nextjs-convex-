@@ -7,6 +7,13 @@ import { ThemeToggle } from "@/components/ui/theme-provider";
 import "./globals.css";
 import { Toaster } from "sonner"
 import { Toast } from "radix-ui";
+import { Poppins } from "next/font/google";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+});
 
 export const metadata: Metadata = {
   title: "E-Research",
@@ -21,7 +28,7 @@ export default function RootLayout({
   return (
     <ClerkProvider
   signInUrl="/sign-in">
-      <html lang="en" suppressHydrationWarning>
+      <html lang="en" suppressHydrationWarning className={`${poppins.variable}`}>
         <body className="min-h-full flex flex-col">
           <ThemeProviderWrapper>
             <div className="fixed top-20 right-4 z-50">

@@ -7,7 +7,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Copy, Check, CheckCircle2 } from "lucide-react"
+import { Plus, Copy, Check, CheckCircle2, ChevronRight } from "lucide-react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { useState, useRef } from "react"
@@ -78,10 +78,19 @@ export function DialogDemo() {
   return (
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) resetForm(); }}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-xs lg:text-sm flex items-center justify-center px-1.5 lg:px-3 bg-black dark:bg-gray-50 text-background hover:bg-gray-800 hover:text-background dark:hover:bg-gray-200">
-          <Plus /> Create Team
-        </Button>
-      </DialogTrigger>
+  <Button className="group h-auto w-full justify-between rounded-2xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700 hover:text-white">
+    <span className="flex items-center gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+        <Plus className="h-5 w-5" />
+      </span>
+      <span className="flex flex-col items-start text-left">
+        <span className="text-sm font-semibold leading-tight">Create Team</span>
+        <span className="text-xs font-normal text-white/80">Start a new capstone team</span>
+      </span>
+    </span>
+    <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+  </Button>
+</DialogTrigger>
 
       <DialogContent className="sm:max-w-sm">
         {createdCode ? (

@@ -4,6 +4,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import Link from "next/link";
+import { Users, FileText, Clock, Calendar, ChevronRight, ArrowRight } from "lucide-react";
 import { DialogDemo } from "@/app/components/createTeam";
 import { TaskDialogDemo } from "@/app/components/createTask";
 import { InstructorTabsDemo } from "@/app/components/instructorDashboard-tabs";
@@ -12,18 +14,15 @@ export default function InstructorDashboard() {
   const me = useQuery(api.users.getMe);
   const myId = me?._id as string | undefined;
   const router = useRouter();
-  const dashboardData = useQuery(api.dashboard.getInstructorDashboardData, myId ? { instructorId: myId } : "skip");
+  const dashboardData = useQuery(
+    api.dashboard.getInstructorDashboardData,
+    myId ? { instructorId: myId } : "skip"
+  );
 
-
-useEffect(() => {
-  if (me === undefined) return;
-
-  if (me === null) return; 
-
-  if (me.role !== "instructor") { 
-    router.push("/unauthorized");
-  }
-}, [me, router]);
+  useEffect(() => {
+    if (me === undefined || me === null) return;
+    if (me.role !== "instructor") router.push("/unauthorized");
+  }, [me, router]);
 
   if (me === undefined || dashboardData === undefined) {
     return (
@@ -33,60 +32,109 @@ useEffect(() => {
     );
   }
 
+  const firstName = me?.name?.split(" ")[0] ?? "";
+
+  // TODO: change the hrefs to your real routes
+  const stats = [
+    {
+      label: "Total Teams",
+      value: dashboardData.totalTeams,
+      icon: Users,
+      href: "/instructor/teams",
+      linkText: "View all teams",
+      card: "bg-blue-50 dark:bg-blue-950/30",
+      iconWrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
+      link: "text-blue-700 dark:text-blue-300",
+    },
+    {
+      label: "Active Projects",
+      value: dashboardData.activeProjects,
+      icon: FileText,
+      href: "/instructor/projects",
+      linkText: "View projects",
+      card: "bg-green-50 dark:bg-green-950/30",
+      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
+      link: "text-green-700 dark:text-green-300",
+    },
+    {
+      label: "Pending Review",
+      value: dashboardData.pendingReviews,
+      icon: Clock,
+      href: "/instructor/tasks",
+      linkText: "View tasks",
+      card: "bg-amber-50 dark:bg-amber-950/30",
+      iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
+      link: "text-amber-700 dark:text-amber-300",
+    },
+    {
+      label: "Overdue Tasks",
+      value: dashboardData.overdueTasks,
+      icon: Calendar,
+      href: "/instructor/tasks",
+      linkText: "View tasks",
+      card: "bg-red-50 dark:bg-red-950/30",
+      iconWrap: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400",
+      link: "text-red-700 dark:text-red-300",
+    },
+  ];
+
   return (
     <div className="scroll-smooth bg-background">
-      <div className="lg:ml-1 px-0 max-h-auto lg:px-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ">
-          <div>
-              <h1 className="text-2xl font-semibold text-foreground">
-          Instructor Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage teams, assign tasks, and track project progress.
-        </p>
+      <div className="px-0 lg:px-5 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+          <div className="rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8 flex flex-col justify-center">
+            <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
+              Good day, Prof. {firstName}! 👋
+            </h1>
+            <p className="text-sm lg:text-base text-muted-foreground mt-2">
+              Here&apos;s an overview of your teams, projects, and tasks.
+            </p>
+            <p className="text-sm text-muted-foreground/80 mt-1">
+              Together, we make academic dreams happen!
+            </p>
           </div>
-          <div className="flex items-center justify-center md:justify-end mt-3 flex-row gap-2 lg:gap-3">
-                <DialogDemo />  
-                <TaskDialogDemo />
+
+          {/* These keep your existing dialogs. See note about restyling their triggers. */}
+          <div className="flex flex-col gap-3 justify-center">
+            <DialogDemo />
+            <TaskDialogDemo />
           </div>
         </div>
 
+        {/* Stat cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+          {stats.map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.label}
+                href={s.href}
+                className={`${s.card} rounded-2xl p-4 lg:p-5 flex flex-col gap-3 transition hover:shadow-md hover:-translate-y-0.5`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`${s.iconWrap} h-12 w-12 rounded-full flex items-center justify-center`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-semibold text-foreground leading-none">{s.value}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <span className={`${s.link} text-xs font-medium inline-flex items-center gap-1`}>
+                  {s.linkText} <ArrowRight className="h-3 w-3" />
+                </span>
+              </Link>
+            );
+          })}
+        </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4  gap-2 lg:gap-4 mt-3 lg:mt-5 md:mt-10">
-              <div className="bg-muted gap-1  flex flex-col items-center justify-center rounded-lg">
-                <div className="text-center my-1 lg:my-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-users h-8 w-8 mx-auto mb-2 text-blue-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                <h1 className="text-lg lg:text-xl font-semibold text-foreground">{dashboardData.totalTeams}</h1>
-                <p className="text-xs lg:text-sm text-muted-foreground">Total Teams</p>
-                </div>
-              </div>
-              <div className="bg-muted gap-1  flex flex-col items-center justify-center rounded-lg p-4 px-6">
-                <div className="text-center my-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-text h-8 w-8 mx-auto mb-2 text-green-600"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
-                <h1 className="text-lg lg:text-xl font-semibold text-foreground">{dashboardData.activeProjects}</h1>
-                <p className="text-xs lg:text-sm text-muted-foreground">Active Projects</p>
-                </div>
-              </div>
-              <div className="bg-muted gap-1  flex flex-col items-center justify-center rounded-lg  p-4 px-6">
-                <div className="text-center my-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clock h-8 w-8 mx-auto mb-2 text-yellow-600"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <h1 className="text-lg lg:text-xl font-semibold text-foreground">{dashboardData.pendingReviews}</h1>
-                <p className="text-xs lg:text-sm text-muted-foreground">Pending Review</p>
-                </div>
-              </div>
-              <div className="bg-muted rounded-lg p-4">
-                <div className="text-center my-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-calendar h-8 w-8 mx-auto mb-2 text-red-600"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path></svg>
-                <h1 className="text-lg lg:text-xl font-semibold text-foreground">{dashboardData.overdueTasks}</h1>
-                <p className="text-xs lg:text-sm text-muted-foreground">Overdue Tasks</p>
-                </div>
-
-              </div>
-            </div>
-            <div className="flex items-center justify-center ml-auto mt-4 lg:mt-6">
-              <InstructorTabsDemo />
-            </div>
-        
+        {/* Teams / Submissions / Tasks */}
+        <div>
+          <InstructorTabsDemo />
+        </div>
       </div>
     </div>
   );

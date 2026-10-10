@@ -7,12 +7,14 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus,  CalendarX2Icon} from "lucide-react"
+import { Plus,  CalendarX2Icon, ChevronRight, FileText} from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { useState } from "react"
 import { toast } from "sonner"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Switch } from "@/components/ui/switch"
 
 export function TaskDialogDemo() {
     const teams = useQuery(api.dashboard.getTeams);
@@ -57,10 +59,22 @@ export function TaskDialogDemo() {
     <Dialog open={open} onOpenChange={setOpen}>
 
       <DialogTrigger asChild>
-        <Button variant="outline" className="text-xs lg:text-sm flex items-center justify-center px-1.5 lg:px-3 bg-muted  text-foreground">
-          <CalendarX2Icon /> Create Task
-        </Button>
-      </DialogTrigger>
+  <Button
+    variant="outline"
+    className="group h-auto w-full justify-between rounded-2xl border-blue-100 bg-blue-50 px-4 py-3 text-foreground hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:hover:bg-blue-950/70"
+  >
+    <span className="flex items-center gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
+        <FileText className="h-5 w-5" />
+      </span>
+      <span className="flex flex-col items-start text-left">
+        <span className="text-sm font-semibold leading-tight">Create Task</span>
+        <span className="text-xs font-normal text-muted-foreground">Assign a task to a team</span>
+      </span>
+    </span>
+    <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
+  </Button>
+</DialogTrigger>
 
       <DialogContent className="sm:max-w-sm ">
 
@@ -72,6 +86,7 @@ export function TaskDialogDemo() {
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          <div className=" grid grid-cols-2 gap-2 ">
 
           <div className="space-y-1">
             <Label htmlFor="TeamName">Team</Label>
@@ -102,9 +117,11 @@ export function TaskDialogDemo() {
             
           </div>
 
+          
+
           {/* Need to implement role selection */}
           <div className="space-y-1">
-            <Label htmlFor="TeamName">Role</Label>
+            <Label htmlFor="TeamName">Role/Assignees</Label>
 
             <Select onValueChange={setSelectedTeamId}>
               <SelectTrigger className="w-full ">
@@ -136,6 +153,8 @@ export function TaskDialogDemo() {
             
           </div>
 
+          </div>
+
           <div className="space-y-1">
             <Label htmlFor="projectTitle">Task Title</Label>
             <Input  id="projectTitle"  placeholder="e.g. Complete UI design" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
@@ -148,6 +167,10 @@ export function TaskDialogDemo() {
             <Label htmlFor="dueDate">Due Date</Label>
             <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}/>
           </div>
+          <div className="flex items-center justify-between ">
+            <Label>Assigned to all active teams(Send to All)</Label>
+             <Switch id="switch-size-default" size="default" />
+          </div>
         </div>
 
         <DialogFooter>
@@ -157,7 +180,7 @@ export function TaskDialogDemo() {
           <Button onClick={handleSubmit}>Create Task</Button>
 
           {/* Need to implement the "Send to All" functionality */}
-          <Button onClick={handleSubmit}>Send to All</Button>
+
         </DialogFooter>
       </DialogContent>
     </Dialog>

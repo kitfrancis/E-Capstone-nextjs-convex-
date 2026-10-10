@@ -3,14 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 type OnlyOfficeEditorProps = {
-  fileId: string; // editor cache key (should change after every save)
-  deliverableId: string; // Convex deliverable id, sent to the callback route
+  fileId: string; 
+  deliverableId: string;
   fileName: string;
   fileUrl: string;
-  // edit = student (full editing)
-  // review = adviser/instructor (highlighter + colors, every change is tracked and the student can reject it)
-  // comment = comments only (fixed purple highlight, no color picker)
-  // view = read-only
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
@@ -30,6 +26,8 @@ declare global {
 }
 
 let onlyOfficeApiPromise: Promise<void> | null = null;
+
+const LOAD_TIMEOUT_MS = 15000;
 
 const EDITABLE_EXTENSIONS = new Set([
   "doc", "docx", "odt", "xls", "xlsx", "ods", "ppt", "pptx", "odp", "pdf",
@@ -53,25 +51,37 @@ function loadOnlyOfficeApi(serverUrl: string) {
   if (onlyOfficeApiPromise) return onlyOfficeApiPromise;
 
   onlyOfficeApiPromise = new Promise<void>((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[data-onlyoffice-api="true"]',
-    );
-    const script = existingScript ?? document.createElement("script");
+    document.querySelector('script[data-onlyoffice-api="true"]')?.remove();
 
-    const handleLoad = () => resolve();
-    const handleError = () => {
+    const script = document.createElement("script");
+    let finished = false;
+
+    const fail = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      script.remove();
       onlyOfficeApiPromise = null;
-      reject(new Error(`OnlyOffice could not be reached at ${serverUrl}.`));
+      reject(
+        new Error(
+          `OnlyOffice could not be reached at ${serverUrl}. Check that the OnlyOffice server is running.`,
+        ),
+      );
     };
 
-    script.addEventListener("load", handleLoad, { once: true });
-    script.addEventListener("error", handleError, { once: true });
+    const timer = setTimeout(fail, LOAD_TIMEOUT_MS);
 
-    if (!existingScript) {
-      script.src = `${serverUrl}/web-apps/apps/api/documents/api.js`;
-      script.dataset.onlyofficeApi = "true";
-      document.body.appendChild(script);
-    }
+    script.addEventListener("load", () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve();
+    });
+    script.addEventListener("error", fail);
+
+    script.src = `${serverUrl}/web-apps/apps/api/documents/api.js`;
+    script.dataset.onlyofficeApi = "true";
+    document.body.appendChild(script);
   });
 
   return onlyOfficeApiPromise;
@@ -82,13 +92,14 @@ export default function OnlyOfficeEditor({
   deliverableId,
   fileName,
   fileUrl,
-  mode = "view", // safe default: only views that pass mode="edit" can edit
+  mode = "view", 
   userId,
   userName,
   onClose,
 }: OnlyOfficeEditorProps) {
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
@@ -99,12 +110,15 @@ export default function OnlyOfficeEditor({
 
   useEffect(() => {
     let cancelled = false;
+    setLoadError(null);
+    setLoading(true);
 
     async function createEditor() {
       try {
         await loadOnlyOfficeApi(serverUrl);
       } catch (error) {
         if (!cancelled) {
+          setLoading(false);
           setLoadError(
             error instanceof Error
               ? error.message
@@ -137,6 +151,22 @@ export default function OnlyOfficeEditor({
           customization: { autosave: true, forcesave: true },
           mode: mode === "view" ? "view" : "edit",
           user: userId ? { id: userId, name: userName ?? "User" } : undefined,
+        },
+        events: {
+          onAppReady: () => {
+            if (!cancelled) setLoading(false);
+          },
+          onError: (event: { data?: { errorDescription?: string } }) => {
+            console.error("OnlyOffice error:", event?.data);
+            if (!cancelled) {
+              setLoading(false);
+              setLoadError(
+                event?.data?.errorDescription
+                  ? `OnlyOffice error: ${event.data.errorDescription}`
+                  : "OnlyOffice reported an error. Open the browser console for details.",
+              );
+            }
+          },
         },
         height: "100%",
         type: "desktop",
@@ -171,7 +201,14 @@ export default function OnlyOfficeEditor({
           {loadError}
         </div>
       ) : (
-        <div id={elementId} className="min-h-0 flex-1" />
+        <div className="relative min-h-0 flex-1">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70 pointer-events-none">
+              Loading editor...
+            </div>
+          )}
+          <div id={elementId} className="h-full w-full" />
+        </div>
       )}
     </div>
   );
