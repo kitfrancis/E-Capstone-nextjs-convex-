@@ -85,7 +85,9 @@ export default defineSchema({
     status: v.union(
       v.literal("completed"),
       v.literal("in_progress"),
-      v.literal("pending")
+      v.literal("pending"),
+      v.literal("under_review"),
+      v.literal("needs_revision"),
     ),
     batchId: v.optional(v.string()),
   }),

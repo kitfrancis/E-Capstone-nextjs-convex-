@@ -1,12 +1,13 @@
 "use client";
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@clerk/nextjs";
+import { toast } from "sonner";
 import {
   Check,
   Copy,
@@ -21,6 +22,7 @@ import {
   Lightbulb,
   ArrowRight,
   CalendarDays,
+  RotateCcw,
 } from "lucide-react";
 import { EditTask } from "@/app/components/editTask";
 import { DeleteTask } from "./deleteTask";
@@ -50,7 +52,7 @@ const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
 export type InstructorTab = "teams" | "submissions" | "tasks";
 export type SubmissionFilter = "all" | "under_review" | "needs_revision" | "approved";
-export type TaskFilter = "all" | "overdue";
+export type TaskFilter = "all" | "overdue" | "under_review";
 
 // Icon + color combos, cycled per team row
 const TEAM_STYLES = [
@@ -168,6 +170,17 @@ export function InstructorTabsDemo({
     setTimeout(() => setCopiedTeamId(null), 2000);
   };
 
+  const reviewTask = useMutation(api.dashboard.reviewTask);
+  const handleReview = async (taskId: Id<"tasks">, decision: "confirm" | "revise") => {
+    try {
+      await reviewTask({ taskId, decision });
+      toast.success(decision === "confirm" ? "Task confirmed." : "Task sent back to the team.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't update the task. Try again.");
+    }
+  };
+
   const allDeliverables = useQuery(api.dashboard.getInstructorDeliverables, myId ? { instructorId: myId } : "skip");
   const allTeams = useQuery(api.dashboard.getInstructorTeams, myId ? { instructorId: myId } : "skip");
   const allTasks = useQuery(api.dashboard.getInstructorTasks, myId ? { instructorId: myId } : "skip");
@@ -177,7 +190,6 @@ export function InstructorTabsDemo({
   );
   const tasks = capstoneProjectId ? projectTasks : allTasks;
 
-  // Chapter-based progress per team, computed from the latest version of each chapter
   const progressByTeam = useMemo(() => {
     const map = new Map<string, number>();
     if (!allTeams) return map;
@@ -193,8 +205,18 @@ export function InstructorTabsDemo({
     (d) => submissionFilter === "all" || d.status === submissionFilter
   );
   const countStatus = (s: string) => allDeliverables?.filter((d) => d.status === s).length ?? 0;
-  const shownTasks = tasks?.filter((t) => taskFilter === "all" || isOverdue(t));
+
+  // Tasks waiting for the instructor go first
+  const shownTasks = tasks
+    ?.filter(
+      (t) =>
+        taskFilter === "all" ||
+        (taskFilter === "overdue" && isOverdue(t)) ||
+        (taskFilter === "under_review" && t.status === "under_review")
+    )
+    .sort((a, b) => Number(b.status === "under_review") - Number(a.status === "under_review"));
   const overdueCount = tasks?.filter(isOverdue).length ?? 0;
+  const reviewCount = tasks?.filter((t) => t.status === "under_review").length ?? 0;
 
   const getStatusBadge = (status: string) => {
     if (status === "approved") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
@@ -211,12 +233,16 @@ export function InstructorTabsDemo({
   const getTaskBadge = (status: string) => {
     if (status === "completed") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
     if (status === "in_progress") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+    if (status === "under_review") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
+    if (status === "needs_revision") return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
     return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
   };
 
   const getTaskLabel = (status: string) => {
     if (status === "completed") return "Completed";
     if (status === "in_progress") return "In Progress";
+    if (status === "under_review") return "Under Review";
+    if (status === "needs_revision") return "Needs Revision";
     return "Pending";
   };
 
@@ -504,12 +530,15 @@ export function InstructorTabsDemo({
               onChange={setTaskFilter}
               options={[
                 { label: "All", value: "all", count: tasks.length },
+                { label: "Under Review", value: "under_review", count: reviewCount },
                 { label: "Overdue", value: "overdue", count: overdueCount },
               ]}
             />
             {shownTasks && shownTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
-                <p className="text-muted-foreground">No overdue tasks</p>
+                <p className="text-muted-foreground">
+                  {taskFilter === "under_review" ? "No tasks waiting for review" : "No overdue tasks"}
+                </p>
               </div>
             ) : (
               shownTasks?.map((task, i) => (
@@ -569,6 +598,30 @@ export function InstructorTabsDemo({
                       </DropdownMenu>
                     </div>
                   </div>
+
+                  {/* The team marked this as done: confirm it or send it back */}
+                  {task.status === "under_review" && (
+                    <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                      <span className="mr-auto text-xs text-muted-foreground">
+                        The team marked this as done.
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full px-4 gap-1.5"
+                        onClick={() => handleReview(task._id, "revise")}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" /> Revise
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="rounded-full bg-green-600 px-4 gap-1.5 text-white hover:bg-green-700"
+                        onClick={() => handleReview(task._id, "confirm")}
+                      >
+                        <Check className="h-3.5 w-3.5" /> Confirm
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))
             )}

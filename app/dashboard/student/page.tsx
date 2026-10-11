@@ -7,7 +7,7 @@ import { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { computeProgress } from "@/lib/progress";
+import { computeProgress, CHAPTER_MAX, TOTAL_CHAPTERS } from "@/lib/progress";
 import {
   CheckCircle2,
   Clock,
@@ -28,6 +28,12 @@ const initials = (name?: string) =>
     .slice(0, 2)
     .toUpperCase();
 
+const progressBarColor = (status: string | null) => {
+  if (status === "approved") return "bg-green-600";
+  if (status === "needs_revision") return "bg-amber-500";
+  return "bg-blue-600";
+};
+
 function DashboardContent() {
   const searchParams = useSearchParams();
   const deliverableIdFromUrl = searchParams.get("deliverableId") as Id<"deliverables"> | null;
@@ -46,10 +52,6 @@ function DashboardContent() {
     api.dashboard.getMyProject,
     me ? { clerkId: me.clerkId } : "skip"
   );
-  const dashboardData = useQuery(
-    api.dashboard.getDashboardData,
-    project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
-  );
   const teamMembers = useQuery(
     api.dashboard.getProjectMembers,
     project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
@@ -63,7 +65,7 @@ function DashboardContent() {
     project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
   );
 
-  // Chapter-based progress, computed from the latest version of each chapter
+  // Progress and stats both come from the latest version of each chapter
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
 
   const handleJoin = async () => {
@@ -92,21 +94,21 @@ function DashboardContent() {
   const stats = [
     {
       label: "Approved",
-      value: dashboardData?.approvedCount ?? 0,
+      value: progress.approved,
       icon: CheckCircle2,
       card: "bg-green-50 dark:bg-green-950/30",
       iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
     },
     {
       label: "Under review",
-      value: dashboardData?.underReviewCount ?? 0,
+      value: progress.underReview,
       icon: Clock,
       card: "bg-blue-50 dark:bg-blue-950/30",
       iconWrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
     },
     {
       label: "Needs revision",
-      value: dashboardData?.needsRevisionCount ?? 0,
+      value: progress.needsRevision,
       icon: RotateCcw,
       card: "bg-amber-50 dark:bg-amber-950/30",
       iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
@@ -176,11 +178,16 @@ function DashboardContent() {
           </div>
         ) : (
           <>
-            {/* Project overview */}
+            {/* Project overview (single progress display) */}
             <div className="rounded-2xl border bg-card p-5 lg:p-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-foreground leading-tight">{project.teamName}</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold text-foreground leading-tight">{project.teamName}</h2>
+                    <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                      {project.phase}
+                    </span>
+                  </div>
                   <p className="text-sm text-muted-foreground mt-1">{project.projectTitle}</p>
                 </div>
                 <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
@@ -189,18 +196,29 @@ function DashboardContent() {
               </div>
 
               <div className="mt-5">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-end justify-between gap-3">
                   <p className="text-sm text-muted-foreground">
-                    Current phase:{" "}
-                    <span className="font-medium text-foreground">{project.phase}</span>
+                    {progress.approved} of {TOTAL_CHAPTERS} chapters approved
                   </p>
-                  <span className="text-sm font-semibold text-foreground">{progress.total}%</span>
+                  <span className="text-3xl font-semibold text-foreground tabular-nums leading-none">
+                    {progress.total}%
+                  </span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-500 ${progress.total >= 100 ? "bg-green-600" : "bg-blue-600"}`}
-                    style={{ width: `${progress.total}%` }}
-                  />
+                {/* grid-cols-5 matches TOTAL_CHAPTERS = 5 */}
+                <div className="mt-4 grid grid-cols-5 gap-1.5">
+                  {progress.chapters.map((c) => (
+                    <div key={c.chapter}>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${progressBarColor(c.status)}`}
+                          style={{ width: `${(c.points / CHAPTER_MAX) * 100}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-center text-[11px] text-muted-foreground">
+                        Ch {c.chapter} · {c.points}%
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -218,6 +236,11 @@ function DashboardContent() {
                   );
                 })}
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Counts use the latest version of each chapter.
+                {progress.superseded > 0 &&
+                  ` ${progress.superseded} older ${progress.superseded === 1 ? "version is" : "versions are"} superseded.`}
+              </p>
             </div>
 
             {/* Adviser + members */}

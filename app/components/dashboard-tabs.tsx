@@ -11,7 +11,7 @@ import { SelectDemo } from "@/app/components/select";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
-import { chapterOf, computeProgress, CHAPTER_MAX, TOTAL_CHAPTERS } from "@/lib/progress";
+import { chapterOf, computeProgress, CHAPTER_MAX } from "@/lib/progress";
 import {
   MoreVertical,
   FileText,
@@ -25,6 +25,8 @@ import {
   Loader2,
   Play,
   Check,
+  Undo2,
+  RotateCcw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -100,6 +102,74 @@ function DownloadItem({ storageId }: { storageId?: string }) {
   );
 }
 
+// Student-side task button. "Mark as done" sends the task to the instructor for review.
+function TaskActions({
+  status,
+  onChange,
+}: {
+  status: string;
+  onChange: (s: "in_progress" | "under_review") => void;
+}) {
+  if (status === "completed")
+    return (
+      <Button size="sm" disabled className="rounded-full px-4 gap-1.5 bg-muted text-muted-foreground">
+        <Check className="h-3.5 w-3.5" /> Completed
+      </Button>
+    );
+
+  if (status === "under_review")
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-muted-foreground">Waiting for your instructor</span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full px-4 gap-1.5"
+          onClick={() => onChange("in_progress")}
+        >
+          <Undo2 className="h-3.5 w-3.5" /> Undo
+        </Button>
+      </div>
+    );
+
+  if (status === "needs_revision")
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-orange-600 dark:text-orange-400">
+          Your instructor sent this back
+        </span>
+        <Button
+          size="sm"
+          className="rounded-full px-4 gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
+          onClick={() => onChange("under_review")}
+        >
+          <RotateCcw className="h-3.5 w-3.5" /> Resubmit
+        </Button>
+      </div>
+    );
+
+  if (status === "in_progress")
+    return (
+      <Button
+        size="sm"
+        className="rounded-full px-4 gap-1.5 bg-green-600 text-white hover:bg-green-700"
+        onClick={() => onChange("under_review")}
+      >
+        <Check className="h-3.5 w-3.5" /> Mark as done
+      </Button>
+    );
+
+  return (
+    <Button
+      size="sm"
+      className="rounded-full px-4 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+      onClick={() => onChange("in_progress")}
+    >
+      <Play className="h-3.5 w-3.5" /> Start task
+    </Button>
+  );
+}
+
 export function TabsDemo({
   capstoneProjectId,
   highlightDeliverableId,
@@ -143,7 +213,7 @@ export function TabsDemo({
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
-  const updateTaskStatus = useMutation(api.dashboard.updateTaskStatus);
+  const studentUpdateTask = useMutation(api.dashboard.studentUpdateTask);
 
   const [activeTab, setActiveTab] = useState("deliverables");
   const deliverables = useQuery(
@@ -161,10 +231,10 @@ export function TabsDemo({
   if (chosenChapter && chosen) {
     if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
     else if (chosen.status === "needs_revision")
-      uploadHint = `Resubmitting keeps Chapter ${chosenChapter} at 15% until your adviser approves it.`;
+      uploadHint = `Resubmitting sends Chapter ${chosenChapter} back to your adviser for review.`;
     else if (chosen.status === "under_review")
-      uploadHint = `This replaces the version under review. Chapter ${chosenChapter} stays at ${chosen.points}%.`;
-    else uploadHint = `Chapter ${chosenChapter} moves to 10% when you upload.`;
+      uploadHint = `This replaces the version under review.`;
+    else uploadHint = `Uploading sends Chapter ${chosenChapter} to your adviser for review.`;
   }
 
   useEffect(() => {
@@ -187,6 +257,16 @@ export function TabsDemo({
     api.dashboard.getTasks,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
+
+  const changeTaskStatus = async (taskId: Id<"tasks">, status: "in_progress" | "under_review") => {
+    try {
+      await studentUpdateTask({ taskId, status });
+      if (status === "under_review") toast.success("Sent to your instructor for review.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't update the task. Try again.");
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) setFile(e.target.files[0]);
@@ -260,12 +340,16 @@ export function TabsDemo({
   const getTaskBadge = (status: string) => {
     if (status === "completed") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
     if (status === "in_progress") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+    if (status === "under_review") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
+    if (status === "needs_revision") return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
     return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
   };
 
   const getTaskLabel = (status: string) => {
     if (status === "completed") return "Completed";
     if (status === "in_progress") return "In Progress";
+    if (status === "under_review") return "Under Review";
+    if (status === "needs_revision") return "Needs Revision";
     return "Pending";
   };
 
@@ -279,37 +363,6 @@ export function TabsDemo({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      {/* Project progress (visible on every tab) */}
-      {deliverables !== undefined && (
-        <div className="rounded-2xl border bg-card p-5 lg:p-6 mb-6">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Project progress</h2>
-              <p className="text-sm text-muted-foreground">
-                {progress.approved} of {TOTAL_CHAPTERS} chapters approved
-              </p>
-            </div>
-            <span className="text-3xl font-semibold text-foreground tabular-nums">{progress.total}%</span>
-          </div>
-          {/* grid-cols-5 matches TOTAL_CHAPTERS = 5 */}
-          <div className="mt-4 grid grid-cols-5 gap-1.5">
-            {progress.chapters.map((c) => (
-              <div key={c.chapter}>
-                <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${progressBarColor(c.status)}`}
-                    style={{ width: `${(c.points / CHAPTER_MAX) * 100}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-center text-[11px] text-muted-foreground">
-                  Ch {c.chapter} · {c.points}%
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Section heading + pill tabs */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end  sm:justify-between mb-4">
         <div >
@@ -585,35 +638,7 @@ export function TabsDemo({
               </div>
 
               <div className="flex justify-end mt-3">
-                <Button
-                  size="sm"
-                  disabled={task.status === "completed"}
-                  onClick={() => {
-                    if (task.status === "pending") updateTaskStatus({ taskId: task._id, status: "in_progress" });
-                    else if (task.status === "in_progress") updateTaskStatus({ taskId: task._id, status: "completed" });
-                  }}
-                  className={`rounded-full px-4 gap-1.5 text-white ${
-                    task.status === "pending"
-                      ? "bg-blue-600 hover:bg-blue-700"
-                      : task.status === "in_progress"
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {task.status === "pending" ? (
-                    <>
-                      <Play className="h-3.5 w-3.5" /> Start task
-                    </>
-                  ) : task.status === "in_progress" ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" /> Mark as done
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-3.5 w-3.5" /> Completed
-                    </>
-                  )}
-                </Button>
+                <TaskActions status={task.status} onChange={(s) => changeTaskStatus(task._id, s)} />
               </div>
             </div>
           ))

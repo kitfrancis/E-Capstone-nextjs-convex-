@@ -1,4 +1,4 @@
-import { mutation, query, action } from "./_generated/server";
+import { mutation, query, action, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
@@ -582,6 +582,8 @@ export const getInstructorDashboardData = query({
   },
 });
 
+// OLD: no longer used by the student Tasks tab, and it lets anyone set any status.
+// Search the project for "updateTaskStatus". If nothing else calls it, delete this mutation.
 export const updateTaskStatus = mutation({
   args: {
     taskId: v.id("tasks"),
@@ -593,6 +595,103 @@ export const updateTaskStatus = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.taskId, { status: args.status });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Task review flow: student marks done -> instructor confirms or sends back
+// ---------------------------------------------------------------------------
+
+// Finds the signed-in user (same Clerk identity that api.users.getMe uses)
+async function requireCaller(ctx: MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not signed in");
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+    .first();
+  if (!user) throw new Error("User not found");
+  return user;
+}
+
+// STUDENT: pending -> in_progress -> under_review (and undo back to in_progress).
+// A student can never set "completed". Only the instructor can.
+export const studentUpdateTask = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    status: v.union(v.literal("in_progress"), v.literal("under_review")),
+  },
+  handler: async (ctx, args) => {
+    const caller = await requireCaller(ctx);
+
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+
+    const project = await ctx.db.get(task.capstoneProjectId);
+    if (!project || !(project.members ?? []).includes(caller._id)) {
+      throw new Error("You are not on this team");
+    }
+
+    const allowed =
+      (args.status === "in_progress" &&
+        (task.status === "pending" || task.status === "under_review")) ||
+      (args.status === "under_review" &&
+        (task.status === "in_progress" || task.status === "needs_revision"));
+    if (!allowed) {
+      throw new Error(`A ${task.status} task can't move to ${args.status}`);
+    }
+
+    await ctx.db.patch(args.taskId, { status: args.status });
+
+    // Tell the instructor there's something to review
+    if (args.status === "under_review" && project.instructorId) {
+      await ctx.runMutation(api.notifications.sendNotification, {
+        userId: project.instructorId,
+        message: `${caller.name} marked "${task.title}" as done for team "${project.teamName}". It's waiting for your review.`,
+        type: "task_submitted",
+        relatedId: args.taskId,
+      });
+    }
+  },
+});
+
+// INSTRUCTOR: confirm (-> completed) or revise (-> needs_revision) a task under review.
+export const reviewTask = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    decision: v.union(v.literal("confirm"), v.literal("revise")),
+  },
+  handler: async (ctx, args) => {
+    const caller = await requireCaller(ctx);
+
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+
+    const project = await ctx.db.get(task.capstoneProjectId);
+    if (!project) throw new Error("Team not found");
+    if (project.instructorId !== caller._id) {
+      throw new Error("Only this team's instructor can review tasks");
+    }
+    if (task.status !== "under_review") {
+      throw new Error("This task isn't waiting for review");
+    }
+
+    const status = args.decision === "confirm" ? "completed" : "needs_revision";
+    await ctx.db.patch(args.taskId, { status });
+
+    // Tell every team member
+    for (const memberId of project.members ?? []) {
+      await ctx.runMutation(api.notifications.sendNotification, {
+        userId: memberId,
+        message:
+          args.decision === "confirm"
+            ? `Your instructor confirmed the task "${task.title}". It's now completed.`
+            : `Your instructor sent the task "${task.title}" back. Please review it and resubmit.`,
+        type: args.decision === "confirm" ? "task_confirmed" : "task_revision",
+        relatedId: args.taskId,
+      });
+    }
   },
 });
 
