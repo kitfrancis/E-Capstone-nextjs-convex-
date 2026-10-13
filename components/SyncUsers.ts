@@ -1,11 +1,9 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react"; 
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
-
-type Role = "student" | "instructor" | "adviser";
 
 export function SyncUser() {
   const { user, isSignedIn, isLoaded } = useUser();
@@ -15,29 +13,23 @@ export function SyncUser() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user || me === undefined) return;
 
-     console.log("Clerk user:", {
-    fullName: user.fullName,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    email: user.emailAddresses[0].emailAddress,
-  });
+    // Admins are managed only in Convex; upsertUser doesn't accept "admin"
+    if (me === null || me.role === "admin") return;
 
-    if (me !== null) {
-      // Update existing user
-      upsertUser({
-        clerkId: user.id,
-        name: user.fullName ?? 
-          user.firstName ?? 
-          user.username ?? 
-          user.emailAddresses[0].emailAddress.split("@")[0], 
-        email: user.emailAddresses[0].emailAddress,
-        image: user.imageUrl,
-        role: me.role,
-        studentNo: me.studentNo ,
-        program: me.program ,
-        section: me.section ,
-      });
-    }
+    upsertUser({
+      clerkId: user.id,
+      name:
+        user.fullName ??
+        user.firstName ??
+        user.username ??
+        user.emailAddresses[0].emailAddress.split("@")[0],
+      email: user.emailAddresses[0].emailAddress,
+      image: user.imageUrl,
+      role: me.role,
+      studentNo: me.studentNo,
+      program: me.program,
+      section: me.section,
+    });
   }, [isLoaded, isSignedIn, user, me, upsertUser]);
 
   return null;

@@ -18,11 +18,14 @@ import {
   Loader2,
   Archive,
   User,
+  Users,
   FileText,
   User2,
   ChevronUp,
   GraduationCap,
+  ScrollText,
 } from "lucide-react";
+
 
 const studentLinks = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard, children: [
@@ -44,6 +47,14 @@ const adviserLinks = [
   { label: "Dashboard", href: "/dashboard/adviser", icon: LayoutDashboard },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/adviser", icon: User },
+];
+
+const adminLinks = [
+  { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
+  { label: "User Management", href: "/dashboard/admin/users", icon: Users },
+    { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
+  { label: "Archive", href: "/components/Archive", icon: Archive },
+  { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ScrollText },
 ];
 
 type LinkItem = {
@@ -72,6 +83,8 @@ export function AppSidebar() {
       ? instructorLinks
       : me?.role === "adviser"
       ? adviserLinks
+      : me?.role === "admin"
+      ? adminLinks
       : [];
 
   return (

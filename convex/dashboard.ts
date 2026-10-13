@@ -1,6 +1,21 @@
 import { mutation, query, action, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { logAction } from "./users";
+
+// Logs an action for whoever is signed in. Silently skips if nobody is.
+async function logCaller(ctx: MutationCtx, action: string, details: string) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return;
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+    .first();
+  if (!user) return;
+
+  await logAction(ctx, user, action, details);
+}
 
 export const getMyProject = query({
   args: { clerkId: v.string() },
@@ -122,6 +137,13 @@ export const saveDeliverable = mutation({
     });
 
     const project = await ctx.db.get(args.capstoneProjectId);
+
+    await logCaller(
+      ctx,
+      "Uploaded deliverable",
+      `${args.fileName} (v${version}) for team "${project?.teamName ?? "Unknown"}"`
+    );
+
     if (project?.adviserId) {
       await ctx.runMutation(api.notifications.sendNotification, {
         userId: project.adviserId,
@@ -207,6 +229,12 @@ export const createCapstoneProject = mutation({
       inviteCode: code,
     });
 
+    await logCaller(
+      ctx,
+      "Created team",
+      `${args.teamName}: ${args.projectTitle}`
+    );
+
     await ctx.runMutation(api.notifications.sendNotification, {
       userId: args.adviserId,
       message: `You have been assigned as adviser for team "${args.teamName}" on project "${args.projectTitle}".`,
@@ -245,6 +273,12 @@ export const createTask = mutation({
       dueDate: args.dueDate,
       status: args.status,
     });
+
+    await logCaller(
+      ctx,
+      "Created task",
+      `${args.title} for team "${project?.teamName ?? "Unknown"}"`
+    );
 
     if (project && project.members) {
       for (const memberId of project.members) {
@@ -405,14 +439,24 @@ export const updateTeam = mutation({
 export const deleteTeam = mutation({
   args: { teamId: v.id("capstoneProjects") },
   handler: async (ctx, args) => {
+    const team = await ctx.db.get(args.teamId);
     await ctx.db.delete(args.teamId);
+
+    await logCaller(ctx, "Deleted team", team?.teamName ?? "Unknown team");
   },
 }); 
 
 export const deleteDeliverable = mutation({
   args: { deliverableId: v.id("deliverables") },
   handler: async (ctx, args) => {
+    const deliverable = await ctx.db.get(args.deliverableId);
     await ctx.db.delete(args.deliverableId);
+
+    await logCaller(
+      ctx,
+      "Deleted deliverable",
+      deliverable?.fileName ?? "Unknown file"
+    );
   }
 });
 
@@ -447,7 +491,14 @@ export const adviserDeliverableStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const deliverable = await ctx.db.get(args.deliverableId);
     await ctx.db.patch(args.deliverableId, { status: args.status });
+
+    await logCaller(
+      ctx,
+      "Updated deliverable status",
+      `${deliverable?.fileName ?? "Unknown file"} → ${args.status.replace("_", " ")}`
+    );
   },
 });
 
@@ -645,13 +696,22 @@ export const studentUpdateTask = mutation({
     await ctx.db.patch(args.taskId, { status: args.status });
 
     // Tell the instructor there's something to review
-    if (args.status === "under_review" && project.instructorId) {
-      await ctx.runMutation(api.notifications.sendNotification, {
-        userId: project.instructorId,
-        message: `${caller.name} marked "${task.title}" as done for team "${project.teamName}". It's waiting for your review.`,
-        type: "task_submitted",
-        relatedId: args.taskId,
-      });
+    if (args.status === "under_review") {
+      await logAction(
+        ctx,
+        caller,
+        "Submitted task for review",
+        `${task.title} (team "${project.teamName}")`
+      );
+
+      if (project.instructorId) {
+        await ctx.runMutation(api.notifications.sendNotification, {
+          userId: project.instructorId,
+          message: `${caller.name} marked "${task.title}" as done for team "${project.teamName}". It's waiting for your review.`,
+          type: "task_submitted",
+          relatedId: args.taskId,
+        });
+      }
     }
   },
 });
@@ -679,6 +739,13 @@ export const reviewTask = mutation({
 
     const status = args.decision === "confirm" ? "completed" : "needs_revision";
     await ctx.db.patch(args.taskId, { status });
+
+    await logAction(
+      ctx,
+      caller,
+      args.decision === "confirm" ? "Confirmed task" : "Sent task back for revision",
+      `${task.title} (team "${project.teamName}")`
+    );
 
     // Tell every team member
     for (const memberId of project.members ?? []) {
@@ -745,6 +812,9 @@ export const joinTeamByInviteCode = mutation({
       await ctx.db.patch(team._id, {
         members: [...(team.members ?? []), user._id],
       });
+
+      // The student has no session yet during sign-up, so log with their own record
+      await logAction(ctx, user, "Joined team", `${user.name} joined "${team.teamName}"`);
     }
   },
 });

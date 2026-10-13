@@ -17,19 +17,15 @@ export default function LandingPage() {
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn && me && me.role) {
-      router.push(`/dashboard/${me.role}`);
+      router.replace(`/dashboard/${me.role}`);
     }
-  }, [isLoaded, isSignedIn, me]);
+  }, [isLoaded, isSignedIn, me, router]);
 
   const handleClick = (role: Role) => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("intendedRole", role);
     }
-
-    
-  router.push(`/sign-in?role=${role}`);
-
-    // router.push("/auth-callback");
+    router.push(`/sign-in?role=${role}`);
   };
 
   if (!isLoaded) {
@@ -43,13 +39,17 @@ export default function LandingPage() {
   return (
     <>
       <div className="font-Poppins bg-background min-h-screen scroll-smooth">
-          
-          {/* need to implement admin access */}
-          <button 
-            onClick={() => handleClick("admin")}
-            className="fixed h-2 w-2 top-4 right-4 pt-2 pr-6 text-slate-500">
-            <User/>
-          </button>
+
+        {/* Admin access */}
+        <button
+          onClick={() => handleClick("admin")}
+          aria-label="Admin sign in"
+          title="Admin sign in"
+          className="fixed top-4 right-4 z-50 p-2 rounded-full text-slate-500 hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <User className="h-5 w-5" />
+        </button>
+
         <div className="flex items-center justify-center px-4 sm:px-6 md:px-10 lg:px-40">
           <div className="flex flex-col items-center text-center mt-10 md:mt-20 max-w-6xl w-full">
             <h1 className="text-3xl sm:text-4xl font-bold text-foreground">

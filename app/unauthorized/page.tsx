@@ -25,9 +25,6 @@ export default function Unauthorized() {
         </EmptyHeader>
         <EmptyContent>
           <Button onClick={handleBack}>Back to Landing Page</Button>
-          <EmptyDescription>
-            Need help? <a href="#">Contact support</a>
-          </EmptyDescription>
         </EmptyContent>
       </Empty>
     </div>

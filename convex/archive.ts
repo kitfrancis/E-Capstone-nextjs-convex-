@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { requireAdmin, logAction } from "./users";
 
 export const getAll = query({
   args: {},
@@ -14,6 +15,51 @@ export const getFileUrl = query({
   handler: async (ctx, args) => {
     if (!args.storageId) return null;
     return await ctx.storage.getUrl(args.storageId);
+  },
+});
+
+// ---------- admin ----------
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const addProject = mutation({
+  args: {
+    title: v.string(),
+    team: v.string(),
+    year: v.number(),
+    course: v.string(),
+    grade: v.string(),
+    abstract: v.string(),
+    keywords: v.array(v.string()),
+    members: v.array(v.string()),
+    adviser: v.string(),
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const archivedDate = new Date().toISOString().slice(0, 10);
+
+    await ctx.db.insert("projects", { ...args, archivedDate });
+    await logAction(ctx, admin, "Uploaded to archive", args.title);
+  },
+});
+
+export const deleteProject = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    if (project.storageId) await ctx.storage.delete(project.storageId);
+    await ctx.db.delete(args.projectId);
+    await logAction(ctx, admin, "Deleted archived project", project.title);
   },
 });
 

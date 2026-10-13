@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as archive from "../archive.js";
 import type * as dashboard from "../dashboard.js";
 import type * as notifications from "../notifications.js";
@@ -20,6 +21,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   archive: typeof archive;
   dashboard: typeof dashboard;
   notifications: typeof notifications;

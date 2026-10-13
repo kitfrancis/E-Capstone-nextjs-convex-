@@ -1,24 +1,27 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
     name: v.string(),
     studentNo: v.optional(v.string()),
-  program: v.optional(v.string()),
-  section: v.optional(v.string()),
+    program: v.optional(v.string()),
+    section: v.optional(v.string()),
     email: v.string(),
     image: v.optional(v.string()),
     role: v.union(
       v.literal("student"),
       v.literal("instructor"),
-      v.literal("adviser")
+      v.literal("adviser"),
+      v.literal("admin")
     ),
     inviteCode: v.optional(v.string()),
-  }).index("by_clerk_id", ["clerkId"])
-    .index("by_studentno", ["studentNo"]),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_studentno", ["studentNo"])
+    .index("by_role", ["role"])
+    .index("by_email", ["email"]),
 
   projects: defineTable({
     title: v.string(),
@@ -56,12 +59,12 @@ export default defineSchema({
     status: v.union(
       v.literal("approved"),
       v.literal("under_review"),
-      v.literal("needs_revision"),
+      v.literal("needs_revision")
     ),
     fileSize: v.string(),
     uploadedAt: v.string(),
     comments: v.number(),
-  storageId: v.optional(v.id("_storage")),
+    storageId: v.optional(v.id("_storage")),
   }),
 
   pdfComments: defineTable({
@@ -71,8 +74,7 @@ export default defineSchema({
     comment: v.string(),
     pageNumber: v.number(),
     x: v.number(),
-    y: v.number(), 
-    
+    y: v.number(),
     createdAt: v.string(),
   }).index("by_deliverable", ["deliverableId"]),
 
@@ -87,7 +89,7 @@ export default defineSchema({
       v.literal("in_progress"),
       v.literal("pending"),
       v.literal("under_review"),
-      v.literal("needs_revision"),
+      v.literal("needs_revision")
     ),
     batchId: v.optional(v.string()),
   }),
@@ -98,6 +100,15 @@ export default defineSchema({
     read: v.boolean(),
     type: v.string(),
     relatedId: v.optional(v.string()),
-    link: v.optional(v.string()), 
-  }).index("by_user", ["userId"]).index("by_user_read", ["userId", "read"]),
+    link: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "read"]),
+
+  auditLogs: defineTable({
+    userId: v.string(),
+    userName: v.string(),
+    action: v.string(),
+    details: v.string(),
+  }),
 });
