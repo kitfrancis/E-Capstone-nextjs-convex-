@@ -1,10 +1,11 @@
 "use client";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import dynamic from "next/dynamic";
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import {ButtonGroup } from "@/components/ui/button-group";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Combobox,
@@ -13,40 +14,167 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from "@/components/ui/combobox"
-import { File } from "lucide-react"
-import dynamic from "next/dynamic";
-import { Id } from "@/convex/_generated/dataModel";
+} from "@/components/ui/combobox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  BookOpen,
+  CalendarDays,
+  Download,
+  File,
+  FileText,
+  Filter,
+  GraduationCap,
+  Search,
+  SearchX,
+  Tag,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 
-const PDFViewer = dynamic(() => import("@/app/components/PDFViewer").then(mod => ({ default: mod.PDFViewer })), {
-  ssr: false,
-});
+const PDFViewer = dynamic(
+  () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
+  { ssr: false }
+);
+
+type Project = FunctionReturnType<typeof api.archive.getAll>[number];
+
+const ALL_YEARS = "All Years";
+const ALL_DEPARTMENTS = "All Departments";
+
+// Same tinted-card language as the instructor dashboard (blue / amber / purple / rose).
+const TONES = {
+  blue: { card: "bg-blue-500/10 border-blue-500/20", icon: "bg-blue-500/15 text-blue-500" },
+  green: { card: "bg-emerald-500/10 border-emerald-500/20", icon: "bg-emerald-500/15 text-emerald-500" },
+  purple: { card: "bg-purple-500/10 border-purple-500/20", icon: "bg-purple-500/15 text-purple-500" },
+  orange: { card: "bg-orange-500/10 border-orange-500/20", icon: "bg-orange-500/15 text-orange-500" },
+} as const;
+
+// Each department keeps the same icon color everywhere it appears.
+const COURSE_ICON_TONES = [
+  "bg-blue-500/15 text-blue-500",
+  "bg-purple-500/15 text-purple-500",
+  "bg-emerald-500/15 text-emerald-500",
+  "bg-orange-500/15 text-orange-500",
+  "bg-rose-500/15 text-rose-500",
+];
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase())
+    .join("");
+
+const projectKey = (p: Project) => String((p as any).storageId ?? p.title);
+
+function StatCard({
+  icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: React.ReactNode;
+  value: number;
+  label: string;
+  tone: keyof typeof TONES;
+}) {
+  return (
+    <div className={`flex items-center gap-4 rounded-2xl border p-5 ${TONES[tone].card}`}>
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${TONES[tone].icon}`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-3xl font-semibold leading-none text-foreground">{value}</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6 mt-10 px-1">
+      <div className="h-36 rounded-2xl bg-muted" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl bg-muted" />
+        ))}
+      </div>
+      <div className="h-40 rounded-2xl bg-muted" />
+      <div className="h-32 rounded-2xl bg-muted" />
+      <div className="h-32 rounded-2xl bg-muted" />
+    </div>
+  );
+}
 
 export default function Archive() {
-
-
-  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false); // modal, mobile + tablet only
   const [viewingFile, setViewingFile] = useState<{ storageId: string; fileName: string } | null>(null);
-const archiveFileUrl = useQuery(api.archive.getFileUrl, viewingFile ? { storageId: viewingFile.storageId as Id<"_storage"> } : "skip");
+
+  const [query, setQuery] = useState("");
+  const [year, setYear] = useState<string>(ALL_YEARS);
+  const [department, setDepartment] = useState<string>(ALL_DEPARTMENTS);
+
+  const archiveFileUrl = useQuery(
+    api.archive.getFileUrl,
+    viewingFile ? { storageId: viewingFile.storageId as Id<"_storage"> } : "skip"
+  );
   const projectsData = useQuery(api.archive.getAll);
 
-  const Year = ["All Year", "2025", "2026", "2027", "2028"]
-  const Course = ["All Department", "Computer Science", "Information Technology", "BLIS"]
+  const projects = useMemo(() => projectsData ?? [], [projectsData]);
 
+  const uniqueCourses = useMemo(() => [...new Set(projects.map((p) => p.course))], [projects]);
+  const uniqueYears = useMemo(() => [...new Set(projects.map((p) => String(p.year)))].sort().reverse(), [projects]);
+  const uniqueKeywords = useMemo(() => [...new Set(projects.flatMap((p) => p.keywords))], [projects]);
 
-  if (projectsData === undefined) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
+  const yearOptions = useMemo(() => [ALL_YEARS, ...uniqueYears], [uniqueYears]);
+  const departmentOptions = useMemo(() => [ALL_DEPARTMENTS, ...uniqueCourses], [uniqueCourses]);
 
-  const projects = projectsData ?? [];
-  const uniqueCourses = [...new Set(projects.map(p => p.course))];
-  const uniqueYears = [...new Set(projects.map(p => p.year))];
-  const uniqueKeywords = [...new Set(projects.flatMap(p => p.keywords))];
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects.filter((p) => {
+      if (year !== ALL_YEARS && String(p.year) !== year) return false;
+      if (department !== ALL_DEPARTMENTS && p.course !== department) return false;
+      if (!q) return true;
+      return [p.title, p.team, p.abstract, p.adviser, ...p.keywords, ...p.members].some((field) =>
+        String(field).toLowerCase().includes(q)
+      );
+    });
+  }, [projects, query, year, department]);
 
-  const handleDownload = (project: any) => {
-  const content = `
+  const hasFilters = query.trim() !== "" || year !== ALL_YEARS || department !== ALL_DEPARTMENTS;
+  const clearFilters = () => {
+    setQuery("");
+    setYear(ALL_YEARS);
+    setDepartment(ALL_DEPARTMENTS);
+  };
+
+  if (projectsData === undefined) return <ArchiveSkeleton />;
+
+  const courseTone = (course: string) =>
+    COURSE_ICON_TONES[Math.max(0, uniqueCourses.indexOf(course)) % COURSE_ICON_TONES.length];
+
+  // lg (1024px+) shows the side detail panel; below that (mobile + tablet) we open the modal.
+  const openProject = (project: Project) => {
+    setSelectedProject(project);
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (!isDesktop) setDetailOpen(true);
+  };
+
+  const handleDownload = (project: Project) => {
+    const line = "=".repeat(60);
+    const content = `
 PROJECT ARCHIVE - ${project.title}
-${"=".repeat(60)}
+${line}
 
 TEAM: ${project.team}
 YEAR: ${project.year}
@@ -55,106 +183,161 @@ ADVISER: ${project.adviser}
 GRADE: ${project.grade}
 ARCHIVED DATE: ${project.archivedDate}
 
-${"=".repeat(60)}
+${line}
 ABSTRACT
-${"=".repeat(60)}
+${line}
 ${project.abstract}
 
-${"=".repeat(60)}
+${line}
 KEYWORDS
-${"=".repeat(60)}
+${line}
 ${project.keywords.join(", ")}
 
-${"=".repeat(60)}
+${line}
 TEAM MEMBERS
-${"=".repeat(60)}
+${line}
 ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
   `.trim();
 
-  const blob = new Blob([content], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${project.title.replace(/\s+/g, "_")}_Archive.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.title.replace(/\s+/g, "_")}_Archive.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Detail content shared by the desktop side panel and the mobile/tablet modal.
+  const detailBody = selectedProject && (
+    <div className="mt-5 space-y-6 pb-2">
+      {/* Quick facts */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {[
+          { icon: GraduationCap, label: "Course", value: selectedProject.course },
+          { icon: User, label: "Adviser", value: selectedProject.adviser },
+          { icon: CalendarDays, label: "Archived", value: selectedProject.archivedDate },
+        ].map(({ icon: Icon, label, value }) => (
+          <div key={label} className="rounded-xl bg-muted p-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </div>
+            <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Abstract</h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">{selectedProject.abstract}</p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Keywords</h2>
+        <div className="flex flex-wrap gap-2">
+          {selectedProject.keywords.map((keyword: string, i: number) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                setQuery(keyword);
+                setDetailOpen(false);
+              }}
+              className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+              title={`Search for "${keyword}"`}
+            >
+              {keyword}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">
+          Team members <span className="font-normal text-muted-foreground">({selectedProject.members.length})</span>
+        </h2>
+        <ul className="space-y-2">
+          {selectedProject.members.map((member: string, i: number) => (
+            <li key={i} className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                {initials(member)}
+              </span>
+              <span className="text-sm text-foreground">{member}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="flex flex-col gap-2 border-t border-border pt-5">
+        <Button
+          className="w-full"
+          onClick={() => {
+            setDetailOpen(false); // close the modal first so it doesn't fight the PDF viewer for focus
+            setViewingFile({
+              storageId: (selectedProject as any).storageId,
+              fileName: selectedProject.title,
+            });
+          }}
+        >
+          <File className="mr-2 h-4 w-4" />
+          View project files
+        </Button>
+        <Button variant="outline" className="w-full" onClick={() => handleDownload(selectedProject)}>
+          <Download className="mr-2 h-4 w-4" />
+          Download summary
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-    <div className="scroll-smooth font-Poppins">
-      <div className="lg:ml-1 max-h-auto ">
-        <h1 className="text-3xl font-semibold text-foreground mt-10 px-1">Project Archive and Repository</h1>
-        <p className="text-muted-foreground mt-2 px-1">Searchable digital library of completed thesis and capstone projects</p>
+      <div className="scroll-smooth font-Poppins">
+        <div className="lg:ml-1 space-y-6 pb-10">
+          {/* Hero */}
+          <div className="mt-6 rounded-2xl border border-blue-500/20 bg-linear-to-br from-blue-500/15 via-blue-500/5 to-transparent p-6 md:p-8">
+            <h1 className="text-3xl font-semibold text-foreground">Project Archive</h1>
+            <p className="mt-2 max-w-xl text-muted-foreground">
+              Browse completed thesis and capstone projects. Search by title, keyword, adviser, or team member.
+            </p>
+          </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-5 md:mt-10">
-          <div className="bg-muted flex flex-col items-center justify-center rounded-lg p-4 px-6">
-            <div className="text-center my-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 mx-auto mb-2 text-blue-600"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-              <h1 className="text-2xl font-semibold text-foreground">{projects.length}</h1>
-              <p className="text-sm text-muted-foreground">Total Projects</p>
-            </div>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard tone="blue" value={projects.length} label="Total projects" icon={<FileText className="h-5 w-5" />} />
+            <StatCard tone="green" value={uniqueYears.length} label="Academic years" icon={<CalendarDays className="h-5 w-5" />} />
+            <StatCard tone="purple" value={uniqueKeywords.length} label="Unique keywords" icon={<Tag className="h-5 w-5" />} />
+            <StatCard tone="orange" value={uniqueCourses.length} label="Departments" icon={<Users className="h-5 w-5" />} />
           </div>
-          <div className="bg-muted flex flex-col items-center justify-center rounded-lg p-4 px-6">
-            <div className="text-center my-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 mx-auto mb-2 text-green-600"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
-              <h1 className="text-2xl font-semibold text-foreground">{uniqueYears.length}</h1>
-              <p className="text-sm text-muted-foreground">Academic Year</p>
-            </div>
-          </div>
-          <div className="bg-muted flex flex-col items-center justify-center rounded-lg p-4 px-6">
-            <div className="text-center my-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 mx-auto mb-2 text-purple-600"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
-              <h1 className="text-2xl font-semibold text-foreground">{uniqueKeywords.length}</h1>
-              <p className="text-sm text-muted-foreground">Unique Keywords</p>
-            </div>
-          </div>
-          <div className="bg-muted rounded-lg p-4">
-            <div className="text-center my-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 mx-auto mb-2 text-orange-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>
-              <h1 className="text-2xl font-semibold text-foreground">{uniqueCourses.length}</h1>
-              <p className="text-sm text-muted-foreground">Department</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Search & Filter */}
-        <div className="bg-muted gap-6 flex flex-col mt-5 md:mt-8 rounded-lg p-4 px-6">
-          <h1 className="font-semibold text-md flex items-center gap-4 text-foreground">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/></svg>
-            Search & Filter
-          </h1>
-          <div className="md:col-span-3 gap-2">
-            <Field>
-              <FieldLabel htmlFor="input-button-group" className="text-sm">Search Project</FieldLabel>
-              <ButtonGroup>
-                <Input id="input-button-group" placeholder="Search by title, keyword, abstract, or team name..." />
-                <Button variant="outline">Search</Button>
-              </ButtonGroup>
-            </Field>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mt-5 py-3">
-              <div className="space-y-1 flex flex-col">
-                <label className="font-semibold text-sm text-foreground">Year</label>
-                <Combobox items={Year}>
-                  <ComboboxInput placeholder="Select a year" />
-                  <ComboboxContent>
-                    <ComboboxEmpty>No items found.</ComboboxEmpty>
-                    <ComboboxList>
-                      {(item) => (
-                        <ComboboxItem key={item} value={item}>
-                          {item}
-                        </ComboboxItem>
-                      )}
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-                
+          {/* Search & Filter */}
+          <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by title, keyword, abstract, or team name..."
+                  className="h-10 pl-9 pr-9"
+                  aria-label="Search projects"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-              <div className="space-y-1 flex flex-col">
-                <label className="font-semibold text-sm text-foreground">Department</label>
-                <Combobox items={Course}>
-                  <ComboboxInput placeholder="Select a department" />
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:flex md:w-auto">
+                <Combobox items={yearOptions} value={year} onValueChange={(v) => setYear(v ?? ALL_YEARS)}>
+                  <ComboboxInput placeholder="Year" aria-label="Filter by year" />
                   <ComboboxContent>
                     <ComboboxEmpty>No items found.</ComboboxEmpty>
                     <ComboboxList>
@@ -167,133 +350,179 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                   </ComboboxContent>
                 </Combobox>
 
+                <Combobox
+                  items={departmentOptions}
+                  value={department}
+                  onValueChange={(v) => setDepartment(v ?? ALL_DEPARTMENTS)}
+                >
+                  <ComboboxInput placeholder="Department" aria-label="Filter by department" />
+                  <ComboboxContent>
+                    <ComboboxEmpty>No items found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(item) => (
+                        <ComboboxItem key={item} value={item}>
+                          {item}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
               </div>
-              <div className="flex items-end">
-                <Button className="bg-sidebar inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium border border-border text-foreground h-10 px-4 py-2 w-full hover:bg-muted">Clear Filters</Button>
-              </div>
+
+              <Button variant="outline" className="h-10" onClick={clearFilters} disabled={!hasFilters}>
+                <Filter className="mr-2 h-4 w-4" />
+                Clear filters
+              </Button>
             </div>
-            <p className="text-sm text-muted-foreground">Showing {projects.length} of {projects.length} projects.</p>
-          </div>
-        </div>
 
-        {/* Projects + Detail */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5 md:mt-8 items-start">
-          <div className="space-y-4">
-            <h1 className="font-semibold text-xl text-foreground">Projects</h1>
-            {projects.map((project, index) => (
-              <div key={index} onClick={() => setSelectedProject(project)} className="bg-card border border-border mt-4 md:mt-6 rounded-lg p-4 px-6 mb-6 hover:shadow-md cursor-pointer">
-                <div className="flex flex-col mt-4">
-                  <div className="flex justify-between">
-                    <h1 className="text-lg font-semibold text-foreground">{project.title}</h1>
-                    <span className="inline-flex items-center justify-center rounded-md border border-border px-2 text-xs font-medium gap-1 h-6 text-foreground">{project.grade}</span>
-                  </div>
-                  <p className="text-muted-foreground font-medium mt-2">{project.team} • {project.year}</p>
-                </div>
-                <div className="mt-5 md:mt-6 pb-3">
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{project.abstract}</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {project.keywords.map((keyword, i) => (
-                      <div key={i} className="inline-flex items-center bg-muted rounded-lg font-medium py-0.5 w-fit px-3">
-                        <h1 className="text-xs font-medium line-clamp-1 text-foreground">{keyword}</h1>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{project.course} • Archived {project.archivedDate}</p>
-                </div>
-              </div>
-            ))}
+            <p className="mt-3 text-sm text-muted-foreground">
+              Showing {filtered.length} of {projects.length} projects
+            </p>
           </div>
 
-          {/* Detail Panel */}
-          <div className={`mt-4 md:mt-6 rounded-lg w-full py-4 px-6 flex flex-col bg-card border border-border ${!selectedProject ? "max-h-auto md:max-h-50 justify-center" : ""}`}>
-            {selectedProject ? (
-              <>
-                <div className="flex justify-between items-start">
-                  <div className="flex flex-col mt-1">
-                    <h1 className="font-semibold text-md text-foreground">{selectedProject.title}</h1>
-                    <p className="text-muted-foreground font-medium">{selectedProject.team} • {selectedProject.year}</p>
+          {/* Projects + Detail */}
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <div>
+              <h2 className="mb-1 text-xl font-semibold text-foreground">Projects</h2>
+              <p className="mb-4 text-sm text-muted-foreground">Select a project to see its full details.</p>
+
+              <div className="space-y-3">
+                {filtered.length === 0 ? (
+                  <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-12 text-center">
+                    <SearchX className="mb-3 h-10 w-10 text-muted-foreground" />
+                    <p className="font-medium text-foreground">No projects match your search</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Try a different keyword or clear the filters.</p>
+                    {hasFilters && (
+                      <Button variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    )}
                   </div>
-                  <span className="inline-flex items-center justify-center rounded-md border px-2 bg-primary text-primary-foreground text-sm font-medium gap-1 h-10 w-10">{selectedProject.grade}</span>
-                </div>
+                ) : (
+                  filtered.map((project) => {
+                    const isSelected = !!selectedProject && projectKey(selectedProject) === projectKey(project);
+                    return (
+                      <div
+                        key={projectKey(project)}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openProject(project)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openProject(project);
+                          }
+                        }}
+                        className={`cursor-pointer rounded-2xl border bg-card p-4 transition-colors hover:border-blue-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:p-5 ${
+                          isSelected ? "border-blue-500 bg-blue-500/5" : "border-border"
+                        }`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div
+                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${courseTone(project.course)}`}
+                          >
+                            <BookOpen className="h-5 w-5" />
+                          </div>
 
-                <div className="mt-5 md:mt-6 pb-6">
-                  <h1 className="font-semibold mb-2 text-lg text-foreground">Abstract</h1>
-                  <p className="text-sm text-muted-foreground mb-3">{selectedProject.abstract}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <h3 className="text-base font-semibold text-foreground">{project.title}</h3>
+                              <span className="inline-flex h-6 shrink-0 items-center rounded-md border border-border px-2 text-xs font-medium text-foreground">
+                                {project.grade}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-sm text-muted-foreground">
+                              {project.team} • {project.year}
+                            </p>
 
-                  <h1 className="font-semibold mb-2 text-lg text-foreground">Keywords</h1>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {selectedProject.keywords.map((keyword: string, i: number) => (
-                      <div key={i} className="inline-flex items-center bg-muted rounded-lg font-medium py-0.5 w-fit px-3">
-                        <span className="text-xs font-medium text-foreground">{keyword}</span>
-                      </div>
-                    ))}
-                  </div>
+                            <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{project.abstract}</p>
 
-                  <div className="mt-5">
-                    <h1 className="font-semibold mb-2 text-lg text-foreground">Team Members</h1>
-                    <div className="space-y-1">
-                      {selectedProject.members.map((member: string, i: number) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                          <p className="text-sm text-foreground">{member}</p>
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {project.keywords.slice(0, 4).map((keyword: string, i: number) => (
+                                <span
+                                  key={i}
+                                  className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
+                                >
+                                  {keyword}
+                                </span>
+                              ))}
+                              {project.keywords.length > 4 && (
+                                <span className="px-1 py-0.5 text-xs text-muted-foreground">
+                                  +{project.keywords.length - 4} more
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="mt-3 text-xs text-muted-foreground">
+                              {project.course} • Archived {project.archivedDate}
+                            </p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <h1 className="font-semibold mb-2 text-lg text-foreground">Adviser</h1>
-                    <div className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                      <p className="text-sm text-foreground">{selectedProject.adviser}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <h1 className="font-semibold mb-2 text-lg text-foreground">Course</h1>
-                    <p className="text-sm text-foreground">{selectedProject.course}</p>
-                  </div>
-
-                  <div className="mt-4">
-                    <h1 className="font-semibold mb-2 text-lg text-foreground">Archived Date</h1>
-                    <p className="text-xs text-foreground">{selectedProject.archivedDate}</p>
-                  </div>
-
-                  <div>
-                    <button
-                     onClick={() => setViewingFile({ storageId: selectedProject.storageId, fileName: selectedProject.title })}
-                    className="flex flex-row items-center justify-center bg-background text-foreground w-full border-2  rounded-lg mt-5 py-1">
-                      <File className="h-4 w-4 mr-2" />
-                      View Project Files
-                    </button>
-                  </div>
-
-                  <div className="border-t border-border mt-3">
-                    <button 
-    onClick={() => handleDownload(selectedProject)}
-  className="flex flex-row items-center justify-center bg-primary text-primary-foreground w-full rounded-lg mt-5 py-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 mr-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                      Download All Files
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-16 w-16 text-muted-foreground mb-4"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-                <h1 className="text-muted-foreground">Select a project to view details</h1>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Detail panel (desktop only: hidden below lg, where the modal is used instead) */}
+            <div className="hidden lg:block lg:sticky lg:top-4">
+              <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-border bg-card p-6">
+                {selectedProject ? (
+                  <>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-foreground">{selectedProject.title}</h2>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {selectedProject.team} • {selectedProject.year}
+                        </p>
+                      </div>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
+                        {selectedProject.grade}
+                      </span>
+                    </div>
+                    {detailBody}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center py-12 text-center">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                      <FileText className="h-7 w-7 text-muted-foreground" />
+                    </div>
+                    <p className="font-medium text-foreground">No project selected</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Choose a project from the list to read its abstract and open its files.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <PDFViewer
+
+      {/* Mobile + tablet: project details in a shadcn Dialog */}
+      <Dialog open={detailOpen && !!selectedProject} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-h-[95vh] overflow-y-auto lg:hidden">
+          {selectedProject && (
+            <>
+              <DialogHeader className="pr-6 text-left">
+                <DialogTitle className="text-lg font-semibold">{selectedProject.title}</DialogTitle>
+                <DialogDescription>
+                  {selectedProject.team} • {selectedProject.year} • Grade {selectedProject.grade}
+                </DialogDescription>
+              </DialogHeader>
+              {detailBody}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <PDFViewer
         open={!!viewingFile && !!archiveFileUrl}
         fileUrl={archiveFileUrl ?? ""}
         fileName={viewingFile?.fileName ?? ""}
         onClose={() => setViewingFile(null)}
       />
-</>
+    </>
   );
 }

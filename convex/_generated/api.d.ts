@@ -9,6 +9,8 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as adminReports from "../adminReports.js";
+import type * as adminSettings from "../adminSettings.js";
 import type * as adviser from "../adviser.js";
 import type * as archive from "../archive.js";
 import type * as dashboard from "../dashboard.js";
@@ -23,6 +25,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  adminReports: typeof adminReports;
+  adminSettings: typeof adminSettings;
   adviser: typeof adviser;
   archive: typeof archive;
   dashboard: typeof dashboard;

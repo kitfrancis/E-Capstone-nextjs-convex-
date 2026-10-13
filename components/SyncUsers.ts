@@ -9,7 +9,7 @@ import { useEffect } from "react";
 export function SyncUser() {
   const { user, isSignedIn, isLoaded } = useUser();
   const me = useQuery(api.users.getMe);
-  const upsertUser = useMutation(api.users.upsertUser);
+  const syncMe = useMutation(api.users.syncMe);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -22,27 +22,25 @@ export function SyncUser() {
     }
   }, [isLoaded, isSignedIn, me, pathname, router]);
 
+  // Keep email and avatar in step with Clerk. Only calls the server when
+  // something actually changed, so it can't loop.
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user || me === undefined) return;
+    if (!isLoaded || !isSignedIn || !user || !me) return; // me === null: not registered yet
 
-    // Admins are managed only in Convex; upsertUser doesn't accept "admin"
-    if (me === null || me.role === "admin") return;
+    const email = user.primaryEmailAddress?.emailAddress;
+    const image = user.imageUrl;
 
-    upsertUser({
-      clerkId: user.id,
-      name:
-        user.fullName ??
-        user.firstName ??
-        user.username ??
-        user.emailAddresses[0].emailAddress.split("@")[0],
-      email: user.emailAddresses[0].emailAddress,
-      image: user.imageUrl,
-      role: me.role,
-      studentNo: me.studentNo,
-      program: me.program,
-      section: me.section,
+    const emailChanged = !!email && email !== me.email;
+    const imageChanged = !!image && image !== me.image;
+    if (!emailChanged && !imageChanged) return;
+
+    syncMe({
+      email: emailChanged ? email : undefined,
+      image: imageChanged ? image : undefined,
+    }).catch(() => {
+      // Non-critical; it will retry on the next load
     });
-  }, [isLoaded, isSignedIn, user, me, upsertUser]);
+  }, [isLoaded, isSignedIn, user, me, syncMe]);
 
   return null;
 }

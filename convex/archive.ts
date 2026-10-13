@@ -97,7 +97,7 @@ export const seed = mutation({
         title: "TVulcaFinder: A Mobile Application for Vehicle Servicing",
         team: "DDivas(sample groupname)",
         year: 2026,
-        course: "Information Technology)",
+        course: "Information Technology",
         grade: "A",
         abstract: "Drivers traveling through the southern municipalities of Antique often face difficulties when encountering vehicle emergencies like flat tires. While vulcanizing shops provide essential roadside repairs, most lack an online presence and are missing from major digital maps. This study addresses this gap by developing VulcaFinder, a GPS-enabled Android mobile application designed to connect motorists with nearby vehicle service providers. Built using Agile methodology, the app features frontend development via React Native, backend services managed through Node.js and Express.js, and real-time synchronization using Firebase and WebSockets. Most importantly, VulcaFinder integrates an offline mode using AsyncStorage and SQLite to keep preloaded map listings accessible in areas with weak internet connectivity. The system was evaluated using two industry-recognized quality standards: the ISO/IEC 25010 model and McCall’s Software Quality Model. Testing with 30 university students yielded an overall mean ISO score of 4.24 ('Very High'), while evaluation by 8 IT experts resulted in a McCall's score of 4.45 ('Very High'). The results prove that VulcaFinder is a stable, reliable, and user-friendly solution that effectively reduces vehicle downtime, enhances road safety, and promotes digital inclusion for small local businesses. ",
         archivedDate: "2026-05-10",

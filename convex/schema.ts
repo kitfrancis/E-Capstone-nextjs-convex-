@@ -119,4 +119,15 @@ export default defineSchema({
     action: v.string(),
     details: v.string(),
   }),
+
+    settings: defineTable({
+    systemName: v.string(),
+    institutionName: v.string(),
+    academicYear: v.string(),
+    allowRegistration: v.boolean(),
+    requireArchiveApproval: v.boolean(),
+    maintenanceMode: v.boolean(),
+    supportEmail: v.string(),
+    updatedAt: v.number(),
+  }),
 });

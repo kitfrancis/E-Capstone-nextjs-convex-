@@ -34,7 +34,7 @@ const PDFViewer = dynamic(
   { ssr: false }
 );
 
-const COURSES = ["Information Technology", "Computer Science", "BLIS"];
+const COURSES = ["Information Technology", "Computer Science", "Library and Information Science"];
 
 const emptyForm = {
   title: "",

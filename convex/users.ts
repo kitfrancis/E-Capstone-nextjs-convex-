@@ -2,7 +2,10 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 
-// ---------- helpers ----------
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
@@ -11,6 +14,14 @@ async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .first();
+}
+
+// Signed-in AND approved. Returns null instead of throwing (for queries).
+async function getApprovedUser(ctx: QueryCtx | MutationCtx) {
+  const user = await getCurrentUser(ctx);
+  if (!user) return null;
+  if (user.status === "pending" || user.status === "rejected") return null;
+  return user;
 }
 
 // Use this at the top of every admin-only query/mutation (in any file)
@@ -36,65 +47,109 @@ export async function logAction(
   });
 }
 
-// ---------- user sync ----------
-// NOTE: "admin" is intentionally NOT allowed here (this mutation is public).
-export const upsertUser = mutation({
+// ---------------------------------------------------------------------------
+// Registration
+// ---------------------------------------------------------------------------
+// The old public `upsertUser` is gone. It trusted the client for clerkId AND
+// role, so anyone could register as an instructor or overwrite another user.
+// Both mutations below take the identity from the signed-in session.
+
+// STUDENT sign-up. The role is always "student", the invite code is checked
+// on the server, and creating the user + joining the team happen in ONE
+// transaction (no half-created accounts).
+// Call this AFTER the Clerk session is active (setActive) and Convex is authed.
+export const registerStudent = mutation({
   args: {
-    clerkId: v.string(),
     name: v.string(),
     email: v.string(),
-    image: v.optional(v.string()),
-    role: v.union(
-      v.literal("student"),
-      v.literal("instructor"),
-      v.literal("adviser")
-    ),
-    studentNo: v.optional(v.string()),
-    program: v.optional(v.string()),
-    section: v.optional(v.string()),
-    inviteCode: v.optional(v.string()),
+    studentNo: v.string(),
+    program: v.string(),
+    section: v.string(),
+    inviteCode: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not signed in");
+
     const existing = await ctx.db
       .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
       .first();
+    if (existing) throw new Error("Account already registered.");
 
-    if (!existing) {
-      if (args.studentNo) {
-        const duplicate = await ctx.db
-          .query("users")
-          .withIndex("by_studentno", (q) => q.eq("studentNo", args.studentNo))
-          .first();
+    // Tip: add an index "by_invite_code" on capstoneProjects and use it here.
+    const team = await ctx.db
+      .query("capstoneProjects")
+      .filter((q) => q.eq(q.field("inviteCode"), args.inviteCode.trim().toUpperCase()))
+      .first();
+    if (!team) throw new Error("Invalid or expired invite code.");
 
-        if (duplicate) {
-          throw new Error("Student number is already registered.");
-        }
-      }
+    const studentNo = args.studentNo.trim();
+    const duplicate = await ctx.db
+      .query("users")
+      .withIndex("by_studentno", (q) => q.eq("studentNo", studentNo))
+      .first();
+    if (duplicate) throw new Error("Student number is already registered.");
 
-      // Only advisers must be verified by the admin first.
-      // Students and instructors are approved automatically.
-      const needsApproval = args.role === "adviser";
-      const status = needsApproval ? "pending" : "approved";
+    const email = identity.email ?? args.email;
 
-      await ctx.db.insert("users", { ...args, status });
-      await logAction(
-        ctx,
-        { clerkId: args.clerkId, name: args.name },
-        "User registered",
-        `${args.name} registered as ${args.role}${needsApproval ? " (awaiting approval)" : ""}`
-      );
-    } else {
-      // role and status are never patched here
-      await ctx.db.patch(existing._id, {
-        name: args.name,
-        email: args.email,
-        image: args.image,
-        studentNo: args.studentNo,
-        program: args.program,
-        section: args.section,
-      });
-    }
+    const userId = await ctx.db.insert("users", {
+      clerkId: identity.subject,
+      name: args.name.trim(),
+      email,
+      role: "student",
+      status: "approved",
+      studentNo,
+      program: args.program,
+      section: args.section,
+    });
+
+    await ctx.db.patch(team._id, {
+      members: [...(team.members ?? []), userId],
+    });
+
+    await logAction(
+      ctx,
+      { clerkId: identity.subject, name: args.name },
+      "User registered",
+      `${args.name} joined "${team.teamName}" as student`
+    );
+  },
+});
+
+// INSTRUCTOR / ADVISER sign-up. Always starts as "pending" until an admin
+// approves. (Previously instructors were auto-approved, which let anyone
+// self-promote.) Use this from your staff sign-up page.
+export const registerStaff = mutation({
+  args: {
+    name: v.string(),
+    email: v.string(),
+    role: v.union(v.literal("instructor"), v.literal("adviser")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not signed in");
+
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+    if (existing) throw new Error("Account already registered.");
+
+    await ctx.db.insert("users", {
+      clerkId: identity.subject,
+      name: args.name.trim(),
+      email: identity.email ?? args.email,
+      role: args.role,
+      status: "pending",
+    });
+
+    await logAction(
+      ctx,
+      { clerkId: identity.subject, name: args.name },
+      "User registered",
+      `${args.name} registered as ${args.role} (awaiting approval)`
+    );
   },
 });
 
@@ -109,27 +164,42 @@ export const updateProfile = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    if (args.studentNo && args.studentNo.trim() !== "") {
+    // Only include fields that were actually sent. Patching with `undefined`
+    // would REMOVE the stored field in Convex.
+    const patch: {
+      name: string;
+      studentNo?: string;
+      program?: string;
+      section?: string;
+    } = { name: args.name.trim() };
+
+    if (args.program !== undefined) patch.program = args.program;
+    if (args.section !== undefined) patch.section = args.section;
+
+    const newNo = args.studentNo?.trim();
+    if (newNo && newNo !== user.studentNo) {
+      // Student number is write-once for non-admins
+      if (user.studentNo && user.role !== "admin") {
+        throw new Error("Student number can't be changed. Contact an admin.");
+      }
       const duplicate = await ctx.db
         .query("users")
-        .withIndex("by_studentno", (q) => q.eq("studentNo", args.studentNo))
+        .withIndex("by_studentno", (q) => q.eq("studentNo", newNo))
         .first();
-
       if (duplicate && duplicate._id !== user._id) {
         throw new Error("Student number is already registered.");
       }
+      patch.studentNo = newNo;
     }
 
-    await ctx.db.patch(user._id, {
-      name: args.name,
-      studentNo: args.studentNo,
-      program: args.program,
-      section: args.section,
-    });
+    await ctx.db.patch(user._id, patch);
   },
 });
 
-// ---------- queries ----------
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
 export const getMe = query({
   args: {},
   handler: async (ctx) => {
@@ -137,31 +207,59 @@ export const getMe = query({
   },
 });
 
-// Only approved advisers can be assigned to teams
+// Instructors/admins pick advisers when creating a team.
+// Only approved advisers, and only the fields the UI needs.
 export const getAdvisers = query({
   args: {},
   handler: async (ctx) => {
+    const caller = await getApprovedUser(ctx);
+    if (!caller || (caller.role !== "instructor" && caller.role !== "admin")) {
+      return [];
+    }
+
     const advisers = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "adviser"))
       .collect();
-    return advisers.filter(
-      (a) => a.status !== "pending" && a.status !== "rejected"
-    );
+
+    return advisers
+      .filter((a) => a.status !== "pending" && a.status !== "rejected")
+      .map((a) => ({ _id: a._id, name: a.name, email: a.email, image: a.image }));
   },
 });
 
 export const getStudents = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const caller = await getApprovedUser(ctx);
+    if (
+      !caller ||
+      (caller.role !== "instructor" && caller.role !== "adviser" && caller.role !== "admin")
+    ) {
+      return [];
+    }
+
+    const students = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "student"))
       .collect();
+
+    return students.map((s) => ({
+      _id: s._id,
+      name: s.name,
+      email: s.email,
+      image: s.image,
+      studentNo: s.studentNo,
+      program: s.program,
+      section: s.section,
+    }));
   },
 });
 
-// ---------- admin ----------
+// ---------------------------------------------------------------------------
+// Admin
+// ---------------------------------------------------------------------------
+
 export const listAllUsers = query({
   args: {},
   handler: async (ctx) => {
@@ -179,12 +277,7 @@ export const approveUser = mutation({
     if (!target) throw new Error("User not found");
 
     await ctx.db.patch(args.userId, { status: "approved" });
-    await logAction(
-      ctx,
-      admin,
-      "Approved account",
-      `${target.name} (${target.role})`
-    );
+    await logAction(ctx, admin, "Approved account", `${target.name} (${target.role})`);
   },
 });
 
@@ -200,12 +293,7 @@ export const rejectUser = mutation({
     }
 
     await ctx.db.patch(args.userId, { status: "rejected" });
-    await logAction(
-      ctx,
-      admin,
-      "Rejected account",
-      `${target.name} (${target.role})`
-    );
+    await logAction(ctx, admin, "Rejected account", `${target.name} (${target.role})`);
   },
 });
 
@@ -238,7 +326,10 @@ export const setUserRole = mutation({
   },
 });
 
-// Removes a user from the system (Convex only; see notes about Clerk).
+// Removes a user from Convex only. The Clerk account still exists, so delete it
+// in Clerk too (or via a Clerk backend API call from an action). Now that
+// registration is session-based, a deleted user who signs in again can only
+// re-register as a student (with a valid invite code) or as pending staff.
 export const deleteUser = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -313,6 +404,27 @@ export const makeAdmin = internalMutation({
       throw new Error("No user with that email. Sign up first, then run this.");
     }
 
-    await ctx.db.patch(user._id, { role: "admin" });
+    await ctx.db.patch(user._id, { role: "admin", status: "approved" });
+  },
+});
+
+export const syncMe = mutation({
+  args: {
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    image: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return; // not registered yet, nothing to sync
+
+    const patch: { name?: string; email?: string; image?: string } = {};
+    if (args.name?.trim()) patch.name = args.name.trim();
+    if (args.email) patch.email = args.email;
+    if (args.image) patch.image = args.image;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(user._id, patch);
+    }
   },
 });

@@ -4,23 +4,28 @@ import { useEffect, useState } from "react";
 import { useSignUp } from "@clerk/nextjs/legacy";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useMutation, useAction, useQuery } from "convex/react";
+import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowRight, EyeIcon, EyeOffIcon } from "lucide-react";
+import { ArrowRight, EyeIcon, EyeOffIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
-import { RefreshCwIcon } from "lucide-react"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+
+// idle    = nothing happening yet
+// waiting = Clerk session is active, waiting for Convex to receive the token
+// failed  = registration on the server failed; the user can retry
+type SetupState = "idle" | "waiting" | "failed";
 
 export default function SignUpPage() {
   const { isLoaded, signUp } = useSignUp();
   const { setActive, isSignedIn } = useClerk();
-  const upsertUser = useMutation(api.users.upsertUser);
+  const { isAuthenticated } = useConvexAuth();
+  const registerStudent = useMutation(api.users.registerStudent);
   const router = useRouter();
 
   const [step, setStep] = useState<"form" | "verify">("form");
@@ -38,31 +43,78 @@ export default function SignUpPage() {
 
   const [verifyCode, setVerifyCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [setupState, setSetupState] = useState<SetupState>("idle");
 
-  const joinTeamByInviteCode = useMutation(api.dashboard.joinTeamByInviteCode);
-  const ValidateInviteCode = useQuery(api.dashboard.validateInviteCode, inviteCode ? { inviteCode } : "skip");
+  const inviteCodeValid = useQuery(
+    api.dashboard.validateInviteCode,
+    inviteCode ? { inviteCode } : "skip"
+  );
+
+  // Already signed in and not in the middle of signing up -> go to dashboard
+  useEffect(() => {
+    if (isSignedIn && setupState === "idle" && step === "form") {
+      router.push("/dashboard/student");
+    }
+  }, [isSignedIn, setupState, step, router]);
+
+  // Create the Convex user + join the team in ONE server call.
+  // Runs only after the Clerk session exists AND Convex has the auth token.
+  const runSetup = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await registerStudent({
+        name: `${firstName} ${lastName}`.trim(),
+        email,
+        studentNo: studentNo.trim(),
+        program,
+        section,
+        inviteCode,
+      });
+      router.push("/dashboard/student");
+    } catch (err: any) {
+      setError(
+        err?.data ??
+          err?.message ??
+          "Your account was created but setup failed. Please try again."
+      );
+      setSetupState("failed");
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (isSignedIn) router.push("/dashboard/student");
-  }, [isSignedIn]);
-
-
+    if (setupState === "waiting" && isAuthenticated) {
+      runSetup();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setupState, isAuthenticated]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
     setError("");
     setInviteCodeError("");
+
+    if (!inviteCode) {
+      setInviteCodeError("An invite code is required.");
+      return;
+    }
+    if (!program || !section) {
+      setError("Please select your program and section.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (ValidateInviteCode === undefined) {
+      if (inviteCodeValid === undefined) {
         setInviteCodeError("Still validating code, please try again.");
         setLoading(false);
         return;
       }
 
-      if (!ValidateInviteCode) {
+      if (!inviteCodeValid) {
         setInviteCodeError("Invalid or expired invite code.");
         setLoading(false);
         return;
@@ -78,11 +130,16 @@ export default function SignUpPage() {
     }
   };
 
-  
-
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
+
+    // Session already exists from a previous attempt: just retry the setup
+    if (setupState === "failed") {
+      if (isAuthenticated) await runSetup();
+      return;
+    }
+
     setError("");
     setLoading(true);
 
@@ -103,26 +160,14 @@ export default function SignUpPage() {
     }
 
     try {
-      await upsertUser({
-        clerkId: result.createdUserId!,
-        name: `${firstName} ${lastName}`,
-        email,
-        role: "student",
-        studentNo,
-        program,
-        section,
-        inviteCode,
-      });
-
-      await joinTeamByInviteCode({
-        clerkId: result.createdUserId!,
-        inviteCode,
-      });
-
+      // Mark "waiting" BEFORE activating the session so the redirect effect
+      // above doesn't send the user to the dashboard before setup finishes.
+      setSetupState("waiting");
       await setActive({ session: result.createdSessionId });
-      router.push("/dashboard/student");
+      // The effect above calls registerStudent once Convex is authenticated.
     } catch (err: any) {
-      setError(err.message ?? "Account created but setup failed. Please contact support.");
+      setSetupState("idle");
+      setError(err.message ?? "Could not sign you in. Please try again.");
       setLoading(false);
     }
   };
@@ -148,7 +193,7 @@ export default function SignUpPage() {
                     type="button"
                     variant="outline"
                     size="xs"
-                    disabled={loading}
+                    disabled={loading || setupState !== "idle"}
                     onClick={() => signUp?.prepareEmailAddressVerification({ strategy: "email_code" })}
                   >
                     <RefreshCwIcon />
@@ -157,7 +202,13 @@ export default function SignUpPage() {
                 </div>
 
                 <div className="flex justify-center mb-4 mt-2 px-6 md:px-2">
-                  <InputOTP maxLength={6} id="otp-verification" value={verifyCode} onChange={(value) => setVerifyCode(value)}>
+                  <InputOTP
+                    maxLength={6}
+                    id="otp-verification"
+                    value={verifyCode}
+                    onChange={(value) => setVerifyCode(value)}
+                    disabled={setupState !== "idle"}
+                  >
                     <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 md:*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-10 md:*:data-[slot=input-otp-slot]:w-11 *:data-[slot=input-otp-slot]:text-xl">
                       <InputOTPSlot index={0} />
                       <InputOTPSlot index={1} />
@@ -178,7 +229,15 @@ export default function SignUpPage() {
 
             <CardFooter className="flex flex-col gap-3 px-6 pb-6">
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Verifying..." : "Verify"}
+                {setupState === "failed"
+                  ? loading
+                    ? "Retrying..."
+                    : "Retry setup"
+                  : loading
+                    ? setupState === "waiting"
+                      ? "Setting up your account..."
+                      : "Verifying..."
+                    : "Verify"}
               </Button>
               <div className="text-xs text-muted-foreground text-center">
                 Having trouble?{" "}
@@ -219,7 +278,7 @@ export default function SignUpPage() {
             <Label className="text-xs">Password</Label>
             <div className="flex items-center gap-2 mb-6">
               <Input type={showPassword ? "text" : "password"} placeholder="Minimum 8 characters" onChange={(e) => setPassword(e.target.value)} required />
-              <Button type="button" className="bg-card text-foreground hover:bg-accent" onClick={() => setShowPassword(prev => !prev)}>
+              <Button type="button" className="bg-card text-foreground hover:bg-accent" onClick={() => setShowPassword((prev) => !prev)}>
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </Button>
             </div>
@@ -284,9 +343,10 @@ export default function SignUpPage() {
               placeholder="e.g. ECAP-ABCD-EFGH"
               className={`text-xs mb-1 ${inviteCodeError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               onChange={(e) => {
-                setInviteCode(e.target.value.toUpperCase());
+                setInviteCode(e.target.value.trim().toUpperCase());
                 setInviteCodeError("");
               }}
+              required
             />
             {inviteCodeError && (
               <p className="text-red-500 text-xs mt-1">{inviteCodeError}</p>
