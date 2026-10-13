@@ -1,14 +1,15 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 export function SyncUser() {
   const { user, isSignedIn, isLoaded } = useUser();
-  const me = useQuery(api.users.getMe);
+  const { isAuthenticated } = useConvexAuth();
+  const me = useQuery(api.users.getMe, isAuthenticated ? {} : "skip");
   const syncMe = useMutation(api.users.syncMe);
   const router = useRouter();
   const pathname = usePathname();
@@ -22,7 +23,8 @@ export function SyncUser() {
     }
   }, [isLoaded, isSignedIn, me, pathname, router]);
 
-  // Keep email and avatar in step with Clerk. Only calls the server when
+  // Keep email and avatar in step with Clerk. The server takes the email from
+  // the verified token, so only the image is sent. Only calls the server when
   // something actually changed, so it can't loop.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user || !me) return; // me === null: not registered yet
@@ -34,10 +36,7 @@ export function SyncUser() {
     const imageChanged = !!image && image !== me.image;
     if (!emailChanged && !imageChanged) return;
 
-    syncMe({
-      email: emailChanged ? email : undefined,
-      image: imageChanged ? image : undefined,
-    }).catch(() => {
+    syncMe({ image: imageChanged ? image : undefined }).catch(() => {
       // Non-critical; it will retry on the next load
     });
   }, [isLoaded, isSignedIn, user, me, syncMe]);

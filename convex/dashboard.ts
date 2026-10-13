@@ -1080,3 +1080,36 @@ export const validateInviteCode = query({
     return team !== null;
   },
 });
+
+// Joins the signed-in student to a team by invite code. Identity comes from
+// the session (no clerkId argument) and only the team name is returned.
+export const joinTeam = mutation({
+  args: { inviteCode: v.string() },
+  handler: async (ctx, args): Promise<{ teamName: string }> => {
+    const caller = await requireRole(ctx, ["student"]);
+
+    const team = await ctx.db
+      .query("capstoneProjects")
+      .filter((q) =>
+        q.eq(q.field("inviteCode"), args.inviteCode.trim().toUpperCase())
+      )
+      .first();
+    if (!team) throw new Error("Invalid or expired invite code.");
+
+    // One team per student
+    const allTeams = await ctx.db.query("capstoneProjects").collect();
+    const current = allTeams.find((t) => (t.members ?? []).includes(caller._id));
+    if (current) {
+      if (current._id === team._id) return { teamName: team.teamName };
+      throw new Error("You're already in a team.");
+    }
+
+    await ctx.db.patch(team._id, {
+      members: [...(team.members ?? []), caller._id],
+    });
+
+    await logAction(ctx, caller, "Joined team", `${caller.name} joined "${team.teamName}"`);
+
+    return { teamName: team.teamName };
+  },
+});

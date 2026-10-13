@@ -46,7 +46,7 @@ function DashboardContent() {
   const [isLoading, setIsLoading] = useState(false);
 
   const me = useQuery(api.users.getMe);
-  const joinTeam = useMutation(api.dashboard.joinTeamByInviteCode);
+  const joinTeam = useMutation(api.dashboard.joinTeam);
 
   const project = useQuery(
     api.dashboard.getMyProject,
@@ -81,7 +81,7 @@ function DashboardContent() {
     setIsLoading(true);
     setError("");
     try {
-      await joinTeam({ clerkId: me.clerkId, inviteCode: trimmed });
+      await joinTeam({ inviteCode: trimmed });
     } catch {
       setError("Invalid invite code. Please check and try again.");
     } finally {
