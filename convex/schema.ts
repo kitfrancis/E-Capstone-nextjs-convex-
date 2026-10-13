@@ -16,6 +16,14 @@ export default defineSchema({
       v.literal("adviser"),
       v.literal("admin")
     ),
+    // Empty (older accounts) counts as approved
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("approved"),
+        v.literal("rejected")
+      )
+    ),
     inviteCode: v.optional(v.string()),
   })
     .index("by_clerk_id", ["clerkId"])

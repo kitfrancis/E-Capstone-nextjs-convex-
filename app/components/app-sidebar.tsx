@@ -24,6 +24,7 @@ import {
   ChevronUp,
   GraduationCap,
   ScrollText,
+  UserCheck,
 } from "lucide-react";
 
 
@@ -51,7 +52,8 @@ const adviserLinks = [
 
 const adminLinks = [
   { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
-  { label: "User Management", href: "/dashboard/admin/users", icon: Users },
+  { label: "User Management", href: "/dashboard/admin/Users", icon: Users },
+  { label: "Approvals", href: "/dashboard/admin/approvals", icon: UserCheck },
     { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ScrollText },

@@ -71,15 +71,21 @@ export const upsertUser = mutation({
           throw new Error("Student number is already registered.");
         }
       }
-      await ctx.db.insert("users", args);
+
+      // Only advisers must be verified by the admin first.
+      // Students and instructors are approved automatically.
+      const needsApproval = args.role === "adviser";
+      const status = needsApproval ? "pending" : "approved";
+
+      await ctx.db.insert("users", { ...args, status });
       await logAction(
         ctx,
         { clerkId: args.clerkId, name: args.name },
         "User registered",
-        `${args.name} registered as ${args.role}`
+        `${args.name} registered as ${args.role}${needsApproval ? " (awaiting approval)" : ""}`
       );
     } else {
-      // role is never patched here, so admins keep their role on login
+      // role and status are never patched here
       await ctx.db.patch(existing._id, {
         name: args.name,
         email: args.email,
@@ -131,13 +137,17 @@ export const getMe = query({
   },
 });
 
+// Only approved advisers can be assigned to teams
 export const getAdvisers = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const advisers = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "adviser"))
       .collect();
+    return advisers.filter(
+      (a) => a.status !== "pending" && a.status !== "rejected"
+    );
   },
 });
 
@@ -160,25 +170,63 @@ export const listAllUsers = query({
   },
 });
 
+export const approveUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new Error("User not found");
+
+    await ctx.db.patch(args.userId, { status: "approved" });
+    await logAction(
+      ctx,
+      admin,
+      "Approved account",
+      `${target.name} (${target.role})`
+    );
+  },
+});
+
+export const rejectUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new Error("User not found");
+    if (target.role === "admin") {
+      throw new Error("The admin account can't be rejected.");
+    }
+
+    await ctx.db.patch(args.userId, { status: "rejected" });
+    await logAction(
+      ctx,
+      admin,
+      "Rejected account",
+      `${target.name} (${target.role})`
+    );
+  },
+});
+
+// Admin is NOT assignable here: there is exactly one admin account.
 export const setUserRole = mutation({
   args: {
     userId: v.id("users"),
     role: v.union(
       v.literal("student"),
       v.literal("instructor"),
-      v.literal("adviser"),
-      v.literal("admin")
+      v.literal("adviser")
     ),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
 
-    if (admin._id === args.userId && args.role !== "admin") {
-      throw new Error("You can't remove your own admin role.");
-    }
-
     const target = await ctx.db.get(args.userId);
     if (!target) throw new Error("User not found");
+    if (target.role === "admin") {
+      throw new Error("The admin account's role can't be changed.");
+    }
 
     await ctx.db.patch(args.userId, { role: args.role });
     await logAction(
@@ -190,11 +238,72 @@ export const setUserRole = mutation({
   },
 });
 
-// Run from the Convex dashboard to create the first admin:
+// Removes a user from the system (Convex only; see notes about Clerk).
+export const deleteUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new Error("User not found");
+    if (target.role === "admin") {
+      throw new Error("The admin account can't be deleted.");
+    }
+
+    const teams = await ctx.db.query("capstoneProjects").collect();
+
+    // Don't leave a team without its adviser or instructor
+    const supervised = teams.filter(
+      (t) => t.adviserId === target._id || t.instructorId === target._id
+    );
+    if (supervised.length > 0) {
+      throw new Error(
+        `${target.name} is the adviser or instructor of ${supervised.length} team(s). Reassign those teams first.`
+      );
+    }
+
+    // Remove from any team they're a member of
+    for (const team of teams) {
+      if ((team.members ?? []).includes(target._id)) {
+        await ctx.db.patch(team._id, {
+          members: (team.members ?? []).filter((m) => m !== target._id),
+        });
+      }
+    }
+
+    // Clear their notifications
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", target._id))
+      .collect();
+    for (const n of notifications) {
+      await ctx.db.delete(n._id);
+    }
+
+    await ctx.db.delete(target._id);
+    await logAction(
+      ctx,
+      admin,
+      "Deleted user",
+      `${target.name} (${target.email}), ${target.role}`
+    );
+  },
+});
+
+// Run from the Convex dashboard to create the one admin:
 // { "email": "you@example.com" }
+// Refuses to run if an admin already exists.
 export const makeAdmin = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, args) => {
+    const existingAdmin = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "admin"))
+      .first();
+    if (existingAdmin) {
+      throw new Error("An admin already exists. Only one admin is allowed.");
+    }
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", args.email))

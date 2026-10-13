@@ -148,7 +148,7 @@ export default function AdminDashboard() {
               Quick Actions
             </h2>
             <Link
-              href="/dashboard/admin/users"
+              href="/dashboard/admin/Users"
               className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300"
             >
               <Users className="h-4 w-4" />

@@ -3,12 +3,24 @@
 import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 export function SyncUser() {
   const { user, isSignedIn, isLoaded } = useUser();
   const me = useQuery(api.users.getMe);
   const upsertUser = useMutation(api.users.upsertUser);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Accounts waiting for (or denied) admin approval can only see /pending-approval
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !me) return;
+    const blocked = me.status === "pending" || me.status === "rejected";
+    if (blocked && pathname !== "/pending-approval") {
+      router.replace("/pending-approval");
+    }
+  }, [isLoaded, isSignedIn, me, pathname, router]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user || me === undefined) return;

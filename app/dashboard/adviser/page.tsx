@@ -178,10 +178,7 @@ function TeamRow({
 export default function AdviserDashboard() {
   const me = useQuery(api.users.getMe);
 
-  const adviserProjects = useQuery(
-    api.dashboard.getAdviserProjects,
-    me ? { clerkId: me.clerkId } : "skip"
-  );
+    const adviserProjects = useQuery(api.adviser.myProjects, me ? {} : "skip");
 
   // Track the selected team
   const [selectedTeamIndex, setSelectedTeamIndex] = useState<number>(0);
@@ -197,7 +194,7 @@ export default function AdviserDashboard() {
   const router = useRouter();
 
   const allTeams = useQuery(api.dashboard.getTeams, {});
-  const allDeliverables = useQuery(api.dashboard.getAllDeliverables, {});
+  const allDeliverables = useQuery(api.adviser.myDeliverables, {});
 
   const dashboardData = useQuery(
     api.dashboard.getDashboardData,
@@ -269,7 +266,7 @@ export default function AdviserDashboard() {
   const stats = [
     {
       label: "Teams under your supervision",
-      value: allTeams === undefined ? "—" : teamsCount,
+      value: adviserProjects === undefined ? "—" : teamsCount,
       icon: Users,
       linkText: "View Teams",
       target: "teams",
