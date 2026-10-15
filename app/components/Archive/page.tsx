@@ -466,8 +466,8 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
             </div>
 
             {/* Detail panel (desktop only: hidden below lg, where the modal is used instead) */}
-            <div className="hidden lg:block lg:sticky lg:top-4">
-              <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-border bg-card p-6">
+            <div className="hidden lg:block lg:sticky lg:top-24 min-w-0">
+              <div className="max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-6">
                 {selectedProject ? (
                   <>
                     <div className="flex items-start justify-between gap-4">
@@ -500,7 +500,6 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
         </div>
       </div>
 
-      {/* Mobile + tablet: project details in a shadcn Dialog */}
       <Dialog open={detailOpen && !!selectedProject} onOpenChange={setDetailOpen}>
         <DialogContent className="max-h-[95vh] overflow-y-auto lg:hidden">
           {selectedProject && (

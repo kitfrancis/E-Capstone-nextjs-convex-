@@ -57,6 +57,33 @@ export default defineSchema({
     instructorId: v.optional(v.string()),
     members: v.optional(v.array(v.string())),
     inviteCode: v.optional(v.string()),
+
+    // Defense pipeline
+    stage: v.optional(
+      v.union(
+        v.literal("endorsed"),
+        v.literal("defense_scheduled"),
+        v.literal("final_revisions"),
+        v.literal("ready_to_archive"),
+        v.literal("archived")
+      )
+    ),
+    endorsedAt: v.optional(v.number()),
+    defenseDate: v.optional(v.string()), // "2026-11-12T09:00"
+    defenseVenue: v.optional(v.string()),
+    defensePanel: v.optional(v.string()),
+    defenseResult: v.optional(
+      v.union(
+        v.literal("passed"),
+        v.literal("passed_with_revisions"),
+        v.literal("failed")
+      )
+    ),
+    finalGrade: v.optional(v.string()),
+    abstract: v.optional(v.string()),
+    keywords: v.optional(v.array(v.string())),
+    finalFileId: v.optional(v.id("_storage")),
+    archivedAt: v.optional(v.number()),
   }).index("by_inviteCode", ["inviteCode"]),
 
   deliverables: defineTable({
@@ -120,7 +147,7 @@ export default defineSchema({
     details: v.string(),
   }),
 
-    settings: defineTable({
+  settings: defineTable({
     systemName: v.string(),
     institutionName: v.string(),
     academicYear: v.string(),

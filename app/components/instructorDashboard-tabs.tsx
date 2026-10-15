@@ -6,6 +6,13 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
@@ -29,6 +36,11 @@ import { DeleteTask } from "./deleteTask";
 import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
+import {
+  DefenseActionButton,
+  defenseActionKind,
+  defenseStatus,
+} from "@/app/components/defense-actions";
 import { computeProgress } from "@/lib/progress";
 import dynamic from "next/dynamic";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -84,7 +96,7 @@ function FilterChips<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2">
       {options.map((o) => (
         <button
           key={o.value}
@@ -101,6 +113,35 @@ function FilterChips<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+// One team filter shared by the Submissions and Tasks tabs
+function TeamSelect({
+  teams,
+  value,
+  onChange,
+}: {
+  teams: { _id: string; teamName: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-9 w-full rounded-full text-xs sm:w-52" aria-label="Filter by team">
+        <SelectValue placeholder="All teams" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all" className="text-xs">
+          All teams
+        </SelectItem>
+        {teams.map((t) => (
+          <SelectItem key={t._id} value={t._id} className="text-xs">
+            {t.teamName}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -138,6 +179,9 @@ export function InstructorTabsDemo({
   const setSubmissionFilter = onSubmissionFilterChange ?? setLocalSubmissionFilter;
   const taskFilter = taskFilterProp ?? localTaskFilter;
   const setTaskFilter = onTaskFilterChange ?? setLocalTaskFilter;
+
+  // Team filter shared by Submissions + Tasks ("all" or a team id)
+  const [teamFilter, setTeamFilter] = useState<string>("all");
 
   // PDF viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{
@@ -200,14 +244,28 @@ export function InstructorTabsDemo({
     return map;
   }, [allTeams, allDeliverables]);
 
+  // If the selected team no longer exists (e.g. it was deleted), fall back to all teams
+  const activeTeam =
+    teamFilter === "all" || allTeams?.some((t) => t._id === teamFilter) ? teamFilter : "all";
+  const inTeam = (id?: string) => activeTeam === "all" || id === activeTeam;
+
+  // Team-scoped lists feed every count and list below
+  const scopedDeliverables = allDeliverables?.filter((d) => inTeam(d.capstoneProjectId));
+  const scopedTasks = tasks?.filter((t) => inTeam(t.capstoneProjectId));
+
   // Filtered lists
-  const shownDeliverables = allDeliverables?.filter(
-    (d) => submissionFilter === "all" || d.status === submissionFilter
-  );
-  const countStatus = (s: string) => allDeliverables?.filter((d) => d.status === s).length ?? 0;
+  // Newest upload first; if two share a timestamp, the higher version goes first
+  const shownDeliverables = scopedDeliverables
+    ?.filter((d) => submissionFilter === "all" || d.status === submissionFilter)
+    .sort(
+      (a, b) =>
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime() ||
+        Number(b.version) - Number(a.version)
+    );
+  const countStatus = (s: string) => scopedDeliverables?.filter((d) => d.status === s).length ?? 0;
 
   // Tasks waiting for the instructor go first
-  const shownTasks = tasks
+  const shownTasks = scopedTasks
     ?.filter(
       (t) =>
         taskFilter === "all" ||
@@ -215,8 +273,8 @@ export function InstructorTabsDemo({
         (taskFilter === "under_review" && t.status === "under_review")
     )
     .sort((a, b) => Number(b.status === "under_review") - Number(a.status === "under_review"));
-  const overdueCount = tasks?.filter(isOverdue).length ?? 0;
-  const reviewCount = tasks?.filter((t) => t.status === "under_review").length ?? 0;
+  const overdueCount = scopedTasks?.filter(isOverdue).length ?? 0;
+  const reviewCount = scopedTasks?.filter((t) => t.status === "under_review").length ?? 0;
 
   const getStatusBadge = (status: string) => {
     if (status === "approved") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
@@ -257,6 +315,9 @@ export function InstructorTabsDemo({
   const rowClass =
     "rounded-2xl border bg-card p-4 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
 
+  // Chip row + team dropdown, shared layout for Submissions and Tasks
+  const filterBarClass = "mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between";
+
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as InstructorTab)} className="w-full">
       {/* Section heading + pill tabs */}
@@ -295,6 +356,13 @@ export function InstructorTabsDemo({
             const TeamIcon = style.icon;
             const teamProgress = progressByTeam.get(team._id) ?? 0;
 
+            // Defense pipeline: the badge shows the stage once the team reaches 100%,
+            // and the action button replaces "View Team" while there's a step to do
+            const defense = defenseStatus(team, teamProgress);
+            const badgeLabel = defense?.label ?? team.phase;
+            const badgeCls = defense?.cls ?? "bg-blue-600 text-white";
+            const hasDefenseAction = defenseActionKind(team, teamProgress) !== null;
+
             return (
               <div key={team._id} className={rowClass}>
                 <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,2fr)_auto_repeat(3,minmax(0,1fr))_minmax(0,1.6fr)_auto] lg:items-center lg:gap-5">
@@ -307,11 +375,11 @@ export function InstructorTabsDemo({
                       <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{team.teamName}</h3>
                       <p className="text-muted-foreground text-xs truncate">{team.projectTitle}</p>
                     </div>
-                    <span className={`${BADGE_BASE} bg-blue-600 text-white lg:hidden`}>{team.phase}</span>
+                    <span className={`${BADGE_BASE} ${badgeCls} lg:hidden`}>{badgeLabel}</span>
                   </div>
 
-                  {/* Phase badge (desktop) */}
-                  <span className={`${BADGE_BASE} bg-blue-600 text-white hidden lg:inline-flex`}>{team.phase}</span>
+                  {/* Phase / defense badge (desktop) */}
+                  <span className={`${BADGE_BASE} ${badgeCls} hidden lg:inline-flex`}>{badgeLabel}</span>
 
                   {/* Stats */}
                   <div className="grid grid-cols-3 gap-3 lg:contents">
@@ -352,12 +420,16 @@ export function InstructorTabsDemo({
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 justify-between lg:justify-end">
-                    {/* TODO: change to your real team page route */}
-                    <Button asChild size="sm" className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700">
-                      <Link href={`/dashboard/instructor/teams/${team._id}`}>
-                        View Team <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
+                    {hasDefenseAction ? (
+                      <DefenseActionButton project={team} progress={teamProgress} />
+                    ) : (
+                      /* TODO: change to your real team page route */
+                      <Button asChild size="sm" className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700">
+                        <Link href={`/dashboard/instructor/teams/${team._id}`}>
+                          View Team <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    )}
 
                     <div className="flex items-center">
                       {team.inviteCode && (
@@ -399,6 +471,25 @@ export function InstructorTabsDemo({
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="space-y-1 p-1">
+                          {/* "View Team" moves here while the row's button is a defense action */}
+                          {hasDefenseAction && (
+                            <Link
+                              href={`/dashboard/instructor/teams/${team._id}`}
+                              className="block w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors"
+                            >
+                              View team
+                            </Link>
+                          )}
+                          {/* Jump to this team's files with the team filter already set */}
+                          <button
+                            className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors"
+                            onClick={() => {
+                              setTeamFilter(team._id);
+                              setTab("submissions");
+                            }}
+                          >
+                            View submissions
+                          </button>
                           <EditTeam
                             teamId={team._id}
                             initialTeamName={team.teamName}
@@ -442,16 +533,19 @@ export function InstructorTabsDemo({
           </div>
         ) : (
           <>
-            <FilterChips<SubmissionFilter>
-              value={submissionFilter}
-              onChange={setSubmissionFilter}
-              options={[
-                { label: "All", value: "all", count: allDeliverables.length },
-                { label: "Under Review", value: "under_review", count: countStatus("under_review") },
-                { label: "Needs Revision", value: "needs_revision", count: countStatus("needs_revision") },
-                { label: "Approved", value: "approved", count: countStatus("approved") },
-              ]}
-            />
+            <div className={filterBarClass}>
+              <FilterChips<SubmissionFilter>
+                value={submissionFilter}
+                onChange={setSubmissionFilter}
+                options={[
+                  { label: "All", value: "all", count: scopedDeliverables?.length ?? 0 },
+                  { label: "Under Review", value: "under_review", count: countStatus("under_review") },
+                  { label: "Needs Revision", value: "needs_revision", count: countStatus("needs_revision") },
+                  { label: "Approved", value: "approved", count: countStatus("approved") },
+                ]}
+              />
+              {allTeams && <TeamSelect teams={allTeams} value={activeTeam} onChange={setTeamFilter} />}
+            </div>
             {shownDeliverables && shownDeliverables.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
                 <p className="text-muted-foreground">No submissions match this filter</p>
@@ -525,19 +619,29 @@ export function InstructorTabsDemo({
           </div>
         ) : (
           <>
-            <FilterChips<TaskFilter>
-              value={taskFilter}
-              onChange={setTaskFilter}
-              options={[
-                { label: "All", value: "all", count: tasks.length },
-                { label: "Under Review", value: "under_review", count: reviewCount },
-                { label: "Overdue", value: "overdue", count: overdueCount },
-              ]}
-            />
+            <div className={filterBarClass}>
+              <FilterChips<TaskFilter>
+                value={taskFilter}
+                onChange={setTaskFilter}
+                options={[
+                  { label: "All", value: "all", count: scopedTasks?.length ?? 0 },
+                  { label: "Under Review", value: "under_review", count: reviewCount },
+                  { label: "Overdue", value: "overdue", count: overdueCount },
+                ]}
+              />
+              {/* Already scoped to one team when a project id is passed in */}
+              {allTeams && !capstoneProjectId && (
+                <TeamSelect teams={allTeams} value={activeTeam} onChange={setTeamFilter} />
+              )}
+            </div>
             {shownTasks && shownTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
                 <p className="text-muted-foreground">
-                  {taskFilter === "under_review" ? "No tasks waiting for review" : "No overdue tasks"}
+                  {taskFilter === "under_review"
+                    ? "No tasks waiting for review"
+                    : taskFilter === "overdue"
+                      ? "No overdue tasks"
+                      : "No tasks for this team"}
                 </p>
               </div>
             ) : (

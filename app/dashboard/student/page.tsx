@@ -2,8 +2,9 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { TabsDemo } from "@/app/components/dashboard-tabs";
+import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status-card";
 import { Id } from "@/convex/_generated/dataModel";
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,18 +41,28 @@ function DashboardContent() {
   const pageFromUrl = searchParams.get("page") || "1";
   const highlightPageFromUrl = pageFromUrl ? parseInt(pageFromUrl) : null;
 
+  // Avoids hydration mismatch: Convex may return cached data on the first
+  // client render while the server always renders the loading state.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // join team by code
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const me = useQuery(api.users.getMe);
+  const meQuery = useQuery(api.users.getMe);
+  const me = mounted ? meQuery : undefined;
   const joinTeam = useMutation(api.dashboard.joinTeam);
+  const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
 
-  const project = useQuery(
+  const projectQuery = useQuery(
     api.dashboard.getMyProject,
     me ? { clerkId: me.clerkId } : "skip"
   );
+  const project = mounted ? projectQuery : undefined;
   const teamMembers = useQuery(
     api.dashboard.getProjectMembers,
     project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
@@ -65,8 +76,15 @@ function DashboardContent() {
     project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
   );
 
-  // Progress and stats both come from the latest version of each chapter
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
+
+  // At 100% the project becomes "Ready for defense" on its own.
+  // The server re-checks progress, and does nothing if a stage is already set.
+  useEffect(() => {
+    if (project && !project.stage && progress.total >= 100) {
+      syncReadiness({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
+    }
+  }, [project?._id, project?.stage, progress.total, syncReadiness]);
 
   const handleJoin = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -118,7 +136,6 @@ function DashboardContent() {
   return (
     <div className="scroll-smooth bg-background min-h-screen">
       <div className="lg:px-5 pb-8 space-y-6">
-        {/* Greeting */}
         <div className="rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8">
           <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
             Welcome back,{" "}
@@ -135,7 +152,6 @@ function DashboardContent() {
         </div>
 
         {project === null ? (
-          /* Not in a team yet */
           <div className="rounded-2xl border bg-card p-8 lg:p-10 flex flex-col items-center justify-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 mb-4">
               <Users className="h-8 w-8" />
@@ -184,9 +200,7 @@ function DashboardContent() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-semibold text-foreground leading-tight">{project.teamName}</h2>
-                    <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                      {project.phase}
-                    </span>
+                    <DefenseBadge project={project} progress={progress.total} />
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">{project.projectTitle}</p>
                 </div>
@@ -221,6 +235,9 @@ function DashboardContent() {
                   ))}
                 </div>
               </div>
+
+              {/* Stepper, next step, defense details and result */}
+              <DefenseStatusCard project={project} progress={progress.total} />
 
               <div className="grid grid-cols-3 gap-3 mt-5">
                 {stats.map((s) => {

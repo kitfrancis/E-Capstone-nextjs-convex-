@@ -114,7 +114,7 @@ export default function AdviserProfile() {
                 <Label className="flex items-center gap-1.5 text-sm font-medium">
                   <GraduationCap className="h-4 w-4 text-blue-600" /> Course
                 </Label>
-                <SelectCourseDemo />
+                <SelectCourseDemo value={program} onValueChange={setProgram} />
               </div>
             </div>
 

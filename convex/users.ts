@@ -273,10 +273,13 @@ export const getStudents = query({
 // Admin
 // ---------------------------------------------------------------------------
 
+// Returns [] for anyone who isn't a signed-in admin (including the brief
+// moment before the Clerk token reaches Convex), instead of throwing.
 export const listAllUsers = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    const caller = await getCurrentUser(ctx);
+    if (!caller || caller.role !== "admin") return [];
     return await ctx.db.query("users").collect();
   },
 });

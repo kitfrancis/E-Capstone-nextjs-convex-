@@ -1,48 +1,40 @@
-"use client"
+"use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState, useEffect } from "react";
-import { useClerk } from "@clerk/nextjs";
-import { SelectCourseDemo } from "@/app/components/selectCourse";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
-import { Save, Mail, ShieldCheck, KeyRound, GraduationCap, BadgeCheck, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Users, Clock, Calendar, RotateCcw, ChevronRight, ArrowRight } from "lucide-react";
+import { DialogDemo } from "@/app/components/createTeam";
+import { TaskDialogDemo } from "@/app/components/createTask";
+import { DefensePipeline } from "@/app/components/defense-pipeline";
+import {
+  InstructorTabsDemo,
+  type InstructorTab,
+  type SubmissionFilter,
+  type TaskFilter,
+} from "@/app/components/instructorDashboard-tabs";
 
-export default function InstructorProfile() {
+export default function InstructorDashboard() {
   const me = useQuery(api.users.getMe);
-  const updateProfile = useMutation(api.users.updateProfile);
-  const { openUserProfile } = useClerk();
+  const myId = me?._id as string | undefined;
+  const router = useRouter();
+  const dashboardData = useQuery(
+    api.dashboard.getInstructorDashboardData,
+    myId ? { instructorId: myId } : "skip"
+  );
 
-  const [name, setName] = useState("");
-  const [program, setProgram] = useState("");
-  const [section, setSection] = useState("");
-  const [saving, setSaving] = useState(false);
+  // The cards control which tab and filter the list below shows
+  const [tab, setTab] = useState<InstructorTab>("teams");
+  const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>("all");
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>("all");
 
   useEffect(() => {
-    if (me) {
-      setName(me.name || "");
-      setProgram(me.program || "");
-      setSection(me.section || "");
-    }
-  }, [me]);
+    if (me === undefined || me === null) return;
+    if (me.role !== "instructor") router.push("/unauthorized");
+  }, [me, router]);
 
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await updateProfile({ name, program, section });
-      toast.success("Profile updated successfully", { position: "top-center" });
-    } catch (error) {
-      console.error("Failed to update profile:", error);
-      toast.error("Failed to update profile");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (me === undefined) {
+  if (me === undefined || dashboardData === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
@@ -50,105 +42,128 @@ export default function InstructorProfile() {
     );
   }
 
-  const inputClass = "h-10 rounded-xl text-sm";
-  const lockedClass = "h-10 rounded-xl text-sm bg-muted text-muted-foreground cursor-not-allowed";
+  const firstName = me?.name?.split(" ")[0] ?? "";
+
+  const openView = (t: InstructorTab, sub?: SubmissionFilter, task?: TaskFilter) => {
+    setTab(t);
+    if (sub) setSubmissionFilter(sub);
+    if (task) setTaskFilter(task);
+    setTimeout(
+      () => document.getElementById("instructor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      50
+    );
+  };
+
+  const stats = [
+    {
+      label: "Total Teams",
+      value: dashboardData.totalTeams,
+      icon: Users,
+      linkText: "View all teams",
+      onClick: () => openView("teams"),
+      card: "bg-blue-50 dark:bg-blue-950/30",
+      iconWrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
+      link: "text-blue-700 dark:text-blue-300",
+    },
+    {
+      label: "Pending Review",
+      value: dashboardData.pendingReviews,
+      icon: Clock,
+      linkText: "View submissions",
+      onClick: () => openView("submissions", "under_review"),
+      card: "bg-amber-50 dark:bg-amber-950/30",
+      iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
+      link: "text-amber-700 dark:text-amber-300",
+    },
+    {
+      label: "Needs Revision",
+      value: dashboardData.needsRevisionCount,
+      icon: RotateCcw,
+      linkText: "View revisions",
+      onClick: () => openView("submissions", "needs_revision"),
+      card: "bg-violet-50 dark:bg-violet-950/30",
+      iconWrap: "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-400",
+      link: "text-violet-700 dark:text-violet-300",
+    },
+    {
+      label: "Overdue Tasks",
+      value: dashboardData.overdueTasks,
+      icon: Calendar,
+      linkText: "View overdue tasks",
+      onClick: () => openView("tasks", undefined, "overdue"),
+      card: "bg-red-50 dark:bg-red-950/30",
+      iconWrap: "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400",
+      link: "text-red-700 dark:text-red-300",
+    },
+  ];
 
   return (
-    <div className="scroll-smooth px-0 lg:px-5 pb-10 space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8">
-        <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">Profile settings</h1>
-        <p className="text-sm lg:text-base text-muted-foreground mt-2">Manage your account information.</p>
-      </div>
+    <div className="scroll-smooth bg-background">
+      <div className="px-0 lg:px-5 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+          <div className="rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8 flex flex-col justify-center">
+            <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
+              Good day, Prof. {firstName}! 👋
+            </h1>
+            <p className="text-sm lg:text-base text-muted-foreground mt-2">
+              Here&apos;s an overview of your teams, projects, and tasks.
+            </p>
+            <p className="text-sm text-muted-foreground/80 mt-1">
+              Together, we make academic dreams happen!
+            </p>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-5 items-start">
-        {/* Identity card */}
-        <div className="rounded-2xl border bg-card p-6 flex flex-col items-center text-center lg:sticky lg:top-4">
-          <span className="flex h-24 w-24 items-center justify-center rounded-full bg-blue-100 text-4xl font-semibold text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-            {name?.[0]?.toUpperCase() || "?"}
-          </span>
-          <h2 className="mt-4 text-lg font-semibold text-foreground">{me?.name || "—"}</h2>
-          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-0.5 text-xs font-medium capitalize text-white">
-            <BadgeCheck className="h-3.5 w-3.5" />
-            {me?.role || "—"}
-          </span>
-          <div className="mt-5 w-full border-t pt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground min-w-0">
-            <Mail className="h-4 w-4 shrink-0" />
-            <span className="truncate">{me?.email || "—"}</span>
+          {/* These keep your existing dialogs. See note about restyling their triggers. */}
+          <div className="flex flex-col gap-3 justify-center">
+            <DialogDemo />
+            <TaskDialogDemo />
           </div>
         </div>
 
-        <div className="space-y-5">
-          {/* Personal information */}
-          <div className="rounded-2xl border bg-card p-5 lg:p-6">
-            <h2 className="text-lg font-semibold text-foreground">Personal information</h2>
-            <p className="text-sm text-muted-foreground">Update your personal details and preferences.</p>
-
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5 md:col-span-2">
-                <Label htmlFor="name" className="text-sm font-medium">Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-                <Input id="email" type="email" value={me?.email || ""} disabled className={lockedClass} />
-                <p className="text-xs text-muted-foreground">Email is managed by your login provider.</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="role" className="text-sm font-medium">Role</Label>
-                <Input id="role" type="text" value={me?.role || "—"} disabled className={`${lockedClass} capitalize`} />
-                <p className="text-xs text-muted-foreground">
-                  Contact your administrator if this is incorrect.
-                </p>
-              </div>
-
-              <div className="space-y-1.5 md:col-span-2">
-                <Label className="flex items-center gap-1.5 text-sm font-medium">
-                  <GraduationCap className="h-4 w-4 text-blue-600" /> Course
-                </Label>
-                <SelectCourseDemo />
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="h-10 w-full sm:w-auto rounded-xl gap-2 bg-blue-600 px-6 text-white hover:bg-blue-700"
+        {/* Stat cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+          {stats.map((s) => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.label}
+                type="button"
+                onClick={s.onClick}
+                className={`${s.card} rounded-2xl p-4 lg:p-5 flex flex-col gap-3 text-left transition hover:shadow-md hover:-translate-y-0.5`}
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {saving ? "Saving..." : "Save changes"}
-              </Button>
-            </div>
-          </div>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`${s.iconWrap} h-12 w-12 rounded-full flex items-center justify-center`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-semibold text-foreground leading-none">{s.value}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <span className={`${s.link} text-xs font-medium inline-flex items-center gap-1`}>
+                  {s.linkText} <ArrowRight className="h-3 w-3" />
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Account security */}
-          <div className="rounded-2xl border bg-card p-5 lg:p-6">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-foreground">Account security</h2>
-                <p className="text-sm text-muted-foreground">Manage your password and security settings.</p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => openUserProfile()}
-              className="mt-5 h-10 w-full rounded-xl gap-2"
-            >
-              <KeyRound className="h-4 w-4" /> Change password
-            </Button>
-          </div>
+        {/* Defense pipeline */}
+        <DefensePipeline onViewTeam={() => openView("teams")} />
+
+        {/* Teams / Submissions / Tasks */}
+        <div id="instructor-tabs" className="scroll-mt-4">
+          <InstructorTabsDemo
+            tab={tab}
+            onTabChange={setTab}
+            submissionFilter={submissionFilter}
+            onSubmissionFilterChange={setSubmissionFilter}
+            taskFilter={taskFilter}
+            onTaskFilterChange={setTaskFilter}
+          />
         </div>
       </div>
     </div>
