@@ -11,6 +11,10 @@ export const startDraft = mutation({
     if (!d || !d.storageId) throw new Error("File not found");
     if (d.status !== "needs_revision") throw new Error("Only chapters that need revision can be edited.");
 
+    // NEW: fail with a clear message if the original file is gone
+    const originalUrl = await ctx.storage.getUrl(d.storageId);
+    if (!originalUrl) throw new Error("The original file is missing. Please upload this chapter again.");
+
     const existing = await ctx.db
       .query("deliverableDrafts")
       .withIndex("by_deliverable", (q) => q.eq("deliverableId", deliverableId))
@@ -64,9 +68,8 @@ export const saveDraftFile = mutation({
     if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
     const draft = await ctx.db.get(draftId);
     if (!draft) return; // draft already submitted: ignore a late callback
-    const original = await ctx.db.get(draft.deliverableId);
-    // delete the previous draft blob, but never v1's blob
-    if (draft.storageId !== original?.storageId) await ctx.storage.delete(draft.storageId);
+    // CHANGED: no longer deletes the previous draft file, so it can never
+    // remove a file that a submitted version is now using
     await ctx.db.patch(draftId, { storageId, updatedAt: Date.now() });
   },
 });
