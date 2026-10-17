@@ -15,8 +15,20 @@ export const startDraft = mutation({
       .query("deliverableDrafts")
       .withIndex("by_deliverable", (q) => q.eq("deliverableId", deliverableId))
       .first();
-    if (existing)
-      return { draftId: existing._id, storageId: existing.storageId, baseVersion: existing.baseVersion };
+
+    if (existing) {
+      const url = await ctx.storage.getUrl(existing.storageId);
+      if (url) {
+        return { draftId: existing._id, storageId: existing.storageId, baseVersion: existing.baseVersion };
+      }
+      // draft file is gone: start again from the original file
+      await ctx.db.patch(existing._id, {
+        storageId: d.storageId,
+        baseVersion: d.version,
+        updatedAt: Date.now(),
+      });
+      return { draftId: existing._id, storageId: d.storageId, baseVersion: d.version };
+    }
 
     const draftId = await ctx.db.insert("deliverableDrafts", {
       deliverableId,

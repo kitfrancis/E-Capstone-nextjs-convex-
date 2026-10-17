@@ -216,6 +216,13 @@ export function TabsDemo({
     officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
   );
 
+  useEffect(() => {
+  if (officeDoc && officeUrl === null) {
+    toast.error("The draft file is missing. Please try again.");
+    setOfficeDoc(null);
+  }
+}, [officeDoc, officeUrl]);
+
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
   const studentUpdateTask = useMutation(api.dashboard.studentUpdateTask);
