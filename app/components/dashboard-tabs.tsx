@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -186,6 +186,9 @@ export function TabsDemo({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { user } = useUser();
+  const convex = useConvex();
+  // Assumes Clerk publicMetadata.role === "admin". Change this line if your admin check differs.
+  const isAdmin = (user?.publicMetadata as { role?: string } | undefined)?.role === "admin";
 
   // PDF viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{
@@ -205,6 +208,8 @@ export function TabsDemo({
     storageId: string;
     deliverableId: string;
     mode: "edit" | "view";
+    // set only while a student is editing a draft
+    draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -214,6 +219,8 @@ export function TabsDemo({
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
   const studentUpdateTask = useMutation(api.dashboard.studentUpdateTask);
+  const startDraft = useMutation(api.drafts.startDraft);
+  const finishDraft = useMutation(api.drafts.finish);
 
   const [activeTab, setActiveTab] = useState("deliverables");
   const deliverables = useQuery(
@@ -266,6 +273,67 @@ export function TabsDemo({
       console.error(err);
       toast.error("Couldn't update the task. Try again.");
     }
+  };
+
+  // "Edit & resubmit": open (or create) the draft and open the editor on it.
+  const startEdit = async (d: NonNullable<typeof deliverables>[number]) => {
+    try {
+      const draft = await startDraft({ deliverableId: d._id });
+      setOfficeDoc({
+        fileName: d.fileName,
+        storageId: draft.storageId,
+        deliverableId: d._id,
+        mode: "edit",
+        draft: {
+          id: draft.draftId,
+          baseVersion: draft.baseVersion,
+          docKey: `${draft.draftId}_${Date.now()}`, // created once per editing session
+          phase: d.phase,
+          fileSize: d.fileSize,
+        },
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
+    }
+  };
+
+  // Submit button in the editor header: save latest edits, then create the next version.
+  const submitDraft = async () => {
+    const doc = officeDoc;
+    if (!doc?.draft || !capstoneProjectId) throw new Error("Missing project.");
+    const deliverableId = doc.deliverableId as Id<"deliverables">;
+    const before =
+      (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
+
+    // 1. make OnlyOffice push the latest edits to the callback
+    const res = await fetch("/api/onlyoffice/forcesave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: doc.draft.docKey }),
+    }).then((r) => r.json());
+    if (!res.ok) throw new Error("Couldn't save your latest edits. Try again.");
+
+    // 2. wait until the draft row is updated (up to ~10s)
+    if (res.waitForCallback) {
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
+        if (cur && cur.updatedAt > before) break;
+      }
+    }
+
+    // 3. create the new version with your existing saveDeliverable
+    const latest = await convex.query(api.drafts.getByDeliverable, { deliverableId });
+    if (!latest) throw new Error("Draft not found.");
+    await saveDeliverable({
+      storageId: latest.storageId,
+      fileName: doc.fileName,
+      phase: doc.draft.phase,
+      fileSize: doc.draft.fileSize,
+      capstoneProjectId,
+    });
+    await finishDraft({ draftId: latest._id });
+    toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -410,6 +478,8 @@ export function TabsDemo({
             const chNum = chapterOf(d.phase);
             const cp = chNum ? progress.chapters[chNum - 1] : null;
             const isLatest = !!cp && cp.latestId === d._id;
+            // Locked once the chapter (or this file) is approved. Only admins can delete.
+            const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
             return (
               <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
                 <div className="flex items-center justify-between gap-3">
@@ -437,6 +507,13 @@ export function TabsDemo({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="flex flex-col justify-center">
+                        {/* NEW: edit the file in OnlyOffice as a draft, then submit as the next version */}
+                        {d.status === "needs_revision" && isLatest && isOffice(d.fileName) && (
+                          <DropdownMenuItem onClick={() => startEdit(d)}>
+                            Edit &amp; resubmit
+                          </DropdownMenuItem>
+                        )}
+
                         {d.status === "needs_revision" && (
                           <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
                             Resubmit
@@ -463,7 +540,7 @@ export function TabsDemo({
                                   fileName: d.fileName,
                                   storageId: d.storageId!,
                                   deliverableId: d._id,
-                                  mode: d.status === "approved" ? "view" : "edit",
+                                  mode: "view",
                                 })
                               }
                             >
@@ -477,27 +554,33 @@ export function TabsDemo({
                                 fileName: d.fileName,
                                 storageId: d.storageId!,
                                 deliverableId: d._id,
-                                mode: d.status === "approved" ? "view" : "edit",
+                                mode: "view",
                               })
                             }
                           >
-                            {d.status === "approved" ? "View in Editor" : "Open in Editor"}
+                            View in Editor
                           </DropdownMenuItem>
                         ) : null}
 
                         {/* Download is available for every file type */}
                         {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
 
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onSelect={(e) => e.preventDefault()}
-                        >
-                          <DeleteDeliverable
-                            deliverableId={d._id}
-                            fileName={d.fileName}
-                            trigger={<span className="w-full text-sm">Delete</span>}
-                          />
-                        </DropdownMenuItem>
+                        {deleteLocked ? (
+                          <DropdownMenuItem disabled className="text-muted-foreground">
+                            Delete (locked)
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <DeleteDeliverable
+                              deliverableId={d._id}
+                              fileName={d.fileName}
+                              trigger={<span className="w-full text-sm">Delete</span>}
+                            />
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -658,7 +741,6 @@ export function TabsDemo({
       {/* OnlyOffice editor */}
       {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
         <OnlyOfficeEditor
-          // key changes after every save, so OnlyOffice never serves a stale cached copy
           fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
           deliverableId={officeDoc.deliverableId}
           fileName={officeDoc.fileName}
@@ -666,6 +748,10 @@ export function TabsDemo({
           mode={officeDoc.mode}
           userId={user?.id}
           userName={user?.fullName ?? undefined}
+          docKey={officeDoc.draft?.docKey}
+          draftId={officeDoc.draft?.id}
+          baseVersion={officeDoc.draft?.baseVersion}
+          onSubmit={officeDoc.draft ? submitDraft : undefined}
           onClose={() => setOfficeDoc(null)}
         />
       )}

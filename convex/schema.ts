@@ -16,7 +16,6 @@ export default defineSchema({
       v.literal("adviser"),
       v.literal("admin")
     ),
-    // Empty (older accounts) counts as approved
     status: v.optional(
       v.union(
         v.literal("pending"),
@@ -101,6 +100,13 @@ export default defineSchema({
     comments: v.number(),
     storageId: v.optional(v.id("_storage")),
   }),
+
+    deliverableDrafts: defineTable({
+    deliverableId: v.id("deliverables"),
+    storageId: v.id("_storage"),
+    baseVersion: v.number(),
+    updatedAt: v.number(),
+  }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({
     deliverableId: v.id("deliverables"),

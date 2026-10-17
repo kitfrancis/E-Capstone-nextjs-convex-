@@ -49,6 +49,43 @@ export const addProject = mutation({
   },
 });
 
+// Admin-only metadata edit. Only these five fields can change.
+// The file (storageId) and archivedDate are never touched.
+export const updateProject = mutation({
+  args: {
+    projectId: v.id("projects"),
+    title: v.optional(v.string()),
+    course: v.optional(v.string()),
+    year: v.optional(v.number()),
+    team: v.optional(v.string()),
+    adviser: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, ...fields }) => {
+    const admin = await requireAdmin(ctx);
+
+    const project = await ctx.db.get(projectId);
+    if (!project) throw new Error("Project not found");
+
+    const patch: Record<string, string | number> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === undefined) continue;
+      const clean = typeof value === "string" ? value.trim() : value;
+      if (clean === "") continue;
+      if ((project as Record<string, unknown>)[key] === clean) continue;
+      patch[key] = clean;
+    }
+    if (Object.keys(patch).length === 0) return;
+
+    await ctx.db.patch(projectId, patch);
+    await logAction(
+      ctx,
+      admin,
+      `Edited archived project (${Object.keys(patch).join(", ")})`,
+      project.title
+    );
+  },
+});
+
 export const deleteProject = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {

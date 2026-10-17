@@ -24,7 +24,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Eye, Trash2, Upload } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Eye, MoreVertical, Pencil, Trash2, Upload } from "lucide-react";
+import {
+  EditArchiveDialog,
+  type EditableProject,
+} from "@/app/components/EditArchiveDialog";
 
 const PDFViewer = dynamic(
   () =>
@@ -69,6 +79,8 @@ export default function AdminArchivePage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+
+  const [editing, setEditing] = useState<EditableProject | null>(null);
 
   const [viewing, setViewing] = useState<{
     storageId: Id<"_storage">;
@@ -265,32 +277,54 @@ export default function AdminArchivePage() {
                 <td className="px-4 py-3 text-muted-foreground">{p.team}</td>
                 <td className="px-4 py-3 text-muted-foreground">{p.year}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                  {p.archivedDate}
+                  {p.archivedDate.slice(0, 10)}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="View file"
-                      disabled={!p.storageId}
-                      onClick={() =>
-                        p.storageId &&
-                        setViewing({ storageId: p.storageId, fileName: p.title })
-                      }
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Delete"
-                      className="text-red-500 hover:text-red-600"
-                      onClick={() => handleDelete(p._id, p.title)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Project actions"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={!p.storageId}
+                        onSelect={() =>
+                          p.storageId &&
+                          setViewing({ storageId: p.storageId, fileName: p.title })
+                        }
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        View file
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          setEditing({
+                            _id: p._id,
+                            title: p.title,
+                            course: p.course,
+                            year: p.year,
+                            team: p.team,
+                            adviser: p.adviser,
+                          })
+                        }
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-500 focus:text-red-600"
+                        onSelect={() => handleDelete(p._id, p.title)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               </tr>
             ))}
@@ -301,6 +335,9 @@ export default function AdminArchivePage() {
       <p className="text-xs text-muted-foreground">
         Showing {filtered.length} of {projects?.length ?? 0} projects
       </p>
+
+      {/* Edit dialog (one for the whole page) */}
+      <EditArchiveDialog project={editing} onClose={() => setEditing(null)} />
 
       {/* Upload dialog */}
       <Dialog open={showUpload} onOpenChange={handleOpenChange}>

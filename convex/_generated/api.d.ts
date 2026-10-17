@@ -15,6 +15,7 @@ import type * as adviser from "../adviser.js";
 import type * as archive from "../archive.js";
 import type * as dashboard from "../dashboard.js";
 import type * as defense from "../defense.js";
+import type * as drafts from "../drafts.js";
 import type * as notifications from "../notifications.js";
 import type * as users from "../users.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   archive: typeof archive;
   dashboard: typeof dashboard;
   defense: typeof defense;
+  drafts: typeof drafts;
   notifications: typeof notifications;
   users: typeof users;
 }>;

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 type OnlyOfficeEditorProps = {
-  fileId: string; 
+  fileId: string;
   deliverableId: string;
   fileName: string;
   fileUrl: string;
@@ -11,6 +11,11 @@ type OnlyOfficeEditorProps = {
   userId?: string;
   userName?: string;
   onClose: () => void;
+  // NEW: draft editing
+  docKey?: string;                 // unique per editor session (falls back to fileId)
+  draftId?: string;                // tells the callback to save into the draft, not a version
+  baseVersion?: number;            // shows "Draft based on v1" and labels the button "Submit as v2"
+  onSubmit?: () => Promise<void>;  // parent calls POST /submit; throws on failure
 };
 
 type DocsApi = {
@@ -92,14 +97,20 @@ export default function OnlyOfficeEditor({
   deliverableId,
   fileName,
   fileUrl,
-  mode = "view", 
+  mode = "view",
   userId,
   userName,
   onClose,
+  docKey,
+  draftId,
+  baseVersion,
+  onSubmit,
 }: OnlyOfficeEditorProps) {
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
@@ -107,6 +118,8 @@ export default function OnlyOfficeEditor({
     (typeof window === "undefined"
       ? ""
       : `${window.location.origin}/api/onlyoffice/callback`);
+
+  const canSubmit = mode === "edit" && !!onSubmit;
 
   useEffect(() => {
     let cancelled = false;
@@ -130,11 +143,16 @@ export default function OnlyOfficeEditor({
 
       if (cancelled || !window.DocsAPI) return;
 
+      // NEW: draftId is added so the callback knows to write to the draft
+      const query =
+        `fileId=${encodeURIComponent(deliverableId)}` +
+        (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "");
+
       document.getElementById(elementId)?.replaceChildren();
       editorRef.current = new window.DocsAPI.DocEditor(elementId, {
         document: {
           fileType: fileName.split(".").pop()?.toLowerCase() || "docx",
-          key: fileId,
+          key: docKey ?? fileId, // CHANGED: must be unique per editing session
           permissions: {
             comment: mode !== "view",
             edit: mode === "edit",
@@ -147,7 +165,7 @@ export default function OnlyOfficeEditor({
         },
         documentType: getDocumentType(fileName),
         editorConfig: {
-          callbackUrl: `${callbackUrl}?fileId=${encodeURIComponent(deliverableId)}`,
+          callbackUrl: `${callbackUrl}?${query}`,
           customization: { autosave: true, forcesave: true },
           mode: mode === "view" ? "view" : "edit",
           user: userId ? { id: userId, name: userName ?? "User" } : undefined,
@@ -182,19 +200,59 @@ export default function OnlyOfficeEditor({
       editorRef.current = null;
       document.getElementById(elementId)?.replaceChildren();
     };
-  }, [callbackUrl, mode, userId, userName, deliverableId, fileId, fileName, fileUrl, serverUrl]);
+  }, [callbackUrl, mode, userId, userName, deliverableId, fileId, fileName, fileUrl, serverUrl, docKey, draftId]);
+
+  // NEW: Submit button handler
+  async function handleSubmit() {
+    if (!onSubmit) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await onSubmit(); // server forcesaves, then creates the new version
+      editorRef.current?.destroyEditor();
+      editorRef.current = null;
+      onClose();
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Submit failed. Your draft is still saved.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#17232b]">
-      <div className="flex items-center justify-between bg-[#173f4a] px-4 py-3 text-white">
-        <p className="truncate text-sm font-bold">{fileName}</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10"
-        >
-          Close
-        </button>
+      <div className="flex items-center justify-between gap-3 bg-[#173f4a] px-4 py-3 text-white">
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="truncate text-sm font-bold">{fileName}</p>
+          {draftId && baseVersion !== undefined && (
+            <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs">
+              Draft based on v{baseVersion}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {submitError && <span className="text-xs text-amber-300">{submitError}</span>}
+          {canSubmit && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting || loading || !!loadError}
+              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+            >
+              {submitting ? "Submitting…" : `Submit as v${(baseVersion ?? 1) + 1}`}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10 disabled:opacity-50"
+          >
+            Close
+          </button>
+        </div>
       </div>
       {loadError ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white">
