@@ -41,7 +41,7 @@ export const getByDeliverable = query({
 export const generateDraftUploadUrl = mutation({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {
-    if (secret !== process.env.ONLYOFFICE_CALLBACK_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -49,7 +49,7 @@ export const generateDraftUploadUrl = mutation({
 export const saveDraftFile = mutation({
   args: { secret: v.string(), draftId: v.id("deliverableDrafts"), storageId: v.id("_storage") },
   handler: async (ctx, { secret, draftId, storageId }) => {
-    if (secret !== process.env.ONLYOFFICE_CALLBACK_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
     const draft = await ctx.db.get(draftId);
     if (!draft) return; // draft already submitted: ignore a late callback
     const original = await ctx.db.get(draft.deliverableId);

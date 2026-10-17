@@ -11,12 +11,13 @@ const DOCX_MIME =
 export async function POST(req: Request) {
   const body = await req.json();
   const draftId = new URL(req.url).searchParams.get("draftId");
+  console.log("OO callback", draftId, body.status, body.url);
 
   // Draft edits: save into the draft only, never touch the original deliverable.
   if (draftId) {
     if (body.status === 2 || body.status === 6) {
       try {
-        const secret = process.env.ONLYOFFICE_CALLBACK_SECRET!;
+        const secret = process.env.ONLYOFFICE_SECRET!;
         const buf = await (await fetch(body.url)).arrayBuffer();
 
         const uploadUrl = await convex.mutation(api.drafts.generateDraftUploadUrl, { secret });
@@ -34,13 +35,11 @@ export async function POST(req: Request) {
         });
       } catch (err) {
         console.error("Draft save failed:", err);
-        return NextResponse.json({ error: 1 }); // tells OnlyOffice the save failed
+        return NextResponse.json({ error: 1 });
       }
     }
     return NextResponse.json({ error: 0 });
   }
 
-  // Non-draft callbacks (your existing behavior) go here.
-  // Until you paste that logic in, just acknowledge so the editor doesn't show an error.
   return NextResponse.json({ error: 0 });
 }

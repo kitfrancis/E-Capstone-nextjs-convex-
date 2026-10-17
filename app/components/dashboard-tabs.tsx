@@ -741,7 +741,7 @@ export function TabsDemo({
       {/* OnlyOffice editor */}
       {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
         <OnlyOfficeEditor
-          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
+          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}${officeDoc.mode === "view" ? "-view2" : ""}`}
           deliverableId={officeDoc.deliverableId}
           fileName={officeDoc.fileName}
           fileUrl={officeUrl}
