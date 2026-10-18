@@ -147,8 +147,9 @@ export default function OnlyOfficeEditor({
       // NEW: draftId is added so the callback knows to write to the draft
       const query =
         `fileId=${encodeURIComponent(deliverableId)}` +
-        (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "");
-
+        (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
+        (mode === "comment" ? "&notify=1" : "");
+        
       document.getElementById(elementId)?.replaceChildren();
       editorRef.current = new window.DocsAPI.DocEditor(elementId, {
         document: {

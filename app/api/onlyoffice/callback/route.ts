@@ -10,7 +10,8 @@ const DOCX_MIME =
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const draftId = new URL(req.url).searchParams.get("draftId");
+  const params = new URL(req.url).searchParams;
+  const draftId = params.get("draftId");
   console.log("OO callback", draftId, body.status, body.url);
 
   // Draft edits: save into the draft only, never touch the original deliverable.
@@ -39,6 +40,30 @@ export async function POST(req: Request) {
       }
     }
     return NextResponse.json({ error: 0 });
+  }
+
+  // Adviser / instructor comment sessions: tell the students when the document
+  // is saved with changes (status 2 = closed after edits, 6 = force-save while
+  // still open). A failed notification never makes OnlyOffice show an error.
+  const fileId = params.get("fileId");
+  if (
+    params.get("notify") === "1" &&
+    (body.status === 2 || body.status === 6) &&
+    fileId
+  ) {
+    const clerkIds: string[] = Array.isArray(body.users) ? body.users : [];
+    for (const clerkId of clerkIds) {
+      try {
+        // The mutation ignores anyone who isn't an adviser/instructor on this team
+        await convex.mutation(api.dashboard.notifyOfficeComment, {
+          secret: process.env.ONLYOFFICE_SECRET!,
+          deliverableId: fileId as Id<"deliverables">,
+          clerkId,
+        });
+      } catch (err) {
+        console.error("Comment notification failed:", err);
+      }
+    }
   }
 
   return NextResponse.json({ error: 0 });

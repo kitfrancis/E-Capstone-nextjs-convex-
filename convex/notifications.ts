@@ -10,6 +10,10 @@ export const NOTIFICATION_TYPES = [
   "task_confirmed", // instructor confirmed a task
   "comment_added",
   "deliverable_uploaded",
+  "deliverable_resubmitted",
+  "chat_message",
+  "deliverable_needs_revision",
+  "deliverable_approved",
 ] as const;
 
 const MAX_LIST = 50;

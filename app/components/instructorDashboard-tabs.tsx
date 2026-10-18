@@ -48,7 +48,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
+  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+
 
 const PDFViewer = dynamic(
   () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
@@ -224,6 +226,22 @@ export function InstructorTabsDemo({
       toast.error("Couldn't update the task. Try again.");
     }
   };
+
+  const updateStatus = useMutation(api.dashboard.adviserDeliverableStatus);
+const handleStatus = async (
+  deliverableId: Id<"deliverables">,
+  status: "approved" | "needs_revision"
+) => {
+  try {
+    await updateStatus({ deliverableId, status });
+    toast.success(
+      status === "approved" ? "Deliverable approved." : "Sent back to the team for revision."
+    );
+  } catch (err) {
+    console.error(err);
+    toast.error(err instanceof Error ? err.message : "Couldn't update the deliverable.");
+  }
+};
 
   const allDeliverables = useQuery(api.dashboard.getInstructorDeliverables, myId ? { instructorId: myId } : "skip");
   const allTeams = useQuery(api.dashboard.getInstructorTeams, myId ? { instructorId: myId } : "skip");
@@ -570,37 +588,61 @@ export function InstructorTabsDemo({
                     </div>
 
                     <div className="flex items-center gap-3 justify-between sm:justify-end">
-                      <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
-                      {isPdf(d.fileName) ? (
-                        <Button
-                          size="sm"
-                          className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
-                          onClick={() =>
-                            setSelectedDeliverable({
-                              fileName: d.fileName,
-                              storageId: d.storageId!,
-                              deliverableId: d._id,
-                            })
-                          }
-                        >
-                          View File
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
-                          onClick={() =>
-                            setOfficeDoc({
-                              fileName: d.fileName,
-                              storageId: d.storageId!,
-                              deliverableId: d._id,
-                            })
-                          }
-                        >
-                          Open &amp; Comment
-                        </Button>
-                      )}
-                    </div>
+  <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
+
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="Submission options">
+        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className="w-44">
+      {isPdf(d.fileName) ? (
+        <DropdownMenuItem
+          onClick={() =>
+            setSelectedDeliverable({
+              fileName: d.fileName,
+              storageId: d.storageId!,
+              deliverableId: d._id,
+            })
+          }
+        >
+          View File
+        </DropdownMenuItem>
+      ) : (
+        <DropdownMenuItem
+          onClick={() =>
+            setOfficeDoc({
+              fileName: d.fileName,
+              storageId: d.storageId!,
+              deliverableId: d._id,
+            })
+          }
+        >
+          View File
+        </DropdownMenuItem>
+      )}
+
+      {/* Only the instructor approves or requests revision, on submissions waiting for review */}
+      {d.status === "under_review" && (
+        <>
+          <DropdownMenuItem
+            onClick={() => handleStatus(d._id, "needs_revision")}
+            className="text-amber-600 focus:text-amber-600"
+          >
+            Request Revision
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => handleStatus(d._id, "approved")}
+            className="text-green-600 focus:text-green-600"
+          >
+            Approve
+          </DropdownMenuItem>
+        </>
+      )}
+    </DropdownMenuContent>
+  </DropdownMenu>
+</div>
                   </div>
                 </div>
               ))

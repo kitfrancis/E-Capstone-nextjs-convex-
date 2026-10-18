@@ -312,22 +312,8 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                             <DropdownMenuContent align="end" className="w-44">
                               <DropdownMenuGroup>
                                 {d.status === "under_review" && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => openInOffice(d)}>Add Comment</DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => updateStatus({ deliverableId: d._id, status: "needs_revision" })}
-                                      className="text-amber-600 focus:text-amber-600"
-                                    >
-                                      Request Revision
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => updateStatus({ deliverableId: d._id, status: "approved" })}
-                                      className="text-green-600 focus:text-green-600"
-                                    >
-                                      Approve
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
+  <DropdownMenuItem onClick={() => openInOffice(d)}>Add Comment</DropdownMenuItem>
+)}
                                 {d.status === "needs_revision" && (
                                   <>
                                     <DropdownMenuItem onClick={() => openInOffice(d)}>View Feedback</DropdownMenuItem>

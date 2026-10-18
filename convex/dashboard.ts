@@ -510,15 +510,26 @@ export const saveDeliverable = mutation({
       `${args.fileName} (v${version}) for team "${project.teamName}"`
     );
 
-    if (project.adviserId) {
+    // Tell the adviser AND the instructor (never the person who submitted)
+    const isResubmission = version > 1;
+    const recipients = new Set<string>();
+    if (project.adviserId) recipients.add(project.adviserId);
+    if (project.instructorId) recipients.add(project.instructorId);
+    recipients.delete(caller._id);
+
+    for (const userId of recipients) {
       await ctx.runMutation(api.notifications.sendNotification, {
-        userId: project.adviserId,
-        message: `Team "${project.teamName}" uploaded ${
-          version > 1 ? `version ${version} of ` : ""
-        }a deliverable: "${args.fileName}".`,
-        type: "deliverable_uploaded",
+        userId,
+        message: isResubmission
+          ? `Team "${project.teamName}" resubmitted "${args.fileName}" as version ${version}. It's waiting for your review.`
+          : `Team "${project.teamName}" uploaded a deliverable: "${args.fileName}".`,
+        type: isResubmission ? "deliverable_resubmitted" : "deliverable_uploaded",
         relatedId: deliverableId,
-        link: `/dashboard/adviser?projectId=${args.capstoneProjectId}&deliverableId=${deliverableId}`,
+        // adviser link as before; instructor has no link until you tell me the route
+        link:
+          userId === project.adviserId
+            ? `/dashboard/adviser?projectId=${args.capstoneProjectId}&deliverableId=${deliverableId}`
+            : "/dashboard/instructor",
       });
     }
   },
@@ -544,6 +555,8 @@ export const deleteDeliverable = mutation({
   },
 });
 
+// Only THIS team's instructor (or admin) can approve / request revision.
+// Advisers can comment but can't change the status.
 export const adviserDeliverableStatus = mutation({
   args: {
     deliverableId: v.id("deliverables"),
@@ -554,17 +567,17 @@ export const adviserDeliverableStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const caller = await requireRole(ctx, ["adviser", "instructor", "admin"]);
+    const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const deliverable = await ctx.db.get(args.deliverableId);
     if (!deliverable) throw new Error("Deliverable not found");
 
-    // Must be THIS team's adviser/instructor (or admin)
     const project = await ctx.db.get(deliverable.capstoneProjectId);
-    if (!project || !canAccess(caller, project)) {
-      throw new Error("Not authorized");
+    if (!project || !canManage(caller, project)) {
+      throw new Error("Only this team's instructor can change the status.");
     }
 
+    const changed = deliverable.status !== args.status;
     await ctx.db.patch(args.deliverableId, { status: args.status });
 
     await logAction(
@@ -573,6 +586,23 @@ export const adviserDeliverableStatus = mutation({
       "Updated deliverable status",
       `${deliverable.fileName} → ${args.status.replace("_", " ")}`
     );
+
+    // Tell the students when the status changes to approved / needs revision
+    if (changed && (args.status === "needs_revision" || args.status === "approved")) {
+      const needsRevision = args.status === "needs_revision";
+      for (const memberId of project.members ?? []) {
+        if (memberId === caller._id) continue;
+        await ctx.runMutation(api.notifications.sendNotification, {
+          userId: memberId,
+          message: needsRevision
+            ? `${caller.name} marked "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}) as needs revision. Please review the feedback and resubmit.`
+            : `${caller.name} approved "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}).`,
+          type: needsRevision ? "deliverable_needs_revision" : "deliverable_approved",
+          relatedId: args.deliverableId,
+          link: "/dashboard/student",
+        });
+      }
+    }
   },
 });
 
@@ -1027,22 +1057,34 @@ export const addPdfComment = mutation({
       comments: (deliverable.comments || 0) + 1,
     });
 
-    for (const memberId of project.members ?? []) {
-      if (memberId === caller._id) continue;
+    // Team members + adviser + instructor, except whoever wrote the comment
+    const members = project.members ?? [];
+    const recipients = new Set<string>(members);
+    if (project.adviserId) recipients.add(project.adviserId);
+    if (project.instructorId) recipients.add(project.instructorId);
+    recipients.delete(caller._id);
+
+    const preview = `${args.comment.slice(0, 80)}${args.comment.length > 80 ? "..." : ""}`;
+
+    for (const userId of recipients) {
+      const link = members.includes(userId)
+        ? `/dashboard/student?deliverableId=${args.deliverableId}&page=${args.pageNumber}`
+        : userId === project.adviserId
+          ? `/dashboard/adviser?projectId=${project._id}&deliverableId=${args.deliverableId}`
+          : "/dashboard/instructor";
 
       await ctx.runMutation(api.notifications.sendNotification, {
-        userId: memberId,
-        message: `A new comment has been added to the deliverable "${deliverable.fileName}" : "${args.comment.slice(0, 80)}${args.comment.length > 80 ? "..." : ""}".`,
+        userId,
+        message: `${caller.name} commented on "${deliverable.fileName}": "${preview}"`,
         type: "comment_added",
         relatedId: commentId,
-        link: `/dashboard/student?deliverableId=${args.deliverableId}&page=${args.pageNumber}`,
+        link,
       });
     }
 
     return commentId;
   },
 });
-
 // Only the author (or an admin) can delete a comment
 export const deletePdfComment = mutation({
   args: { commentId: v.id("pdfComments") },
@@ -1121,5 +1163,39 @@ export const joinTeam = mutation({
     await logAction(ctx, caller, "Joined team", `${caller.name} joined "${team.teamName}"`);
 
     return { teamName: team.teamName };
+  },
+});
+
+// Called ONLY by the OnlyOffice callback route (checked with the shared secret).
+// When an adviser/instructor leaves a document they commented on, tell the students.
+export const notifyOfficeComment = mutation({
+  args: {
+    secret: v.string(),
+    deliverableId: v.id("deliverables"),
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+
+    const author = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+    if (!author || (author.role !== "adviser" && author.role !== "instructor")) return;
+
+    const deliverable = await ctx.db.get(args.deliverableId);
+    if (!deliverable) return;
+    const project = await ctx.db.get(deliverable.capstoneProjectId);
+    if (!project || !canAccess(author, project)) return;
+
+    for (const memberId of project.members ?? []) {
+      await ctx.runMutation(api.notifications.sendNotification, {
+        userId: memberId,
+        message: `${author.name} added comments on "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}). Open the file to read them.`,
+        type: "comment_added",
+        relatedId: args.deliverableId,
+        link: "/dashboard/student",
+      });
+    }
   },
 });
