@@ -421,16 +421,27 @@ export const getStudents = query({
 });
 
 // Only returns a URL if the file belongs to a deliverable you can access
+// Returns a URL if the file belongs to a deliverable you can access,
+// or to a draft of one of those deliverables
 export const getFileUrl = query({
   args: { storageId: v.id("_storage") },
   handler: async (ctx, args) => {
     const user = await getCaller(ctx);
     if (!user) return null;
 
-    const deliverable = await ctx.db
+    let deliverable = await ctx.db
       .query("deliverables")
       .filter((q) => q.eq(q.field("storageId"), args.storageId))
       .first();
+
+    // not a deliverable's file? check whether it's a draft's file
+    if (!deliverable) {
+      const draft = await ctx.db
+        .query("deliverableDrafts")
+        .filter((q) => q.eq(q.field("storageId"), args.storageId))
+        .first();
+      if (draft) deliverable = await ctx.db.get(draft.deliverableId);
+    }
     if (!deliverable) return null;
 
     const project = await ctx.db.get(deliverable.capstoneProjectId);
@@ -439,7 +450,6 @@ export const getFileUrl = query({
     return await ctx.storage.getUrl(args.storageId);
   },
 });
-
 // ---------------------------------------------------------------------------
 // Deliverables
 // ---------------------------------------------------------------------------

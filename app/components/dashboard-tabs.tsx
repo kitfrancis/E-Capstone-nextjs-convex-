@@ -208,7 +208,6 @@ export function TabsDemo({
     storageId: string;
     deliverableId: string;
     mode: "edit" | "view";
-    // set only while a student is editing a draft
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
   const officeUrl = useQuery(
@@ -216,12 +215,34 @@ export function TabsDemo({
     officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
   );
 
+  // Remember the file URL once it has loaded, so a late save that replaces the
+  // draft file can't tear the editor down while you're working in it.
+  const [loadedOfficeUrl, setLoadedOfficeUrl] = useState<{ storageId: string; url: string } | null>(null);
+
   useEffect(() => {
-  if (officeDoc && officeUrl === null) {
-    toast.error("The draft file is missing. Please try again.");
-    setOfficeDoc(null);
-  }
-}, [officeDoc, officeUrl]);
+    if (!officeDoc) {
+      setLoadedOfficeUrl(null);
+      return;
+    }
+    if (
+      typeof officeUrl === "string" &&
+      officeUrl.startsWith("http") &&
+      loadedOfficeUrl?.storageId !== officeDoc.storageId
+    ) {
+      setLoadedOfficeUrl({ storageId: officeDoc.storageId, url: officeUrl });
+    }
+  }, [officeDoc, officeUrl, loadedOfficeUrl]);
+
+  const resolvedOfficeUrl =
+    officeDoc && loadedOfficeUrl?.storageId === officeDoc.storageId ? loadedOfficeUrl.url : null;
+
+  // Only complain if the file never loaded at all
+  useEffect(() => {
+    if (officeDoc && officeUrl === null && !resolvedOfficeUrl) {
+      toast.error("The draft file is missing. Please try again.");
+      setOfficeDoc(null);
+    }
+  }, [officeDoc, officeUrl, resolvedOfficeUrl]);
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
@@ -235,7 +256,6 @@ export function TabsDemo({
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
 
-  // Progress is computed from the latest version of each chapter
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
@@ -294,7 +314,7 @@ export function TabsDemo({
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: `${draft.draftId}_${Date.now()}`, // created once per editing session
+          docKey: `${draft.draftId}_${Date.now()}`,
           phase: d.phase,
           fileSize: d.fileSize,
         },
@@ -302,6 +322,36 @@ export function TabsDemo({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
     }
+  };
+
+  // Close: save the latest edits to the draft first, then close the editor.
+  const closeEditor = async () => {
+    const doc = officeDoc;
+    if (doc?.draft) {
+      try {
+        const deliverableId = doc.deliverableId as Id<"deliverables">;
+        const before =
+          (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
+
+        const res = await fetch("/api/onlyoffice/forcesave", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: doc.draft.docKey }),
+        }).then((r) => r.json());
+
+        if (res.ok && res.waitForCallback) {
+          for (let i = 0; i < 20; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
+            if (cur && cur.updatedAt > before) break;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Couldn't save your latest edits before closing.");
+      }
+    }
+    setOfficeDoc(null);
   };
 
   // Submit button in the editor header: save latest edits, then create the next version.
@@ -514,7 +564,7 @@ export function TabsDemo({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                        {/* NEW: edit the file in OnlyOffice as a draft, then submit as the next version */}
+                        {/* Edit the file in OnlyOffice as a draft, then submit as the next version */}
                         {d.status === "needs_revision" && isLatest && isOffice(d.fileName) && (
                           <DropdownMenuItem onClick={() => startEdit(d)}>
                             Edit &amp; resubmit
@@ -746,12 +796,12 @@ export function TabsDemo({
       />
 
       {/* OnlyOffice editor */}
-      {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
+      {officeDoc && resolvedOfficeUrl && (
         <OnlyOfficeEditor
           fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}${officeDoc.mode === "view" ? "-view2" : ""}`}
           deliverableId={officeDoc.deliverableId}
           fileName={officeDoc.fileName}
-          fileUrl={officeUrl}
+          fileUrl={resolvedOfficeUrl}
           mode={officeDoc.mode}
           userId={user?.id}
           userName={user?.fullName ?? undefined}
@@ -759,7 +809,7 @@ export function TabsDemo({
           draftId={officeDoc.draft?.id}
           baseVersion={officeDoc.draft?.baseVersion}
           onSubmit={officeDoc.draft ? submitDraft : undefined}
-          onClose={() => setOfficeDoc(null)}
+          onClose={closeEditor}
         />
       )}
     </Tabs>

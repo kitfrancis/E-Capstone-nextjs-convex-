@@ -10,7 +10,7 @@ type OnlyOfficeEditorProps = {
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
-  onClose: () => void;
+  onClose: () => void | Promise<void>; // CHANGED: can be async so Close can wait for the save
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
   draftId?: string;                // tells the callback to save into the draft, not a version
@@ -110,6 +110,7 @@ export default function OnlyOfficeEditor({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [closing, setClosing] = useState(false); // NEW
   const [submitError, setSubmitError] = useState<string | null>(null);
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
@@ -221,6 +222,16 @@ export default function OnlyOfficeEditor({
     }
   }
 
+  // NEW: Close waits for the parent to save the draft before closing
+  async function handleClose() {
+    setClosing(true);
+    try {
+      await onClose();
+    } finally {
+      setClosing(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#17232b]">
       <div className="flex items-center justify-between gap-3 bg-[#173f4a] px-4 py-3 text-white">
@@ -238,7 +249,7 @@ export default function OnlyOfficeEditor({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || loading || !!loadError}
+              disabled={submitting || closing || loading || !!loadError}
               className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {submitting ? "Submitting…" : `Submit as v${(baseVersion ?? 1) + 1}`}
@@ -246,11 +257,11 @@ export default function OnlyOfficeEditor({
           )}
           <button
             type="button"
-            onClick={onClose}
-            disabled={submitting}
+            onClick={handleClose}
+            disabled={submitting || closing}
             className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10 disabled:opacity-50"
           >
-            Close
+            {closing ? "Saving…" : "Close"}
           </button>
         </div>
       </div>
