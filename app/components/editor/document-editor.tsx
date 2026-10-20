@@ -149,12 +149,15 @@ export default function OnlyOfficeEditor({
         `fileId=${encodeURIComponent(deliverableId)}` +
         (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
         (mode === "comment" ? "&notify=1" : "");
+      // Every browser editing the same draft must use the same key so
+      // OnlyOffice places them in the same collaborative editing session.
+      const documentKey = draftId ?? docKey ?? fileId;
         
       document.getElementById(elementId)?.replaceChildren();
       editorRef.current = new window.DocsAPI.DocEditor(elementId, {
         document: {
           fileType: fileName.split(".").pop()?.toLowerCase() || "docx",
-          key: docKey ?? fileId, // CHANGED: must be unique per editing session
+          key: documentKey,
           permissions: {
             comment: mode !== "view",
             edit: mode === "edit",
@@ -168,6 +171,10 @@ export default function OnlyOfficeEditor({
         documentType: getDocumentType(fileName),
         editorConfig: {
           callbackUrl: `${callbackUrl}?${query}`,
+          coEditing: {
+            mode: "fast",
+            change: true,
+          },
           customization: { autosave: true, forcesave: true },
           mode: mode === "view" ? "view" : "edit",
           user: userId ? { id: userId, name: userName ?? "User" } : undefined,

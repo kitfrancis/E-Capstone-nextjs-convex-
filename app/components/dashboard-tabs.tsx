@@ -314,7 +314,7 @@ export function TabsDemo({
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: `${draft.draftId}_${Date.now()}`,
+          docKey: draft.draftId,
           phase: d.phase,
           fileSize: d.fileSize,
         },
