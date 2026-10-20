@@ -564,13 +564,6 @@ export function TabsDemo({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                        {/* Edit the latest file in OnlyOffice as a draft, then submit as the next version */}
-                        {isLatest && isOffice(d.fileName) && (
-                          <DropdownMenuItem onClick={() => startEdit(d)}>
-                            Edit &amp; submit as new version
-                          </DropdownMenuItem>
-                        )}
-
                         {d.status === "needs_revision" && (
                           <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
                             Resubmit
@@ -607,15 +600,17 @@ export function TabsDemo({
                         ) : isOffice(d.fileName) ? (
                           <DropdownMenuItem
                             onClick={() =>
-                              setOfficeDoc({
-                                fileName: d.fileName,
-                                storageId: d.storageId!,
-                                deliverableId: d._id,
-                                mode: "view",
-                              })
+                              isLatest
+                                ? startEdit(d)
+                                : setOfficeDoc({
+                                    fileName: d.fileName,
+                                    storageId: d.storageId!,
+                                    deliverableId: d._id,
+                                    mode: "view",
+                                  })
                             }
                           >
-                            View in Editor
+                            {isLatest ? "Open for editing" : "View in Editor"}
                           </DropdownMenuItem>
                         ) : null}
 
