@@ -10,6 +10,6 @@ export async function POST(req: Request) {
   }).then((res) => res.json());
 
   if (r.error === 0) return NextResponse.json({ ok: true, waitForCallback: true });
-  if (r.error === 4) return NextResponse.json({ ok: true, waitForCallback: false }); // no changes since last save
+  if (r.error === 4) return NextResponse.json({ ok: true, waitForCallback: false });
   return NextResponse.json({ ok: false, error: r.error }, { status: 502 });
 }
