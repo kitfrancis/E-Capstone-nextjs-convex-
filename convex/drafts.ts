@@ -1,17 +1,29 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// Student clicks "Edit & resubmit": create the draft, or return the existing one.
+// Student starts editing a deliverable: create the draft, or return the existing one.
 export const startDraft = mutation({
   args: { deliverableId: v.id("deliverables") },
   handler: async (ctx, { deliverableId }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not signed in");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+    if (!user || user.role !== "student" || user.status === "pending" || user.status === "rejected") {
+      throw new Error("Only approved students can edit deliverables.");
+    }
+
     const d = await ctx.db.get(deliverableId);
     if (!d || !d.storageId) throw new Error("File not found");
-    if (d.status !== "needs_revision") throw new Error("Only chapters that need revision can be edited.");
 
-    // NEW: fail with a clear message if the original file is gone
+    const project = await ctx.db.get(d.capstoneProjectId);
+    if (!project || !(project.members ?? []).includes(user._id)) {
+      throw new Error("You can only edit deliverables from your own team.");
+    }
+
     const originalUrl = await ctx.storage.getUrl(d.storageId);
     if (!originalUrl) throw new Error("The original file is missing. Please upload this chapter again.");
 

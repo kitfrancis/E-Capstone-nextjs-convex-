@@ -302,7 +302,7 @@ export function TabsDemo({
     }
   };
 
-  // "Edit & resubmit": open (or create) the draft and open the editor on it.
+  // Open (or create) the draft and open the editor on it.
   const startEdit = async (d: NonNullable<typeof deliverables>[number]) => {
     try {
       const draft = await startDraft({ deliverableId: d._id });
@@ -564,10 +564,10 @@ export function TabsDemo({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                        {/* Edit the file in OnlyOffice as a draft, then submit as the next version */}
-                        {d.status === "needs_revision" && isLatest && isOffice(d.fileName) && (
+                        {/* Edit the latest file in OnlyOffice as a draft, then submit as the next version */}
+                        {isLatest && isOffice(d.fileName) && (
                           <DropdownMenuItem onClick={() => startEdit(d)}>
-                            Edit &amp; resubmit
+                            Edit &amp; submit as new version
                           </DropdownMenuItem>
                         )}
 
