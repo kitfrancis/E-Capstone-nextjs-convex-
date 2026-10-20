@@ -537,8 +537,25 @@ export function TabsDemo({
             const isLatest = !!cp && cp.latestId === d._id;
             // Locked once the chapter (or this file) is approved. Only admins can delete.
             const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
+            const canOpenForEditing = isLatest && isOffice(d.fileName);
             return (
-              <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
+              <div
+                key={d._id}
+                className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""} ${
+                  canOpenForEditing ? "cursor-pointer" : ""
+                }`}
+                onClick={() => {
+                  if (canOpenForEditing) void startEdit(d);
+                }}
+                onKeyDown={(event) => {
+                  if (canOpenForEditing && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    void startEdit(d);
+                  }
+                }}
+                role={canOpenForEditing ? "button" : undefined}
+                tabIndex={canOpenForEditing ? 0 : undefined}
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
@@ -559,17 +576,15 @@ export function TabsDemo({
                     <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="File options">
+                        <button
+                          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                          aria-label="File options"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           <MoreVertical className="h-4 w-4 text-muted-foreground" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                        {d.status === "needs_revision" && (
-                          <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
-                            Resubmit
-                          </DropdownMenuItem>
-                        )}
-
                         {isPdf(d.fileName) ? (
                           <>
                             <DropdownMenuItem
