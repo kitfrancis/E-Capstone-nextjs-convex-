@@ -469,6 +469,8 @@ export const saveDeliverable = mutation({
     phase: v.string(),
     fileSize: v.string(),
     capstoneProjectId: v.id("capstoneProjects"),
+    message: v.optional(v.string()),
+    versionLabel: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const caller = await requireCaller(ctx);
@@ -501,6 +503,8 @@ export const saveDeliverable = mutation({
       uploadedAt: new Date().toISOString(),
       comments: 0,
       storageId: args.storageId,
+      ...(args.message ? { message: args.message } : {}),
+      ...(args.versionLabel ? { versionLabel: args.versionLabel } : {}),
     });
 
     await logAction(
