@@ -1,0 +1,11 @@
+{"name":"users","id":10001}
+{"name":"projects","id":10002}
+{"name":"capstoneProjects","id":10003}
+{"name":"deliverables","id":10004}
+{"name":"tasks","id":10005}
+{"name":"auditLogs","id":10006}
+{"name":"notifications","id":10007}
+{"name":"settings","id":10008}
+{"name":"pdfComments","id":10009}
+{"name":"inviteCodes","id":10010}
+{"name":"deliverableDrafts","id":10011}
