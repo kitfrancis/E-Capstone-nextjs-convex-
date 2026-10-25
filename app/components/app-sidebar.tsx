@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 
 
+import { useSearchParams } from "next/navigation";
+
 const studentLinks = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard, children: [
     { label: "Deliverables", href: "/dashboard/student?tab=deliverables", icon: FileText },
@@ -77,6 +79,8 @@ export function AppSidebar() {
   const { signOut } = useClerk();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") || "deliverables";
 
   const links: LinkItem[] =
     me === undefined
@@ -122,7 +126,7 @@ export function AppSidebar() {
                         <SidebarMenuButton
                           className={`h-11 rounded-xl text-[15px] ${ACTIVE}`}
                           asChild
-                          isActive={pathname === link.href}
+                          isActive={pathname === link.href && !searchParams.get("tab")}
                         >
                           <button onClick={() => router.push(link.href!)}>
                             <link.icon className="h-5 w-5" />
@@ -132,20 +136,44 @@ export function AppSidebar() {
                       </SidebarMenuItem>
                       <SidebarGroupContent>
                         <SidebarMenuSub>
-                          {link.children.map((child) => (
-                            <SidebarMenuSubItem key={child.href}>
-                              <SidebarMenuSubButton
-                                asChild
-                                isActive={pathname === child.href}
-                                className="rounded-lg data-[active=true]:bg-blue-50 data-[active=true]:text-blue-700 dark:data-[active=true]:bg-blue-950/50 dark:data-[active=true]:text-blue-300"
-                              >
-                                <button onClick={() => router.push(child.href)}>
-                                  <child.icon />
-                                  <span>{child.label}</span>
-                                </button>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
+                          {link.children.map((child) => {
+                            const isChildActive = child.href.includes("?tab=")
+                              ? pathname === "/dashboard/student" &&
+                                activeTab === child.href.split("?tab=")[1]
+                              : pathname === child.href;
+
+                            const handleClick = () => {
+                              if (child.href.includes("?tab=")) {
+                                router.push(child.href, { scroll: false });
+                                setTimeout(() => {
+                                  const section = document.getElementById("student-section");
+                                  if (section) {
+                                    const rect = section.getBoundingClientRect();
+                                    if (rect.top < 0 || rect.top > 300) {
+                                      section.scrollIntoView({ behavior: "smooth", block: "start" });
+                                    }
+                                  }
+                                }, 50);
+                              } else {
+                                router.push(child.href);
+                              }
+                            };
+
+                            return (
+                              <SidebarMenuSubItem key={child.href}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={isChildActive}
+                                  className="rounded-lg data-[active=true]:bg-blue-50 data-[active=true]:text-blue-700 dark:data-[active=true]:bg-blue-950/50 dark:data-[active=true]:text-blue-300"
+                                >
+                                  <button onClick={handleClick}>
+                                    <child.icon />
+                                    <span>{child.label}</span>
+                                  </button>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
                         </SidebarMenuSub>
                       </SidebarGroupContent>
                     </SidebarGroup>
