@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
@@ -74,7 +75,7 @@ type LinkItem = {
 const ACTIVE =
   "data-[active=true]:bg-blue-500 data-[active=true]:text-white data-[active=true]:font-medium data-[active=true]:shadow-sm data-[active=true]:hover:bg-blue-600 data-[active=true]:hover:text-white";
 
-export function AppSidebar() {
+function AppSidebarContent() {
   const me = useQuery(api.users.getMe);
   const { signOut } = useClerk();
   const router = useRouter();
@@ -236,5 +237,27 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+export function AppSidebar() {
+  return (
+    <Suspense
+      fallback={
+        <Sidebar side="left">
+          <SidebarHeader className="px-4 pt-5 pb-2">
+            <div className="flex items-center gap-3 cursor-default">
+              <Image src="/CCS.png" alt="Logo" width={44} height={44} className="rounded-lg" />
+              <div className="flex flex-col leading-tight">
+                <span className="font-semibold text-lg text-foreground">E-Capstone</span>
+                <span className="text-[11px] text-muted-foreground">Thesis &amp; Capstone Management</span>
+              </div>
+            </div>
+          </SidebarHeader>
+        </Sidebar>
+      }
+    >
+      <AppSidebarContent />
+    </Suspense>
   );
 }
