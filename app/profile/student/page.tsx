@@ -13,6 +13,10 @@ import { Save, Mail, ShieldCheck, KeyRound, BadgeCheck, Loader2, IdCard, Graduat
 
 export default function StudentProfile() {
   const me = useQuery(api.users.getMe);
+  const team = useQuery(
+    api.dashboard.getMyProject,
+    me?.clerkId ? { clerkId: me.clerkId } : "skip"
+  );
   const updateProfile = useMutation(api.users.updateProfile);
   const { openUserProfile } = useClerk();
 
@@ -86,6 +90,13 @@ export default function StudentProfile() {
             <div className="flex items-center justify-center gap-2 min-w-0">
               <Mail className="h-4 w-4 shrink-0" />
               <span className="truncate">{me?.email || "—"}</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 min-w-0 pt-1">
+              <KeyRound className="h-4 w-4 shrink-0" />
+              <span className="text-xs text-muted-foreground">Team code:</span>
+              <span className="truncate font-mono text-xs font-semibold tracking-wide text-foreground">
+                {team === undefined ? "Loading..." : team?.inviteCode || "No team assigned"}
+              </span>
             </div>
             {(me?.program || me?.section) && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">

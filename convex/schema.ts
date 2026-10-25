@@ -99,6 +99,8 @@ export default defineSchema({
     uploadedAt: v.string(),
     comments: v.number(),
     storageId: v.optional(v.id("_storage")),
+    message: v.optional(v.string()),
+    versionLabel: v.optional(v.string()),
   }),
 
     deliverableDrafts: defineTable({

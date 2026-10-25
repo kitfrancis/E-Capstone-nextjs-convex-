@@ -80,6 +80,7 @@ const TAB_COPY: Record<string, { title: string; description: string }> = {
 
 const rowClass =
   "rounded-2xl border bg-card p-4 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
+const EDITOR_SESSION_KEY = "student-editor-session";
 
 const progressBarColor = (status: string | null) => {
   if (status === "approved") return "bg-green-600";
@@ -207,9 +208,13 @@ export function TabsDemo({
     fileName: string;
     storageId: string;
     deliverableId: string;
+    phase: string;
     mode: "edit" | "view";
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
+  const [versionMessage, setVersionMessage] = useState("");
+  const [versionLabel, setVersionLabel] = useState("");
+  const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
     officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
@@ -255,6 +260,52 @@ export function TabsDemo({
     api.dashboard.getDeliverables,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
+
+  useEffect(() => {
+    if (!deliverables || officeDoc || isRestoringEditor) return;
+    const saved = sessionStorage.getItem(EDITOR_SESSION_KEY);
+    if (!saved) return;
+
+    let target: { deliverableId: string } | null = null;
+    try {
+      target = JSON.parse(saved) as { deliverableId: string };
+    } catch {
+      sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      return;
+    }
+
+    const deliverable = deliverables.find((item) => item._id === target?.deliverableId);
+    if (!deliverable) {
+      sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      return;
+    }
+
+    sessionStorage.removeItem(EDITOR_SESSION_KEY);
+    setIsRestoringEditor(true);
+    void startDraft({ deliverableId: deliverable._id })
+      .then((draft) => {
+        setOfficeDoc({
+          fileName: deliverable.fileName,
+          storageId: draft.storageId,
+          deliverableId: deliverable._id,
+          phase: deliverable.phase,
+          mode: "edit",
+          draft: {
+            id: draft.draftId,
+            baseVersion: draft.baseVersion,
+            docKey: draft.draftId,
+            phase: deliverable.phase,
+            fileSize: deliverable.fileSize,
+          },
+        });
+        setVersionMessage("");
+        setVersionLabel(`v${chapterOf(deliverable.phase) ?? 1}.${draft.baseVersion + 1}`);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
+      })
+      .finally(() => setIsRestoringEditor(false));
+  }, [deliverables, officeDoc, isRestoringEditor, startDraft]);
 
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
   const chosenChapter = chapterOf(phase);
@@ -302,7 +353,7 @@ export function TabsDemo({
     }
   };
 
-  // "Edit & resubmit": open (or create) the draft and open the editor on it.
+  // Open (or create) the draft and open the editor on it.
   const startEdit = async (d: NonNullable<typeof deliverables>[number]) => {
     try {
       const draft = await startDraft({ deliverableId: d._id });
@@ -310,15 +361,22 @@ export function TabsDemo({
         fileName: d.fileName,
         storageId: draft.storageId,
         deliverableId: d._id,
+        phase: d.phase,
         mode: "edit",
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: `${draft.draftId}_${Date.now()}`,
+          docKey: draft.draftId,
           phase: d.phase,
           fileSize: d.fileSize,
         },
       });
+      setVersionMessage("");
+      setVersionLabel(`v${chapterOf(d.phase) ?? 1}.${draft.baseVersion + 1}`);
+      sessionStorage.setItem(
+        EDITOR_SESSION_KEY,
+        JSON.stringify({ deliverableId: d._id }),
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
     }
@@ -352,12 +410,20 @@ export function TabsDemo({
       }
     }
     setOfficeDoc(null);
+    sessionStorage.removeItem(EDITOR_SESSION_KEY);
   };
 
   // Submit button in the editor header: save latest edits, then create the next version.
   const submitDraft = async () => {
     const doc = officeDoc;
     if (!doc?.draft || !capstoneProjectId) throw new Error("Missing project.");
+    const enteredVersion = versionLabel.trim().startsWith("v")
+      ? versionLabel.trim()
+      : `v${versionLabel.trim()}`;
+    const chapter = chapterOf(doc.phase);
+    if (!/^v[1-5]\.\d+$/.test(enteredVersion) || (chapter && !enteredVersion.startsWith(`v${chapter}.`))) {
+      throw new Error(`Enter a version in the format v${chapter ?? 1}.1.`);
+    }
     const deliverableId = doc.deliverableId as Id<"deliverables">;
     const before =
       (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
@@ -388,9 +454,41 @@ export function TabsDemo({
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId,
+      message: versionMessage.trim() || undefined,
+      versionLabel: enteredVersion,
     });
     await finishDraft({ draftId: latest._id });
     toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
+    setVersionMessage("");
+    setVersionLabel("");
+  };
+
+  const officeVersions = useMemo(() => {
+    if (!officeDoc) return [];
+    return (deliverables ?? [])
+      .filter((deliverable) => deliverable.phase === officeDoc.phase)
+      .sort((a, b) => b.version - a.version)
+      .map((deliverable) => ({
+        id: deliverable._id,
+        version: deliverable.version,
+        message: deliverable.message,
+        versionLabel:
+          deliverable.versionLabel ||
+          `v${chapterOf(deliverable.phase) ?? 1}.${deliverable.version}`,
+        uploadedAt: deliverable.uploadedAt,
+      }));
+  }, [deliverables, officeDoc]);
+
+  const selectOfficeVersion = (versionId: string) => {
+    const version = (deliverables ?? []).find((deliverable) => deliverable._id === versionId);
+    if (!version?.storageId || !officeDoc) return;
+    setOfficeDoc({
+      fileName: version.fileName,
+      storageId: version.storageId,
+      deliverableId: version._id,
+      phase: version.phase,
+      mode: "view",
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -537,8 +635,25 @@ export function TabsDemo({
             const isLatest = !!cp && cp.latestId === d._id;
             // Locked once the chapter (or this file) is approved. Only admins can delete.
             const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
+            const canOpenForEditing = isLatest && isOffice(d.fileName);
             return (
-              <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
+              <div
+                key={d._id}
+                className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""} ${
+                  canOpenForEditing ? "cursor-pointer" : ""
+                }`}
+                onClick={() => {
+                  if (canOpenForEditing) void startEdit(d);
+                }}
+                onKeyDown={(event) => {
+                  if (canOpenForEditing && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    void startEdit(d);
+                  }
+                }}
+                role={canOpenForEditing ? "button" : undefined}
+                tabIndex={canOpenForEditing ? 0 : undefined}
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
@@ -559,24 +674,15 @@ export function TabsDemo({
                     <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="File options">
+                        <button
+                          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                          aria-label="File options"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           <MoreVertical className="h-4 w-4 text-muted-foreground" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                        {/* Edit the file in OnlyOffice as a draft, then submit as the next version */}
-                        {d.status === "needs_revision" && isLatest && isOffice(d.fileName) && (
-                          <DropdownMenuItem onClick={() => startEdit(d)}>
-                            Edit &amp; resubmit
-                          </DropdownMenuItem>
-                        )}
-
-                        {d.status === "needs_revision" && (
-                          <DropdownMenuItem onClick={() => setActiveTab("uploads")}>
-                            Resubmit
-                          </DropdownMenuItem>
-                        )}
-
                         {isPdf(d.fileName) ? (
                           <>
                             <DropdownMenuItem
@@ -597,6 +703,7 @@ export function TabsDemo({
                                   fileName: d.fileName,
                                   storageId: d.storageId!,
                                   deliverableId: d._id,
+                                  phase: d.phase,
                                   mode: "view",
                                 })
                               }
@@ -607,15 +714,18 @@ export function TabsDemo({
                         ) : isOffice(d.fileName) ? (
                           <DropdownMenuItem
                             onClick={() =>
-                              setOfficeDoc({
-                                fileName: d.fileName,
-                                storageId: d.storageId!,
-                                deliverableId: d._id,
-                                mode: "view",
-                              })
+                              isLatest
+                                ? startEdit(d)
+                                : setOfficeDoc({
+                                    fileName: d.fileName,
+                                    storageId: d.storageId!,
+                                    deliverableId: d._id,
+                                    phase: d.phase,
+                                    mode: "view",
+                                  })
                             }
                           >
-                            View in Editor
+                            {isLatest ? "Open for editing" : "View in Editor"}
                           </DropdownMenuItem>
                         ) : null}
 
@@ -810,7 +920,22 @@ export function TabsDemo({
           baseVersion={officeDoc.draft?.baseVersion}
           onSubmit={officeDoc.draft ? submitDraft : undefined}
           onClose={closeEditor}
+          versionMessage={versionMessage}
+          onVersionMessageChange={setVersionMessage}
+          versionLabel={versionLabel}
+          onVersionLabelChange={setVersionLabel}
+          versions={officeVersions}
+          selectedVersionId={officeDoc.deliverableId}
+          onVersionSelect={selectOfficeVersion}
         />
+      )}
+      {isRestoringEditor && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 text-white">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin" />
+            <p className="mt-3 text-sm">Restoring your document editor…</p>
+          </div>
+        </div>
       )}
     </Tabs>
   );
