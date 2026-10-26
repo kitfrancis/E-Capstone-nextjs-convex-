@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   BookOpen,
   CalendarDays,
@@ -30,6 +31,7 @@ import {
   FileText,
   Filter,
   GraduationCap,
+  Upload,
   Search,
   SearchX,
   Tag,
@@ -47,6 +49,24 @@ type Project = FunctionReturnType<typeof api.archive.getAll>[number];
 
 const ALL_YEARS = "All Years";
 const ALL_DEPARTMENTS = "All Departments";
+
+const SAMPLE_IMRAD_TEAMS = [
+  {
+    team: "Team Innovators",
+    project: "Health Clinic Management Information System with Treatment Demand Forecasting",
+    year: 2026,
+  },
+  {
+    team: "Team Code Avengers",
+    project: "University of Antique RFID-Based Vehicle Entry System",
+    year: 2026,
+  },
+  {
+    team: "Team Tech Pioneers",
+    project: "Smart Campus Resource Reservation System",
+    year: 2025,
+  },
+];
 
 // Same tinted-card language as the instructor dashboard (blue / amber / purple / rose).
 const TONES = {
@@ -116,8 +136,13 @@ function ArchiveSkeleton() {
 }
 
 export default function Archive() {
+  const me = useQuery(api.users.getMe);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailOpen, setDetailOpen] = useState(false); // modal, mobile + tablet only
+  const [submitDetailsOpen, setSubmitDetailsOpen] = useState(false);
+  const [panelEvaluations, setPanelEvaluations] = useState<(File | null)[]>([null, null, null]);
+  const [submissionDescription, setSubmissionDescription] = useState("");
+  const [submissionNotice, setSubmissionNotice] = useState("");
   const [viewingFile, setViewingFile] = useState<{ storageId: string; fileName: string } | null>(null);
 
   const [query, setQuery] = useState("");
@@ -131,6 +156,7 @@ export default function Archive() {
   const projectsData = useQuery(api.archive.getAll);
 
   const projects = useMemo(() => projectsData ?? [], [projectsData]);
+  const isInstructor = me?.role === "instructor";
 
   const uniqueCourses = useMemo(() => [...new Set(projects.map((p) => p.course))], [projects]);
   const uniqueYears = useMemo(() => [...new Set(projects.map((p) => String(p.year)))].sort().reverse(), [projects]);
@@ -156,6 +182,19 @@ export default function Archive() {
     setQuery("");
     setYear(ALL_YEARS);
     setDepartment(ALL_DEPARTMENTS);
+  };
+
+  const handleSubmitDetails = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (panelEvaluations.some((file) => !file)) {
+      setSubmissionNotice("Please choose a PDF for each panel.");
+      return;
+    }
+    if (panelEvaluations.some((file) => file && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))) {
+      setSubmissionNotice("Each panel evaluation must be a PDF file.");
+      return;
+    }
+    setSubmissionNotice("This preview does not upload or save files yet.");
   };
 
   if (projectsData === undefined) return <ArchiveSkeleton />;
@@ -302,6 +341,45 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
               Browse completed thesis and capstone projects. Search by title, keyword, adviser, or team member.
             </p>
           </div>
+
+          {/* Imrad Processing is available only in the instructor archive. */}
+          {isInstructor && (
+            <section className="space-y-6">
+              <div className="flex flex-col gap-4 rounded-2xl border border-purple-500/20 bg-linear-to-br from-purple-500/15 via-purple-500/5 to-transparent p-6 sm:flex-row sm:items-center sm:justify-between md:p-8">
+                <div>
+                  <h2 className="text-3xl font-semibold text-foreground">Imrad Processing</h2>
+                  <p className="mt-2 text-muted-foreground">Sample view of defended team projects.</p>
+                </div>
+                <Button type="button" onClick={() => setSubmitDetailsOpen(true)}>
+                  Submit Details
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {SAMPLE_IMRAD_TEAMS.map((item) => (
+                  <article
+                    key={item.team}
+                    className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-purple-500/15 text-purple-500">
+                        <BookOpen className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-foreground">{item.project}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {item.team} • {item.year}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex w-fit shrink-0 items-center rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                      Defended
+                    </span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -513,6 +591,79 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
               {detailBody}
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isInstructor && submitDetailsOpen}
+        onOpenChange={(open) => {
+          setSubmitDetailsOpen(open);
+          if (!open) setSubmissionNotice("");
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-lg font-semibold">Submit Details</DialogTitle>
+            <DialogDescription>
+              Upload the final evaluation PDF from each of the three defense panelists, then add a description.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-5" onSubmit={handleSubmitDetails}>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {panelEvaluations.map((file, index) => (
+                <div key={index} className="space-y-2">
+                  <label htmlFor={`panel-evaluation-${index}`} className="text-sm font-medium text-foreground">
+                    Panel {index + 1} final evaluation
+                  </label>
+                  <div className="rounded-xl border border-dashed border-border bg-muted/40 p-4">
+                    <Upload className="mb-2 h-5 w-5 text-muted-foreground" />
+                    <p className="mb-3 truncate text-xs text-muted-foreground">
+                      {file?.name ?? "Choose a PDF file"}
+                    </p>
+                    <Input
+                      id={`panel-evaluation-${index}`}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      required
+                      aria-label={`Upload panel ${index + 1} final evaluation PDF`}
+                      className="h-auto cursor-pointer px-2 py-2 text-xs file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
+                      onChange={(event) => {
+                        const selectedFile = event.currentTarget.files?.[0] ?? null;
+                        setPanelEvaluations((current) =>
+                          current.map((currentFile, fileIndex) => fileIndex === index ? selectedFile : currentFile)
+                        );
+                        setSubmissionNotice("");
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="imrad-description" className="text-sm font-medium text-foreground">
+                Description
+              </label>
+              <Textarea
+                id="imrad-description"
+                value={submissionDescription}
+                onChange={(event) => setSubmissionDescription(event.target.value)}
+                placeholder="Add details about the final evaluations..."
+                rows={4}
+              />
+            </div>
+
+            {submissionNotice && (
+              <p role="status" className="text-sm text-muted-foreground">
+                {submissionNotice}
+              </p>
+            )}
+
+            <div className="flex justify-end">
+              <Button type="submit">Submit</Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
