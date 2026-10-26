@@ -263,19 +263,22 @@ export default function OnlyOfficeEditor({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#17232b]">
       <div className="flex min-h-0 flex-1">
-        <aside className="flex w-2xs shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white text-slate-900">
+        <aside
+          className="flex shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white"
+          style={{ width: "18rem", minWidth: "18rem", flex: "0 0 18rem", color: "#0f172a" }}
+        >
           <div className="border-b border-slate-200 px-4 py-3">
-            <p className="truncate text-sm font-bold">{fileName}</p>
+            <p className="truncate text-sm font-bold" style={{ color: "#0f172a" }}>{fileName}</p>
             {draftId && baseVersion !== undefined && (
-              <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
+              <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs" style={{ color: "#475569" }}>
                 Draft based on v{baseVersion}
               </span>
             )}
           </div>
           <div className="p-3">
-            <h2 className="text-sm font-semibold">Version control</h2>
-            <p className="mt-1 text-xs text-slate-500">Document history</p>
-            {submitError && <p className="mt-3 text-xs text-amber-600">{submitError}</p>}
+            <h2 className="text-sm font-semibold" style={{ color: "#0f172a" }}>Version control</h2>
+            <p className="mt-1 text-xs" style={{ color: "#475569" }}>Document history</p>
+            {submitError && <p className="mt-3 text-xs" style={{ color: "#b45309" }}>{submitError}</p>}
             {canSubmit && (
               <button
                 type="button"
@@ -288,16 +291,17 @@ export default function OnlyOfficeEditor({
             )}
             {mode === "edit" && onSubmit && (
               <label className="mb-4 block">
-                <span className="text-xs font-medium text-slate-700">
+                <span className="text-xs font-medium" style={{ color: "#334155" }}>
                   Message for this version
                 </span>
                 <input
                   value={versionMessage}
                   onChange={(event) => onVersionMessageChange?.(event.target.value)}
                   placeholder="Describe your changes"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-2 text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  style={{ color: "#0f172a" }}
                 />
-                <span className="mt-3 block text-xs font-medium text-slate-700">
+                <span className="mt-3 block text-xs font-medium" style={{ color: "#334155" }}>
                   Version
                 </span>
                 <input
@@ -305,13 +309,14 @@ export default function OnlyOfficeEditor({
                   onChange={(event) => onVersionLabelChange?.(event.target.value)}
                   placeholder="v1.1"
                   pattern="v?[1-5]\.[0-9]+"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-2.5 py-2 text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  style={{ color: "#0f172a" }}
                 />
               </label>
             )}
             <div className="space-y-2">
               {versions.length === 0 ? (
-                <p className="text-xs text-slate-500">No submitted versions yet.</p>
+                <p className="text-xs" style={{ color: "#475569" }}>No submitted versions yet.</p>
               ) : (
                 versions.map((version) => (
                   <button
@@ -324,13 +329,13 @@ export default function OnlyOfficeEditor({
                         : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"
                     }`}
                   >
-                    <span className="block text-xs font-semibold text-slate-900">
+                    <span className="block text-xs font-semibold" style={{ color: "#0f172a" }}>
                       {version.versionLabel || `v${version.version}`}
                     </span>
-                    <span className="mt-1 block truncate text-xs text-slate-600">
+                    <span className="mt-1 block truncate text-xs" style={{ color: "#475569" }}>
                       {version.message || "No message"}
                     </span>
-                    <span className="mt-1 block text-[11px] text-slate-400">
+                    <span className="mt-1 block text-[11px]" style={{ color: "#64748b" }}>
                       {new Date(version.uploadedAt).toLocaleString()}
                     </span>
                   </button>
@@ -344,6 +349,7 @@ export default function OnlyOfficeEditor({
               onClick={handleClose}
               disabled={submitting || closing}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              style={{ color: "#334155" }}
             >
               {closing ? "Saving…" : "Close"}
             </button>
