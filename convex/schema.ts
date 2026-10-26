@@ -83,7 +83,32 @@ export default defineSchema({
     keywords: v.optional(v.array(v.string())),
     finalFileId: v.optional(v.id("_storage")),
     archivedAt: v.optional(v.number()),
-  }).index("by_inviteCode", ["inviteCode"]),
+  })
+    .index("by_inviteCode", ["inviteCode"])
+    .index("by_instructor_stage_result", ["instructorId", "stage", "defenseResult"]),
+
+  imradSubmissions: defineTable({
+    capstoneProjectId: v.id("capstoneProjects"),
+    instructorId: v.id("users"),
+    evaluationFiles: v.array(
+      v.object({
+        storageId: v.id("_storage"),
+        fileName: v.string(),
+      })
+    ),
+    description: v.string(),
+    status: v.union(
+      v.literal("submitted"),
+      v.literal("processing"),
+      v.literal("rejected")
+    ),
+    submittedAt: v.number(),
+    processedAt: v.optional(v.number()),
+    rejectionMessage: v.optional(v.string()),
+  })
+    .index("by_project", ["capstoneProjectId"])
+    .index("by_instructor_status", ["instructorId", "status"])
+    .index("by_status_submitted_at", ["status", "submittedAt"]),
 
   deliverables: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),

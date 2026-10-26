@@ -16,6 +16,7 @@ import type * as archive from "../archive.js";
 import type * as dashboard from "../dashboard.js";
 import type * as defense from "../defense.js";
 import type * as drafts from "../drafts.js";
+import type * as imrad from "../imrad.js";
 import type * as notifications from "../notifications.js";
 import type * as users from "../users.js";
 
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   defense: typeof defense;
   drafts: typeof drafts;
+  imrad: typeof imrad;
   notifications: typeof notifications;
   users: typeof users;
 }>;

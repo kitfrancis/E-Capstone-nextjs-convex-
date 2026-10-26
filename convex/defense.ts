@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { logAction } from "./users";
@@ -39,6 +40,60 @@ export const myInstructorProjects = query({
     if (!user || user.role !== "instructor") return [];
     const all = await ctx.db.query("capstoneProjects").collect();
     return all.filter((p) => p.instructorId === user._id);
+  },
+});
+
+export const myImradReadyProjects = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(
+    v.object({
+      projectId: v.id("capstoneProjects"),
+      teamName: v.string(),
+      projectTitle: v.string(),
+      finalFileId: v.union(v.id("_storage"), v.null()),
+      finalGrade: v.union(v.string(), v.null()),
+      defenseDate: v.union(v.string(), v.null()),
+      defenseVenue: v.union(v.string(), v.null()),
+      defensePanel: v.union(v.string(), v.null()),
+      acceptedAt: v.number(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const user = await currentUser(ctx);
+    if (
+      !user ||
+      user.role !== "instructor" ||
+      user.status === "pending" ||
+      user.status === "rejected"
+    ) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    const result = await ctx.db
+      .query("capstoneProjects")
+      .withIndex("by_instructor_stage_result", (q) =>
+        q
+          .eq("instructorId", user._id)
+          .eq("stage", "ready_to_archive")
+          .eq("defenseResult", "passed")
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    return {
+      ...result,
+      page: result.page.map((project) => ({
+        projectId: project._id,
+        teamName: project.teamName,
+        projectTitle: project.projectTitle,
+        finalFileId: project.finalFileId ?? null,
+        finalGrade: project.finalGrade ?? null,
+        defenseDate: project.defenseDate ?? null,
+        defenseVenue: project.defenseVenue ?? null,
+        defensePanel: project.defensePanel ?? null,
+        acceptedAt: project._creationTime,
+      })),
+    };
   },
 });
 
