@@ -293,6 +293,7 @@ export default function AdminImradProcessingPage() {
         )}
       </section>
 
+      <div className="flex flex-col-reverse gap-6">
       <section className="space-y-3">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Projects in Processing</h2>
@@ -557,6 +558,7 @@ export default function AdminImradProcessingPage() {
           </>
         )}
       </section>
+      </div>
 
       <Dialog open={uploadDialogOpen} onOpenChange={closeUploadDialog}>
         <DialogContent className="sm:max-w-md">
