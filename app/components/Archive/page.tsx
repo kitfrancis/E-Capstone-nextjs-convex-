@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import dynamic from "next/dynamic";
@@ -27,6 +27,7 @@ import {
   BookOpen,
   CalendarDays,
   Check,
+  CheckCircle2,
   Download,
   File,
   FileText,
@@ -124,12 +125,25 @@ export default function Archive() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailOpen, setDetailOpen] = useState(false); // modal, mobile + tablet only
   const [submitDetailsOpen, setSubmitDetailsOpen] = useState(false);
+  const [submissionSuccessOpen, setSubmissionSuccessOpen] = useState(false);
   const [panelEvaluations, setPanelEvaluations] = useState<(File | null)[]>([null, null, null]);
+  const [confirmedPanelEvaluations, setConfirmedPanelEvaluations] = useState([false, false, false]);
+  const [previewingPanel, setPreviewingPanel] = useState<{
+    index: number;
+    fileUrl: string;
+    fileName: string;
+  } | null>(null);
   const [submissionDescription, setSubmissionDescription] = useState("");
   const [submissionNotice, setSubmissionNotice] = useState("");
   const [selectedImradProjectId, setSelectedImradProjectId] = useState("");
   const [submittingImradDetails, setSubmittingImradDetails] = useState(false);
   const [viewingFile, setViewingFile] = useState<{ storageId: string; fileName: string } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewingPanel) URL.revokeObjectURL(previewingPanel.fileUrl);
+    };
+  }, [previewingPanel]);
 
   const [query, setQuery] = useState("");
   const [year, setYear] = useState<string>(ALL_YEARS);
@@ -145,6 +159,9 @@ export default function Archive() {
   const imradSubmissions = useQuery(api.imrad.myInstructorSubmissions);
   const generateEvaluationUploadUrl = useMutation(api.imrad.generateEvaluationUploadUrl);
   const submitPanelEvaluations = useMutation(api.imrad.submitPanelEvaluations);
+  const allPanelEvaluationsConfirmed = panelEvaluations.every(
+    (file, index) => file !== null && confirmedPanelEvaluations[index]
+  );
 
   const projects = useMemo(() => projectsData ?? [], [projectsData]);
   const isInstructor = me?.role === "instructor";
@@ -195,6 +212,10 @@ export default function Archive() {
       setSubmissionNotice("Please choose a PDF for each panel.");
       return;
     }
+    if (!allPanelEvaluationsConfirmed) {
+      setSubmissionNotice("Preview and confirm all three panel evaluation PDFs before submitting.");
+      return;
+    }
     if (panelEvaluations.some((file) => file && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))) {
       setSubmissionNotice("Each panel evaluation must be a PDF file.");
       return;
@@ -227,10 +248,12 @@ export default function Archive() {
         description: submissionDescription,
       });
       setPanelEvaluations([null, null, null]);
+      setConfirmedPanelEvaluations([false, false, false]);
       setSubmissionDescription("");
       setSelectedImradProjectId("");
       setSubmissionNotice("Panel evaluations submitted to the admin for IMRAD processing.");
       setSubmitDetailsOpen(false);
+      setSubmissionSuccessOpen(true);
     } catch (error) {
       console.error("Failed to submit IMRAD evaluation details:", error);
       setSubmissionNotice(
@@ -845,17 +868,65 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                       id={`panel-evaluation-${index}`}
                       type="file"
                       accept="application/pdf,.pdf"
-                      required
                       aria-label={`Upload panel ${index + 1} final evaluation PDF`}
                       className="h-auto cursor-pointer px-2 py-2 text-xs file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
                       onChange={(event) => {
                         const selectedFile = event.currentTarget.files?.[0] ?? null;
+                        if (!selectedFile) return;
                         setPanelEvaluations((current) =>
                           current.map((currentFile, fileIndex) => fileIndex === index ? selectedFile : currentFile)
+                        );
+                        setConfirmedPanelEvaluations((current) =>
+                          current.map((confirmed, fileIndex) =>
+                            fileIndex === index ? false : confirmed
+                          )
                         );
                         setSubmissionNotice("");
                       }}
                     />
+                    {file && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Choose another PDF above to replace this panel&apos;s file.
+                      </p>
+                    )}
+                    {file && (
+                      <div className="mt-3 space-y-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          disabled={
+                            file.type !== "application/pdf" &&
+                            !file.name.toLowerCase().endsWith(".pdf")
+                          }
+                          onClick={() => {
+                            setPreviewingPanel({
+                              index,
+                              fileUrl: URL.createObjectURL(file),
+                              fileName: file.name,
+                            });
+                          }}
+                        >
+                          Preview Panel {index + 1} PDF
+                        </Button>
+                        <p
+                          className={`flex items-center gap-1 text-xs ${
+                            confirmedPanelEvaluations[index]
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {confirmedPanelEvaluations[index] ? (
+                            <>
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Preview confirmed
+                            </>
+                          ) : (
+                            "Preview and confirm this PDF before submitting."
+                          )}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -887,7 +958,11 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
             <div className="flex justify-end">
               <Button
                 type="submit"
-                disabled={submittingImradDetails || availableImradProjects.length === 0}
+                disabled={
+                  submittingImradDetails ||
+                  availableImradProjects.length === 0 ||
+                  !allPanelEvaluationsConfirmed
+                }
               >
                 {submittingImradDetails ? "Submitting..." : "Submit"}
               </Button>
@@ -895,6 +970,84 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={isInstructor && submissionSuccessOpen}
+        onOpenChange={setSubmissionSuccessOpen}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader className="items-center text-center">
+            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+            <DialogTitle className="text-xl font-semibold">
+              Congratulations!
+            </DialogTitle>
+            <DialogDescription>
+              Your panel evaluation files were submitted successfully. Here&apos;s what happens during IMRaD conversion.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ol className="space-y-3">
+            {[
+              {
+                title: "Submission received",
+                  description: "Your three panel evaluation PDFs and details have been received.",
+              },
+              {
+                title: "Admin begins the conversion",
+                description: "The admin prepares the team's working copy and starts organizing the manuscript using the IMRaD guide.",
+              },
+              ...IMRAD_PARTS.map((part, index) => ({
+                title: `Part ${index + 1}: ${part}`,
+                description: `The admin works through the ${part.toLowerCase()} section and marks it complete when finished.`,
+              })),
+              {
+                title: "Follow progress",
+                description: "Your submission is sent to the admin. Your IMRaD Processing list shows completed parts, and you receive a notification as each part is marked done.",
+              },
+            ].map((step, index) => (
+              <li key={step.title} className="flex gap-3 rounded-xl border border-border bg-muted/30 p-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{step.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{step.description}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+            Processing time varies with the review and workload. There is no fixed turnaround estimate; follow the progress updates in your IMRaD Processing list.
+          </p>
+
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setSubmissionSuccessOpen(false)}>
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {previewingPanel && (
+        <PDFViewer
+          open
+          fileUrl={previewingPanel.fileUrl}
+          fileName={previewingPanel.fileName}
+          onClose={() => setPreviewingPanel(null)}
+          onConfirm={() => {
+            setConfirmedPanelEvaluations((current) =>
+              current.map((confirmed, index) =>
+                index === previewingPanel.index ? true : confirmed
+              )
+            );
+            setSubmissionNotice("");
+            setPreviewingPanel(null);
+          }}
+        />
+      )}
 
       <PDFViewer
         open={!!viewingFile && !!archiveFileUrl}
