@@ -175,6 +175,18 @@ export default function AdminImradProcessingPage() {
   };
 
   const cancelLive = async (submissionId: Id<"imradSubmissions">) => {
+    const submission = liveSubmissions?.find(
+      (item) => item.submissionId === submissionId
+    );
+    const teamName = submission?.teamName ?? "this team";
+    if (
+      !window.confirm(
+        `Cancel IMRAD processing for "${teamName}"? This permanently deletes the generated IMRAD PDF, its progress, the three panel evaluation PDFs, and the submission record. The team and account remain, and the accepted team can submit again with new evaluation PDFs.`
+      )
+    ) {
+      return;
+    }
+
     setBackendActionError("");
     try {
       await cancelLiveProcessing({ submissionId });

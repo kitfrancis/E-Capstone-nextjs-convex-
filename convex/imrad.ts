@@ -469,8 +469,26 @@ export const cancelProcessing = mutation({
 
     const project = await ctx.db.get(submission.capstoneProjectId);
     if (!project) throw new Error("Project not found.");
-    await ctx.db.patch(submission._id, { status: "submitted", processedAt: undefined });
-    await logAction(ctx, admin, "Canceled IMRAD processing", project.teamName);
+
+    const workingDocument = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+      .unique();
+    const storageIds = new Set([
+      ...submission.evaluationFiles.map((file) => file.storageId),
+      ...(workingDocument ? [workingDocument.storageId] : []),
+    ]);
+    await Promise.all(
+      [...storageIds].map((storageId) => ctx.storage.delete(storageId))
+    );
+    if (workingDocument) await ctx.db.delete(workingDocument._id);
+    await ctx.db.delete(submission._id);
+    await logAction(
+      ctx,
+      admin,
+      "Canceled IMRAD processing and deleted submission files",
+      project.teamName
+    );
     return null;
   },
 });
