@@ -1019,9 +1019,32 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
             ))}
           </ol>
 
-          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
-            Processing time varies with the review and workload. There is no fixed turnaround estimate; follow the progress updates in your IMRaD Processing list.
-          </p>
+          <div className="space-y-2 rounded-lg bg-amber-500/10 px-3 py-3 text-xs text-muted-foreground">
+            <p>
+              <span className="font-semibold text-foreground">Unofficial planning estimate: 4–8 weeks.</span>{" "}
+              This is not a research-proven deadline or guarantee for this admin-led conversion. Actual timing may vary with the manuscript, review, and workload. Follow updates in your IMRaD Processing list.
+            </p>
+            <p>
+              Related guidance discusses converting dissertations into journal articles, but does not measure this workflow&apos;s duration:{" "}
+              <a
+                href="https://www.editage.com/blog/convert-dissertation-journal-article/"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Editage conversion guide
+              </a>
+              {" · "}
+              <a
+                href="https://doi.org/10.1155/2012/862135"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Thomas &amp; Skinner (2012)
+              </a>
+            </p>
+          </div>
 
           <div className="flex justify-end">
             <Button type="button" onClick={() => setSubmissionSuccessOpen(false)}>
