@@ -69,6 +69,9 @@ export default function AdminArchivePage() {
   const generateUploadUrl = useMutation(api.archive.generateUploadUrl);
   const addProject = useMutation(api.archive.addProject);
   const deleteProject = useMutation(api.archive.deleteProject);
+  const cancelPrajikArchiveForEvaluation = useMutation(
+    api.archive.cancelPrajikArchiveForEvaluation
+  );
 
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("all");
@@ -81,6 +84,8 @@ export default function AdminArchivePage() {
   const [error, setError] = useState("");
 
   const [editing, setEditing] = useState<EditableProject | null>(null);
+  const [restartingArchiveId, setRestartingArchiveId] =
+    useState<Id<"projects"> | null>(null);
 
   const [viewing, setViewing] = useState<{
     storageId: Id<"_storage">;
@@ -175,6 +180,30 @@ export default function AdminArchivePage() {
       await deleteProject({ projectId: id });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Delete failed.");
+    }
+  };
+
+  const handleCancelPrajikArchive = async (
+    projectId: Id<"projects">,
+    title: string,
+    team: string
+  ) => {
+    if (
+      !window.confirm(
+        `Cancel and remove the entire "${title}" archive entry for ${team}? This permanently deletes the archive record and all its PDFs, including the final IMRaD PDF and evaluation files. The accepted team remains and will be reset so the instructor can submit evaluations again.`
+      )
+    ) {
+      return;
+    }
+
+    setRestartingArchiveId(projectId);
+    try {
+      await cancelPrajikArchiveForEvaluation({ projectId });
+    } catch (err) {
+      console.error("Failed to cancel the Prajik archive:", err);
+      alert(err instanceof Error ? err.message : "Could not reset the archived project.");
+    } finally {
+      setRestartingArchiveId(null);
     }
   };
 
@@ -316,6 +345,24 @@ export default function AdminArchivePage() {
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit details
                       </DropdownMenuItem>
+                      {p.title.trim().toLowerCase() === "prajik" ||
+                      p.team.trim().toLowerCase() === "prajik" ? (
+                        <DropdownMenuItem
+                          disabled={
+                            !p.capstoneProjectId ||
+                            restartingArchiveId === p._id
+                          }
+                          className="text-amber-700 focus:text-amber-800"
+                          onSelect={() =>
+                            handleCancelPrajikArchive(p._id, p.title, p.team)
+                          }
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {restartingArchiveId === p._id
+                            ? "Resetting..."
+                            : "Cancel archive and restart evaluations"}
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem
                         className="text-red-500 focus:text-red-600"
                         onSelect={() => handleDelete(p._id, p.title)}
