@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Check, LoaderCircle, X } from "lucide-react";
@@ -96,6 +96,13 @@ export default function AdminImradOnlyOffice({
   const completeWorkingDocumentPart = useMutation(
     api.imrad.completeWorkingDocumentPart
   );
+  const confirmWorkingDocumentHasNoPendingChanges = useMutation(
+    api.imrad.confirmAdminWorkingDocumentHasNoPendingChanges
+  );
+  const workingDocumentStatus = useQuery(
+    api.imrad.adminWorkingDocumentStatus,
+    { submissionId }
+  );
   const serverUrl = (process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080")
     .replace(/\/+$/, "");
   const effectiveFileId = fileId ?? workingDocument?.storageId ?? null;
@@ -104,6 +111,45 @@ export default function AdminImradOnlyOffice({
   const partNames = ["Introduction", "Methodology", "Results", "Discussion"];
   const nextPartNumber = localCompletedParts.length + 1;
   const nextPartName = partNames[nextPartNumber - 1];
+  const finalPdfNeedsSave =
+    localCompletedParts.length === 4 &&
+    (!workingDocumentStatus?.savedAt ||
+      workingDocumentStatus.revision <
+        workingDocumentStatus.requiredSaveRevision);
+  const [savingFinalPdf, setSavingFinalPdf] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  const saveFinalPdf = async () => {
+    if (!effectiveFileId || savingFinalPdf) return;
+    setSavingFinalPdf(true);
+    setSaveMessage("");
+    try {
+      const response = await fetch("/api/onlyoffice/forcesave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: `admin-imrad-${effectiveFileId}` }),
+      });
+      const result: unknown = await response.json();
+      if (!response.ok || !result || typeof result !== "object" || !("ok" in result) || result.ok !== true) {
+        throw new Error("OnlyOffice could not save the final PDF.");
+      }
+      if ("waitForCallback" in result && result.waitForCallback === false) {
+        await confirmWorkingDocumentHasNoPendingChanges({ submissionId });
+        setSaveMessage("The latest saved PDF has no pending edits and is ready for verification.");
+      } else {
+        setSaveMessage(
+          "Save requested. The Final Verification action will be enabled once the saved PDF is confirmed."
+        );
+      }
+    } catch (saveError) {
+      console.error("Failed to save final IMRaD PDF:", saveError);
+      setSaveMessage(
+        saveError instanceof Error ? saveError.message : "Could not save the final PDF."
+      );
+    } finally {
+      setSavingFinalPdf(false);
+    }
+  };
 
   useEffect(() => {
     setLocalCompletedParts(completedParts);
@@ -221,7 +267,7 @@ export default function AdminImradOnlyOffice({
           process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL ||
           `${window.location.origin}/api/onlyoffice/callback`;
         const callbackUrl = new URL(callbackBase);
-        callbackUrl.searchParams.set("adminImrad", "1");
+        callbackUrl.searchParams.set("adminImradSubmissionId", submissionId);
 
         editorRef.current = new window.DocsAPI.DocEditor(editorElementId, {
           document: {
@@ -287,6 +333,7 @@ export default function AdminImradOnlyOffice({
     effectiveFileName,
     effectiveFileUrl,
     serverUrl,
+    submissionId,
   ]);
 
   return (
@@ -301,7 +348,7 @@ export default function AdminImradOnlyOffice({
             {projectTitle} · {effectiveFileName ?? "Preparing IMRAD draft PDF"}
           </p>
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Admin PDF editor · saving changes is not connected yet
+            Changes are saved to the team&apos;s Convex working copy when OnlyOffice saves.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -325,6 +372,20 @@ export default function AdminImradOnlyOffice({
               All 4 IMRAD parts complete
             </span>
           )}
+          {localCompletedParts.length === 4 && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={saveFinalPdf}
+              disabled={!effectiveFileId || savingFinalPdf || !finalPdfNeedsSave}
+            >
+              {savingFinalPdf
+                ? "Saving PDF..."
+                : finalPdfNeedsSave
+                  ? "Save PDF for verification"
+                  : "Final PDF saved"}
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={onClose}>
             <X className="mr-2 h-4 w-4" />
             Close
@@ -334,6 +395,11 @@ export default function AdminImradOnlyOffice({
       {partUpdateError && (
         <p role="alert" className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {partUpdateError}
+        </p>
+      )}
+      {saveMessage && (
+        <p role="status" className="shrink-0 border-b border-border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
+          {saveMessage}
         </p>
       )}
       <main className="relative min-h-0 flex-1 bg-slate-800">

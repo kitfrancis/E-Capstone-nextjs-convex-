@@ -78,7 +78,7 @@ const initials = (name: string) =>
     .map((n) => n[0]?.toUpperCase())
     .join("");
 
-const projectKey = (p: Project) => String((p as any).storageId ?? p.title);
+const projectKey = (p: Project) => String(p.storageId ?? p.title);
 
 function StatCard({
   icon,
@@ -376,19 +376,42 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
       </section>
 
       <div className="flex flex-col gap-2 border-t border-border pt-5">
-        <Button
-          className="w-full"
-          onClick={() => {
-            setDetailOpen(false); // close the modal first so it doesn't fight the PDF viewer for focus
-            setViewingFile({
-              storageId: (selectedProject as any).storageId,
-              fileName: selectedProject.title,
-            });
-          }}
-        >
-          <File className="mr-2 h-4 w-4" />
-          View project files
-        </Button>
+        <h2 className="text-sm font-semibold text-foreground">Project files</h2>
+        {selectedProject.storageId && (
+          <Button
+            className="w-full"
+            onClick={() => {
+              const storageId = selectedProject.storageId;
+              if (!storageId) return;
+              setDetailOpen(false);
+              setViewingFile({
+                storageId,
+                fileName: selectedProject.title,
+              });
+            }}
+          >
+            <File className="mr-2 h-4 w-4" />
+            View original project PDF
+          </Button>
+        )}
+        {selectedProject.additionalFiles?.map((file) => (
+          <Button
+            key={file.storageId}
+            type="button"
+            variant="outline"
+            className="w-full justify-start"
+            onClick={() => {
+              setDetailOpen(false);
+              setViewingFile({
+                storageId: file.storageId,
+                fileName: file.fileName,
+              });
+            }}
+          >
+            <FileText className="mr-2 h-4 w-4 shrink-0" />
+            <span className="truncate">{file.fileName}</span>
+          </Button>
+        ))}
         <Button variant="outline" className="w-full" onClick={() => handleDownload(selectedProject)}>
           <Download className="mr-2 h-4 w-4" />
           Download summary
@@ -453,7 +476,8 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                           <p className="mt-1 text-sm text-muted-foreground">
                             {item.teamName} • {new Date(item.acceptedAt).getFullYear()}
                           </p>
-                          {submissionStatus?.status === "processing" && (
+                          {submissionStatus &&
+                            !["submitted", "rejected"].includes(submissionStatus.status) && (
                             <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                               <FileText className="h-4 w-4 shrink-0" />
                               <span className="truncate">
@@ -467,9 +491,11 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                       <span className={`inline-flex w-fit shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium ${
                         submissionStatus?.status === "rejected"
                           ? "border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400"
-                          : submissionStatus
-                            ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : "border border-blue-500/25 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          : submissionStatus?.status === "changes_requested"
+                            ? "border border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                            : submissionStatus
+                              ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "border border-blue-500/25 bg-blue-500/10 text-blue-600 dark:text-blue-400"
                       }`}>
                         {submissionStatus?.status === "processing"
                           ? "Processing"
@@ -477,10 +503,21 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                             ? "Submitted to admin"
                             : submissionStatus?.status === "rejected"
                               ? "Rejected — resubmission required"
-                              : "Accepted"}
+                              : submissionStatus?.status === "verification"
+                                ? "Final verification"
+                                : submissionStatus?.status === "changes_requested"
+                                  ? "Changes requested"
+                                  : submissionStatus?.status === "approved"
+                                    ? "Instructor approved"
+                                    : submissionStatus?.status === "completed"
+                                      ? "Conversion completed"
+                                      : submissionStatus?.status === "archived"
+                                        ? "Archived"
+                                        : "Accepted"}
                       </span>
                     </div>
-                    {submissionStatus?.status === "processing" && (
+                    {submissionStatus &&
+                      !["submitted", "rejected"].includes(submissionStatus.status) && (
                       <div
                         className="space-y-3"
                         role="group"
@@ -568,6 +605,12 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                         Admin feedback: {submissionStatus.rejectionMessage}
                       </p>
                     )}
+                    {submissionStatus?.status === "changes_requested" &&
+                      submissionStatus.verificationComment && (
+                        <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+                          Instructor feedback: {submissionStatus.verificationComment}
+                        </p>
+                      )}
                     {submissionStatus?.status === "rejected" && (
                       <Button
                         type="button"

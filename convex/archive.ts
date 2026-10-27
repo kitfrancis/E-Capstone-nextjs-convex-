@@ -94,7 +94,11 @@ export const deleteProject = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    if (project.storageId) await ctx.storage.delete(project.storageId);
+    const storageIds = new Set([
+      ...(project.storageId ? [project.storageId] : []),
+      ...(project.additionalFiles ?? []).map((file) => file.storageId),
+    ]);
+    await Promise.all([...storageIds].map((storageId) => ctx.storage.delete(storageId)));
     await ctx.db.delete(args.projectId);
     await logAction(ctx, admin, "Deleted archived project", project.title);
   },
@@ -146,7 +150,7 @@ export const seed = mutation({
     ];
 
     for (const project of projects) {
-      await ctx.db.insert("projects", project as any);
+      await ctx.db.insert("projects", project);
     }
   },
 });

@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   FileText,
   Search,
-  MoreVertical,
   Play,
   X,
   Trash2,
@@ -28,12 +27,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 const IMRAD_PARTS = [
   "Introduction",
@@ -48,6 +41,9 @@ export default function AdminImradProcessingPage() {
   const cancelLiveProcessing = useMutation(api.imrad.cancelProcessing);
   const deleteInvalidSubmission = useMutation(api.imrad.deleteInvalidSubmission);
   const rejectLiveSubmission = useMutation(api.imrad.rejectSubmission);
+  const submitFinalVerification = useMutation(api.imrad.submitFinalVerification);
+  const completeImradConversion = useMutation(api.imrad.completeConversion);
+  const archiveImradConversion = useMutation(api.imrad.archiveCompletedConversion);
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [backendActionError, setBackendActionError] = useState("");
@@ -99,7 +95,9 @@ export default function AdminImradProcessingPage() {
   };
   const filteredLiveProcessing = (liveSubmissions ?? []).filter(
     (submission) =>
-      submission.status === "processing" &&
+      ["processing", "verification", "changes_requested", "approved", "completed"].includes(
+        submission.status
+      ) &&
       matchesFilters({
         project: submission.projectTitle,
         team: submission.teamName,
@@ -107,7 +105,9 @@ export default function AdminImradProcessingPage() {
       })
   );
   const liveProcessingSubmissions = (liveSubmissions ?? []).filter(
-    (submission) => submission.status === "processing"
+    (submission) =>
+      submission.status === "processing" ||
+      submission.status === "changes_requested"
   );
   const filteredLiveSubmissions = (liveSubmissions ?? []).filter(
     (submission) =>
@@ -194,6 +194,27 @@ export default function AdminImradProcessingPage() {
       console.error("Failed to cancel IMRAD processing:", error);
       setBackendActionError(
         error instanceof Error ? error.message : "Couldn't cancel IMRAD processing."
+      );
+    }
+  };
+
+  const runAdminFinalAction = async (
+    submissionId: Id<"imradSubmissions">,
+    action: "verification" | "complete" | "archive"
+  ) => {
+    setBackendActionError("");
+    try {
+      if (action === "verification") {
+        await submitFinalVerification({ submissionId });
+      } else if (action === "complete") {
+        await completeImradConversion({ submissionId });
+      } else {
+        await archiveImradConversion({ submissionId });
+      }
+    } catch (error) {
+      console.error(`Failed to run IMRAD ${action} action:`, error);
+      setBackendActionError(
+        error instanceof Error ? error.message : `Couldn't ${action} the IMRAD document.`
       );
     }
   };
@@ -372,6 +393,24 @@ export default function AdminImradProcessingPage() {
             const completedParts =
               submission.workingDocument?.completedParts ?? [];
             const completedPartCount = completedParts.length;
+            const statusLabel =
+              submission.status === "verification"
+                ? "Final verification"
+                : submission.status === "changes_requested"
+                ? "Changes requested"
+                : submission.status === "approved"
+                  ? "Instructor approved"
+                  : submission.status === "completed"
+                    ? "Ready to archive"
+                    : "Processing";
+            const canSubmitVerification =
+              completedPartCount === IMRAD_PARTS.length &&
+              Boolean(submission.workingDocument?.savedAt) &&
+              (submission.workingDocument?.revision ?? 0) >=
+                submission.requiredSaveRevision;
+            const isEditableStatus =
+              submission.status === "processing" ||
+              submission.status === "changes_requested";
             return (
             <article
               key={submission.submissionId}
@@ -381,9 +420,15 @@ export default function AdminImradProcessingPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-foreground">{submission.teamName}</h3>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+                      submission.status === "changes_requested"
+                        ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                        : submission.status === "approved" || submission.status === "completed"
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                    }`}>
                       <ClipboardCheck className="h-3.5 w-3.5" />
-                      Processing
+                      {statusLabel}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -400,33 +445,81 @@ export default function AdminImradProcessingPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => cancelLive(submission.submissionId)}
-                  >
-                    Cancel Process
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  {isEditableStatus && (
+                    <>
                       <Button
                         type="button"
                         variant="outline"
-                        size="icon"
-                        aria-label={`Open actions for ${submission.teamName}`}
+                        onClick={() => startEditor(submission)}
                       >
-                        <MoreVertical className="h-4 w-4" />
+                        <Play className="mr-2 h-4 w-4" />
+                        Open editor
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => startEditor(submission)}>
-                        <Play className="h-4 w-4" />
-                        Start
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      {submission.status === "processing" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => cancelLive(submission.submissionId)}
+                        >
+                          Cancel Process
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {submission.status === "verification" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => cancelLive(submission.submissionId)}
+                    >
+                      Cancel Process
+                    </Button>
+                  )}
+                  {(submission.status === "processing" ||
+                    submission.status === "changes_requested") && (
+                    <Button
+                      type="button"
+                      disabled={!canSubmitVerification}
+                      onClick={() =>
+                        runAdminFinalAction(submission.submissionId, "verification")
+                      }
+                    >
+                      {submission.status === "changes_requested"
+                        ? "Resubmit for Final Verification"
+                        : "Submit Final Verification"}
+                    </Button>
+                  )}
+                  {submission.status === "approved" && (
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        runAdminFinalAction(submission.submissionId, "complete")
+                      }
+                    >
+                      Complete Conversion
+                    </Button>
+                  )}
+                  {submission.status === "completed" && (
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        runAdminFinalAction(submission.submissionId, "archive")
+                      }
+                    >
+                      Archive Project
+                    </Button>
+                  )}
                 </div>
               </div>
+              {submission.status === "changes_requested" &&
+                submission.verificationComment && (
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-foreground">
+                    <span className="font-semibold">Instructor feedback:</span>{" "}
+                    {submission.verificationComment}
+                  </p>
+                )}
+              {(submission.status === "processing" ||
+                submission.status === "changes_requested") && (
               <div
                 className="space-y-1.5"
                 role="group"
@@ -502,6 +595,7 @@ export default function AdminImradProcessingPage() {
                   ))}
                 </ol>
               </div>
+              )}
               {uploadedImradFiles[submission.submissionId]?.length ? (
                 <ul className="grid gap-2 border-t border-border pt-4 sm:grid-cols-2">
                   {uploadedImradFiles[submission.submissionId].map((fileName, index) => (

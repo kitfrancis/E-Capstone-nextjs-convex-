@@ -31,6 +31,7 @@ export default defineSchema({
     .index("by_email", ["email"]),
 
   projects: defineTable({
+    capstoneProjectId: v.optional(v.id("capstoneProjects")),
     title: v.string(),
     team: v.string(),
     year: v.number(),
@@ -42,7 +43,17 @@ export default defineSchema({
     members: v.array(v.string()),
     adviser: v.string(),
     storageId: v.optional(v.id("_storage")),
-  }),
+    additionalFiles: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          fileName: v.string(),
+        })
+      )
+    ),
+  })
+    .index("by_capstone_project", ["capstoneProjectId"])
+    .index("by_team_title", ["team", "title"]),
 
   capstoneProjects: defineTable({
     teamName: v.string(),
@@ -100,11 +111,18 @@ export default defineSchema({
     status: v.union(
       v.literal("submitted"),
       v.literal("processing"),
-      v.literal("rejected")
+      v.literal("rejected"),
+      v.literal("verification"),
+      v.literal("changes_requested"),
+      v.literal("approved"),
+      v.literal("completed"),
+      v.literal("archived")
     ),
     submittedAt: v.number(),
     processedAt: v.optional(v.number()),
     rejectionMessage: v.optional(v.string()),
+    verificationComment: v.optional(v.string()),
+    requiredSaveRevision: v.optional(v.number()),
   })
     .index("by_project", ["capstoneProjectId"])
     .index("by_instructor_status", ["instructorId", "status"])
@@ -116,6 +134,8 @@ export default defineSchema({
     storageId: v.id("_storage"),
     fileName: v.string(),
     completedParts: v.optional(v.array(v.number())),
+    revision: v.optional(v.number()),
+    savedAt: v.optional(v.number()),
     createdBy: v.id("users"),
     createdAt: v.number(),
   }).index("by_submission", ["submissionId"]),

@@ -26,6 +26,7 @@ import {
   GraduationCap,
   ScrollText,
   UserCheck,
+  CheckCircle2,
 } from "lucide-react";
 
 
@@ -43,6 +44,7 @@ const studentLinks = [
 
 const instructorLinks = [
   { label: "Dashboard", href: "/dashboard/instructor", icon: LayoutDashboard },
+  { label: "Verification", href: "/dashboard/instructor/verification", icon: CheckCircle2 },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/instructor", icon: User },
 ];

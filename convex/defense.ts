@@ -280,6 +280,7 @@ export const archiveProject = mutation({
 
     // The archive page reads from the `projects` table
     await ctx.db.insert("projects", {
+      capstoneProjectId: project._id,
       title: project.projectTitle,
       team: project.teamName,
       year: now.getFullYear(),
