@@ -7,56 +7,117 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus,  CalendarX2Icon, ChevronRight, FileText} from "lucide-react"
+import { ChevronRight, FileText } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { useState } from "react"
 import { toast } from "sonner"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
+import type { Id } from "@/convex/_generated/dataModel"
+
+const TEAM_ROLES = [
+  "Project Manager",
+  "Programmer",
+  "Designer",
+  "System Analyst",
+  "System Architect",
+] as const;
+type TaskTargetRole = (typeof TEAM_ROLES)[number] | "all_roles";
 
 export function TaskDialogDemo() {
-    const teams = useQuery(api.dashboard.getTeams);
-    const createTask = useMutation(api.dashboard.createTask);
+  const teams = useQuery(api.dashboard.getTeams);
+  const me = useQuery(api.users.getMe);
+  const createTask = useMutation(api.dashboard.createTask);
+  const createTaskForAllTeams = useMutation(api.dashboard.createTaskForAllTeams);
 
   const [open, setOpen] = useState(false);
-  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [selectedTeamId, setSelectedTeamId] =
+    useState<Id<"capstoneProjects"> | "">("");
   const [taskTitle, setTaskTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [targetRole, setTargetRole] = useState<TaskTargetRole>("all_roles");
+  const [sendToAll, setSendToAll] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const manageableTeams =
+    teams?.filter((team) => team.instructorId === me?._id) ?? [];
+
+  const resetForm = () => {
+    setSelectedTeamId("");
+    setTaskTitle("");
+    setDescription("");
+    setDueDate("");
+    setTargetRole("all_roles");
+    setSendToAll(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (isSubmitting) return;
+    setOpen(nextOpen);
+    if (!nextOpen) resetForm();
+  };
 
   const handleSubmit = async () => {
-    if (!selectedTeamId || !taskTitle || !dueDate) {
-      alert("Please fill in all required fields.");
+    const title = taskTitle.trim();
+    if ((!sendToAll && !selectedTeamId) || !title || !dueDate) {
+      toast.error("Choose a team and enter a title and due date.");
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      await createTask({
-        capstoneProjectId: selectedTeamId as any,
-        title: taskTitle,
-        description: description || "No description provided",
-        assignedTo: "Team",
-        dueDate,
-        status: "pending",
-      });
+      if (sendToAll) {
+        const result = await createTaskForAllTeams({
+          title,
+          description: description.trim() || "No description provided",
+          dueDate,
+          targetRole,
+          status: "pending",
+        });
+        const missingRoleMessage = result.teamsWithoutRoleCount
+          ? ` ${result.teamsWithoutRoleCount} team${result.teamsWithoutRoleCount === 1 ? " had" : "s had"} no matching members; tasks were left unassigned.`
+          : "";
+        toast.success(
+          `Task created for ${result.createdTeamCount} team${result.createdTeamCount === 1 ? "" : "s"}.${missingRoleMessage}`
+        );
+      } else {
+        if (!selectedTeamId) {
+          toast.error("Choose a team.");
+          return;
+        }
+        const result = await createTask({
+          capstoneProjectId: selectedTeamId,
+          title,
+          description: description.trim() || "No description provided",
+          assignedTo: "Team",
+          dueDate,
+          targetRole,
+          status: "pending",
+        });
+        toast.success(
+          result.notifiedMemberCount > 0
+            ? `Task created and assigned to ${result.notifiedMemberCount} team member${result.notifiedMemberCount === 1 ? "" : "s"}.`
+            : targetRole === "all_roles"
+              ? "Task created for the team, but there are no members to notify."
+              : "Task created for the team, but no members currently have the selected role."
+        );
+      }
 
-      setSelectedTeamId("");
-      setTaskTitle("");
-      setDescription("");
-      setDueDate("");
+      resetForm();
       setOpen(false);
-      toast.success("Task created successfully!");
     } catch (error) {
       console.error("Failed to create task:", error);
-      toast.error("Failed to create task");
+      toast.error(error instanceof Error ? error.message : "Failed to create task.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
 
       <DialogTrigger asChild>
   <Button
@@ -69,121 +130,134 @@ export function TaskDialogDemo() {
       </span>
       <span className="flex flex-col items-start text-left">
         <span className="text-sm font-semibold leading-tight">Create Task</span>
-        <span className="text-xs font-normal text-muted-foreground">Assign a task to a team</span>
+        <span className="text-xs font-normal text-muted-foreground">Assign a task to one or all your teams</span>
       </span>
     </span>
     <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
   </Button>
 </DialogTrigger>
 
-      <DialogContent className="sm:max-w-sm ">
+      <DialogContent className="sm:max-w-sm">
 
         <DialogHeader>
           <DialogTitle>Create New Task</DialogTitle>
           <DialogDescription>
-            Assign a task to a team with a deadline.
+            Create a team task with a deadline.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <div className=" grid grid-cols-2 gap-2 ">
-
-          <div className="space-y-1">
-            <Label htmlFor="TeamName">Team</Label>
-
-            <Select onValueChange={setSelectedTeamId}>
-              <SelectTrigger className="w-full ">
-                <SelectValue placeholder="Select a team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {teams === undefined ? (
-                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                  ) : teams.length === 0 ? (
-                    <SelectItem value="none" disabled>No teams found</SelectItem>
-                  ) : (
-                    teams.map(team => (
-                      <SelectItem key={team._id} value={team._id} className="text-xs">
-                        <span className=" max-w-56 lg:max-w-72 truncate block">
-                          {team.teamName} — {team.projectTitle}
-                        </span>
-                        
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            
-          </div>
-
-          
-
-          {/* Need to implement role selection */}
-          <div className="space-y-1">
-            <Label htmlFor="TeamName">Role/Assignees</Label>
-
-            <Select onValueChange={setSelectedTeamId}>
-              <SelectTrigger className="w-full ">
-                <SelectValue placeholder="Select a role to assign task" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem key={"projectmanager"} value={"projectmanager"} className="text-xs">
-                      Project Manager
-                  </SelectItem>
-                  <SelectItem key={"programmer"} value={"programmer"} className="text-xs">
-                      Programmer
-                  </SelectItem>
-                  <SelectItem key={"designer"} value={"designer"} className="text-xs">
-                      Designer
-                  </SelectItem>
-                  <SelectItem key={"systemanalyst"} value={"systemanalyst"} className="text-xs">
-                      System Analyst
-                  </SelectItem>
-                  <SelectItem key={"systemarchitect"} value={"systemarchitect"} className="text-xs">
-                      System Architect
-                  </SelectItem>
-                  {/* <SelectItem key={"all"} value={"all"} className="text-xs">
-                    All
-                  </SelectItem> */}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            
-          </div>
-
-          </div>
+          {!sendToAll && (
+            <div className="space-y-1">
+              <Label htmlFor="task-team">Team</Label>
+              <Select
+                value={selectedTeamId}
+                onValueChange={(value) =>
+                  setSelectedTeamId(value as Id<"capstoneProjects">)
+                }
+              >
+                <SelectTrigger id="task-team" className="w-full">
+                  <SelectValue placeholder="Select a team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {teams === undefined || me === undefined ? (
+                      <SelectItem value="loading" disabled>Loading...</SelectItem>
+                    ) : manageableTeams.length === 0 ? (
+                      <SelectItem value="none" disabled>No teams found</SelectItem>
+                    ) : (
+                      manageableTeams.map((team) => (
+                        <SelectItem key={team._id} value={team._id} className="text-xs">
+                          <span className="block max-w-56 truncate lg:max-w-72">
+                            {team.teamName} — {team.projectTitle}
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-1">
             <Label htmlFor="projectTitle">Task Title</Label>
-            <Input  id="projectTitle"  placeholder="e.g. Complete UI design" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+            <Input id="projectTitle" placeholder="e.g. Complete UI design" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="description">Description</Label> 
-            <Textarea  id="description" placeholder="Provide details about the task and its requirements." value={description} onChange={(e) => setDescription(e.target.value)}  />
+            <Label htmlFor="description">Description</Label>
+            <Textarea id="description" placeholder="Provide details about the task and its requirements." value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="task-role">Assign to role</Label>
+            <Select
+              value={targetRole}
+              onValueChange={(value) => setTargetRole(value as TaskTargetRole)}
+            >
+              <SelectTrigger id="task-role" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all_roles">All Roles</SelectItem>
+                  {TEAM_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {targetRole === "all_roles"
+                ? "The whole team will receive this task."
+                : `Only team members with the ${targetRole} role will receive it.`}
+            </p>
           </div>
           <div className="space-y-1 mb-3">
             <Label htmlFor="dueDate">Due Date</Label>
-            <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}/>
+            <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
           <div className="flex items-center justify-between ">
-            <Label>Assigned to all active teams(Send to All)</Label>
-             <Switch id="switch-size-default" size="default" />
+            <Label htmlFor="send-to-all">
+              Assign to all your teams (Send to All)
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                Creates one task for each team you manage and notifies its members.
+              </span>
+            </Label>
+            <Switch
+              id="send-to-all"
+              size="default"
+              checked={sendToAll}
+              onCheckedChange={(checked) => {
+                setSendToAll(checked);
+                if (checked) setSelectedTeamId("");
+              }}
+            />
           </div>
         </div>
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
           </DialogClose>
-          <Button onClick={handleSubmit}>Create Task</Button>
-
-          {/* Need to implement the "Send to All" functionality */}
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={
+              isSubmitting ||
+              (sendToAll
+                ? manageableTeams.length === 0
+                : teams === undefined || manageableTeams.length === 0)
+            }
+          >
+            {isSubmitting
+              ? "Creating..."
+              : sendToAll
+                ? "Create for All Teams"
+                : "Create Task"}
+          </Button>
 
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 } 
-

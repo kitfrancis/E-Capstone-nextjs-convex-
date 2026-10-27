@@ -877,7 +877,8 @@ export function TabsDemo({
                     <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
                     <p className="text-muted-foreground text-xs mt-0.5 wrap-break-word">{task.description}</p>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                      <span>Assigned to: {task.assignedTo}</span>
+                      <span>Team: {task.assignedTo}</span>
+                      <span>Role: {task.targetRole ?? "All Roles"}</span>
                       <span className="inline-flex items-center gap-1">
                         <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
                       </span>

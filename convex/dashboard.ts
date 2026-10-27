@@ -6,6 +6,32 @@ import type { Doc } from "./_generated/dataModel";
 import { logAction } from "./users";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
+const teamRoleValidator = v.union(
+  v.literal("Project Manager"),
+  v.literal("Programmer"),
+  v.literal("Designer"),
+  v.literal("System Analyst"),
+  v.literal("System Architect")
+);
+const taskTargetRoleValidator = v.union(v.literal("all_roles"), teamRoleValidator);
+const taskDocValidator = v.object({
+  _id: v.id("tasks"),
+  _creationTime: v.number(),
+  capstoneProjectId: v.id("capstoneProjects"),
+  title: v.string(),
+  description: v.string(),
+  assignedTo: v.string(),
+  dueDate: v.string(),
+  status: v.union(
+    v.literal("completed"),
+    v.literal("in_progress"),
+    v.literal("pending"),
+    v.literal("under_review"),
+    v.literal("needs_revision")
+  ),
+  batchId: v.optional(v.string()),
+  targetRole: v.optional(teamRoleValidator),
+});
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -238,16 +264,48 @@ export const getDeliverables = query({
 
 export const getTasks = query({
   args: { capstoneProjectId: v.id("capstoneProjects") },
+  returns: v.array(taskDocValidator),
   handler: async (ctx, args) => {
     const user = await getCaller(ctx);
     if (!user) return [];
     const project = await ctx.db.get(args.capstoneProjectId);
     if (!project || !canAccess(user, project)) return [];
 
-    return await ctx.db
+    const tasks = await ctx.db
       .query("tasks")
-      .filter((q) => q.eq(q.field("capstoneProjectId"), args.capstoneProjectId))
+      .withIndex("by_capstone_project", (q) =>
+        q.eq("capstoneProjectId", args.capstoneProjectId)
+      )
       .collect();
+
+    if (user.role !== "student") return tasks;
+    const role = project.teamRoles?.find(
+      (assignment) => assignment.memberId === user._id
+    )?.role;
+    return tasks.filter((task) => !task.targetRole || task.targetRole === role);
+  },
+});
+
+export const setMyTeamRole = mutation({
+  args: {
+    capstoneProjectId: v.id("capstoneProjects"),
+    role: teamRoleValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const caller = await requireRole(ctx, ["student"]);
+    const project = await ctx.db.get(args.capstoneProjectId);
+    if (!project || !(project.members ?? []).includes(caller._id)) {
+      throw new Error("You are not a member of this team.");
+    }
+
+    const existingRoles = project.teamRoles ?? [];
+    const nextRoles = existingRoles.filter(
+      (assignment) => assignment.memberId !== caller._id
+    );
+    nextRoles.push({ memberId: caller._id, role: args.role });
+    await ctx.db.patch(args.capstoneProjectId, { teamRoles: nextRoles });
+    return null;
   },
 });
 
@@ -777,12 +835,17 @@ export const createTask = mutation({
     description: v.string(),
     assignedTo: v.string(),
     dueDate: v.string(),
+    targetRole: taskTargetRoleValidator,
     status: v.union(
       v.literal("completed"),
       v.literal("in_progress"),
       v.literal("pending")
     ),
   },
+  returns: v.object({
+    taskId: v.id("tasks"),
+    notifiedMemberCount: v.number(),
+  }),
   handler: async (ctx, args) => {
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
@@ -796,31 +859,45 @@ export const createTask = mutation({
       description: args.description,
       assignedTo: project.teamName,
       dueDate: args.dueDate,
+      targetRole: args.targetRole === "all_roles" ? undefined : args.targetRole,
       status: args.status,
     });
 
     await logAction(ctx, caller, "Created task", `${args.title} for team "${project.teamName}"`);
 
-    for (const memberId of project.members ?? []) {
+    const recipients = (project.members ?? []).filter((memberId) =>
+      args.targetRole === "all_roles" ||
+      project.teamRoles?.some(
+        (assignment) =>
+          assignment.memberId === memberId && assignment.role === args.targetRole
+      )
+    );
+    const assignmentLabel = args.targetRole === "all_roles"
+      ? "your team"
+      : `your ${args.targetRole} role on team "${project.teamName}"`;
+    for (const memberId of recipients) {
       await ctx.runMutation(api.notifications.sendNotification, {
         userId: memberId,
-        message: `A new task "${args.title}" has been assigned to your team. Due date: ${args.dueDate}.`,
+        message: `A new task "${args.title}" has been assigned to ${assignmentLabel}. Due date: ${args.dueDate}.`,
         type: "task_assigned",
         relatedId: taskId,
       });
     }
 
-    return taskId;
+    return {
+      taskId,
+      notifiedMemberCount: recipients.length,
+    };
   },
 });
 
-// "Assigned to all active teams (Send to All)": one task per team the caller
-// manages (admin: every team), all in one transaction.
+// "Send to All" creates one task per team managed by the instructor.
 export const createTaskForAllTeams = mutation({
   args: {
     title: v.string(),
     description: v.string(),
     dueDate: v.string(),
+    targetRole: taskTargetRoleValidator,
     status: v.optional(
       v.union(
         v.literal("completed"),
@@ -829,27 +906,51 @@ export const createTaskForAllTeams = mutation({
       )
     ),
   },
+  returns: v.object({
+    createdTeamCount: v.number(),
+    teamsWithoutRoleCount: v.number(),
+  }),
   handler: async (ctx, args) => {
-    const caller = await requireRole(ctx, ["instructor", "admin"]);
+    const caller = await requireRole(ctx, ["instructor"]);
 
-    const allTeams = await ctx.db.query("capstoneProjects").collect();
-    const teams = allTeams.filter((t) => canManage(caller, t));
+    const teams = await ctx.db
+      .query("capstoneProjects")
+      .withIndex("by_instructor_stage_result", (q) =>
+        q.eq("instructorId", caller._id)
+      )
+      .collect();
     if (teams.length === 0) throw new Error("You have no teams to assign this task to.");
 
+    let teamsWithoutRoleCount = 0;
     for (const project of teams) {
+      const recipients = (project.members ?? []).filter((memberId) =>
+        args.targetRole === "all_roles" ||
+        project.teamRoles?.some(
+          (assignment) =>
+            assignment.memberId === memberId && assignment.role === args.targetRole
+        )
+      );
+      const assignmentLabel = args.targetRole === "all_roles"
+        ? "your team"
+        : `your ${args.targetRole} role on team "${project.teamName}"`;
+      if (args.targetRole !== "all_roles" && recipients.length === 0) {
+        teamsWithoutRoleCount += 1;
+      }
+
       const taskId = await ctx.db.insert("tasks", {
         capstoneProjectId: project._id,
         title: args.title,
         description: args.description,
         assignedTo: project.teamName,
         dueDate: args.dueDate,
+        targetRole: args.targetRole === "all_roles" ? undefined : args.targetRole,
         status: args.status ?? "pending",
       });
 
-      for (const memberId of project.members ?? []) {
+      for (const memberId of recipients) {
         await ctx.runMutation(api.notifications.sendNotification, {
           userId: memberId,
-          message: `A new task "${args.title}" has been assigned to your team. Due date: ${args.dueDate}.`,
+          message: `A new task "${args.title}" has been assigned to ${assignmentLabel}. Due date: ${args.dueDate}.`,
           type: "task_assigned",
           relatedId: taskId,
         });
@@ -860,10 +961,13 @@ export const createTaskForAllTeams = mutation({
       ctx,
       caller,
       "Created task for all teams",
-      `${args.title} → ${teams.length} team(s)`
+      `${args.title} → ${teams.length} team(s), ${teamsWithoutRoleCount} without matching members`
     );
 
-    return teams.length;
+    return {
+      createdTeamCount: teams.length,
+      teamsWithoutRoleCount,
+    };
   },
 });
 
@@ -874,7 +978,9 @@ export const updateTask = mutation({
     description: v.string(),
     dueDate: v.string(),
     capstoneProjectId: v.id("capstoneProjects"),
+    targetRole: taskTargetRoleValidator,
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
@@ -895,9 +1001,11 @@ export const updateTask = mutation({
       dueDate: args.dueDate,
       capstoneProjectId: args.capstoneProjectId,
       assignedTo: newProject.teamName,
+      targetRole: args.targetRole === "all_roles" ? undefined : args.targetRole,
     });
 
     await logAction(ctx, caller, "Updated task", `${args.title} (team "${newProject.teamName}")`);
+    return null;
   },
 });
 
@@ -931,6 +1039,7 @@ export const studentUpdateTask = mutation({
     taskId: v.id("tasks"),
     status: v.union(v.literal("in_progress"), v.literal("under_review")),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const caller = await requireCaller(ctx);
 
@@ -940,6 +1049,16 @@ export const studentUpdateTask = mutation({
     const project = await ctx.db.get(task.capstoneProjectId);
     if (!project || !(project.members ?? []).includes(caller._id)) {
       throw new Error("You are not on this team");
+    }
+    if (
+      task.targetRole &&
+      !project.teamRoles?.some(
+        (assignment) =>
+          assignment.memberId === caller._id &&
+          assignment.role === task.targetRole
+      )
+    ) {
+      throw new Error("This task is assigned to a different team role.");
     }
 
     const allowed =
@@ -971,6 +1090,7 @@ export const studentUpdateTask = mutation({
         });
       }
     }
+    return null;
   },
 });
 

@@ -11,6 +11,14 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SelectDemo } from "@/app/components/select";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
 import { toast } from "sonner";
@@ -38,6 +46,15 @@ import {
   Undo2,
   Info,
 } from "lucide-react";
+
+const TEAM_ROLES = [
+  "Project Manager",
+  "Programmer",
+  "Designer",
+  "System Analyst",
+  "System Architect",
+] as const;
+type TeamRole = (typeof TEAM_ROLES)[number];
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,12 +222,21 @@ function DashboardContent() {
   const me = mounted ? meQuery : undefined;
   const joinTeam = useMutation(api.dashboard.joinTeam);
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
+  const setMyTeamRole = useMutation(api.dashboard.setMyTeamRole);
+  const [selectedTeamRole, setSelectedTeamRole] = useState<TeamRole | "">("");
+  const [savingTeamRole, setSavingTeamRole] = useState(false);
 
   const projectQuery = useQuery(
     api.dashboard.getMyProject,
     me ? { clerkId: me.clerkId } : "skip"
   );
   const project = mounted ? projectQuery : undefined;
+  const currentTeamRole =
+    project?.teamRoles?.find((assignment) => assignment.memberId === me?._id)?.role ?? "";
+
+  useEffect(() => {
+    setSelectedTeamRole(currentTeamRole);
+  }, [currentTeamRole, project]);
 
   const teamMembers = useQuery(
     api.dashboard.getProjectMembers,
@@ -614,6 +640,23 @@ function DashboardContent() {
     }
   };
 
+  const saveTeamRole = async () => {
+    if (!project || !selectedTeamRole || selectedTeamRole === currentTeamRole) return;
+    setSavingTeamRole(true);
+    try {
+      await setMyTeamRole({
+        capstoneProjectId: project._id,
+        role: selectedTeamRole,
+      });
+      toast.success("Your team role has been updated.");
+    } catch (error) {
+      console.error("Failed to update team role:", error);
+      toast.error(error instanceof Error ? error.message : "Couldn't update your team role.");
+    } finally {
+      setSavingTeamRole(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     if (status === "approved") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
     if (status === "under_review") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
@@ -776,6 +819,44 @@ function DashboardContent() {
                 </span>
               </div>
 
+              <div className="mt-5 flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1">
+                  <label htmlFor="student-team-role" className="text-sm font-medium">
+                    Your role in this team
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Instructors use team roles to assign role-specific tasks.
+                  </p>
+                  <Select
+                    value={selectedTeamRole}
+                    onValueChange={(value) => setSelectedTeamRole(value as TeamRole)}
+                  >
+                    <SelectTrigger id="student-team-role" className="w-full sm:w-64">
+                      <SelectValue placeholder="Choose your team role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {TEAM_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={saveTeamRole}
+                  disabled={
+                    savingTeamRole ||
+                    !selectedTeamRole ||
+                    selectedTeamRole === currentTeamRole
+                  }
+                >
+                  {savingTeamRole ? "Saving..." : "Save Role"}
+                </Button>
+              </div>
+
               <div className="mt-5">
                 <div className="flex items-end justify-between gap-3">
                   <p className="text-sm text-muted-foreground">
@@ -889,6 +970,9 @@ function DashboardContent() {
                               )}
                             </div>
                             <p className="text-xs lg:text-sm text-muted-foreground capitalize">{member.role}</p>
+                            <p className="text-xs lg:text-sm text-muted-foreground">
+                              Team role: {project.teamRoles?.find((assignment) => assignment.memberId === member._id)?.role ?? "Not selected"}
+                            </p>
                             <p className="text-xs lg:text-sm text-muted-foreground truncate">{member.email}</p>
                           </div>
                         </div>
@@ -1270,7 +1354,8 @@ function DashboardContent() {
                                 <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
                                 <p className="text-muted-foreground text-xs mt-0.5 break-words">{task.description}</p>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                                  <span>Assigned to: {task.assignedTo}</span>
+                                  <span>Team: {task.assignedTo}</span>
+                                  <span>Role: {task.targetRole ?? "All Roles"}</span>
                                   <span className="inline-flex items-center gap-1">
                                     <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
                                   </span>

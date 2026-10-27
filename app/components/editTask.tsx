@@ -12,19 +12,29 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { useState, useEffect, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { Pencil } from "lucide-react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { toast } from "sonner"
-import { Id } from "@/convex/_generated/dataModel"
+import type { Id } from "@/convex/_generated/dataModel"
+
+const TEAM_ROLES = [
+  "Project Manager",
+  "Programmer",
+  "Designer",
+  "System Analyst",
+  "System Architect",
+] as const;
+type TaskTargetRole = (typeof TEAM_ROLES)[number] | "all_roles";
 
 interface EditTaskProps {
   taskId: Id<"tasks">;
   initialTitle: string;
   initialDescription: string;
   initialDueDate: string;
-  initialTeamId: string;
+  initialTeamId: Id<"capstoneProjects">;
+  initialTargetRole?: (typeof TEAM_ROLES)[number];
   trigger?: ReactNode;
 }
 
@@ -34,26 +44,22 @@ export function EditTask({
   initialDescription,
   initialDueDate,
   initialTeamId,
+  initialTargetRole,
   trigger,
 }: EditTaskProps) {
   const [open, setOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [dueDate, setDueDate] = useState(initialDueDate);
-  const [selectedTeamId, setSelectedTeamId] = useState(initialTeamId);
+  const [selectedTeamId, setSelectedTeamId] =
+    useState<Id<"capstoneProjects"> | "">(initialTeamId);
+  const [targetRole, setTargetRole] = useState<TaskTargetRole>(
+    initialTargetRole ?? "all_roles"
+  );
 
   const teams = useQuery(api.dashboard.getTeams);
   const updateTask = useMutation(api.dashboard.updateTask);
 
-
-    useEffect(() => {
-    if (open) {
-      setTaskTitle(initialTitle);
-      setDescription(initialDescription);
-      setDueDate(initialDueDate);
-      setSelectedTeamId(initialTeamId);
-    }
-  }, [open, initialTitle, initialDescription, initialDueDate, initialTeamId]);
 
   const handleSubmit = async () => {
     if (!selectedTeamId || !taskTitle || !dueDate) {
@@ -67,19 +73,32 @@ export function EditTask({
         title: taskTitle,
         description: description || "No description provided",
         dueDate,
-        capstoneProjectId: selectedTeamId as any,
+        capstoneProjectId: selectedTeamId,
+        targetRole,
       });
 
       setOpen(false);
       toast.success("Task updated successfully!");
     } catch (error) {
       console.error("Failed to update task:", error);
-      toast.error("Failed to update task");
+      toast.error(error instanceof Error ? error.message : "Failed to update task.");
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          setTaskTitle(initialTitle);
+          setDescription(initialDescription);
+          setDueDate(initialDueDate);
+          setSelectedTeamId(initialTeamId);
+          setTargetRole(initialTargetRole ?? "all_roles");
+        }
+        setOpen(nextOpen);
+      }}
+    >
       <DialogTrigger asChild>
         {trigger ? (
           trigger
@@ -97,7 +116,12 @@ export function EditTask({
         <div className="flex flex-col gap-3">
           <div className="space-y-1">
             <Label>Team</Label>
-            <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+            <Select
+              value={selectedTeamId}
+              onValueChange={(value) =>
+                setSelectedTeamId(value as Id<"capstoneProjects">)
+              }
+            >
               <SelectTrigger className="w-full overflow-hidden">
                 <SelectValue placeholder="Select a team" className="w-full overflow-hidden" />
               </SelectTrigger>
@@ -114,6 +138,25 @@ export function EditTask({
                       </SelectItem>
                     ))
                   )}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Assign to role</Label>
+            <Select
+              value={targetRole}
+              onValueChange={(value) => setTargetRole(value as TaskTargetRole)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all_roles">All Roles</SelectItem>
+                  {TEAM_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
