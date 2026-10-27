@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   BookOpen,
   CalendarDays,
+  Check,
   Download,
   File,
   FileText,
@@ -49,6 +50,7 @@ type Project = FunctionReturnType<typeof api.archive.getAll>[number];
 
 const ALL_YEARS = "All Years";
 const ALL_DEPARTMENTS = "All Departments";
+const IMRAD_PARTS = ["Introduction", "Methodology", "Results", "Discussion"] as const;
 
 // Same tinted-card language as the instructor dashboard (blue / amber / purple / rose).
 const TONES = {
@@ -409,37 +411,135 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
                 <div className="space-y-3">
                 {imradReadyProjects.map((item) => {
                   const submissionStatus = imradSubmissionByProject.get(item.projectId);
+                  const completedParts = submissionStatus?.completedParts ?? [];
+                  const completedPartCount = completedParts.length;
                   return (
                   <article
                     key={item.projectId}
-                    className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
+                    className={`rounded-2xl border border-border bg-card p-5 ${
+                      submissionStatus?.status === "processing" ? "space-y-5" : ""
+                    }`}
                   >
-                    <div className="flex min-w-0 items-start gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-purple-500/15 text-purple-500">
-                        <BookOpen className="h-5 w-5" />
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-purple-500/15 text-purple-500">
+                          <BookOpen className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-foreground">{item.projectTitle}</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {item.teamName} • {new Date(item.acceptedAt).getFullYear()}
+                          </p>
+                          {submissionStatus?.status === "processing" && (
+                            <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                              <FileText className="h-4 w-4 shrink-0" />
+                              <span className="truncate">
+                                {submissionStatus.workingDocumentFileName ??
+                                  `${item.teamName} - IMRAD Conversion Guide.pdf`}
+                              </span>
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-foreground">{item.projectTitle}</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {item.teamName} • {new Date(item.acceptedAt).getFullYear()}
-                        </p>
-                      </div>
+                      <span className={`inline-flex w-fit shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium ${
+                        submissionStatus?.status === "rejected"
+                          ? "border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400"
+                          : submissionStatus
+                            ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "border border-blue-500/25 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                      }`}>
+                        {submissionStatus?.status === "processing"
+                          ? "Processing"
+                          : submissionStatus?.status === "submitted"
+                            ? "Submitted to admin"
+                            : submissionStatus?.status === "rejected"
+                              ? "Rejected — resubmission required"
+                              : "Accepted"}
+                      </span>
                     </div>
-                    <span className={`inline-flex w-fit shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium ${
-                      submissionStatus?.status === "rejected"
-                        ? "border border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400"
-                        : submissionStatus
-                          ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : "border border-blue-500/25 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                    }`}>
-                      {submissionStatus?.status === "processing"
-                        ? "Processing"
-                        : submissionStatus?.status === "submitted"
-                          ? "Submitted to admin"
-                          : submissionStatus?.status === "rejected"
-                            ? "Rejected — resubmission required"
-                            : "Accepted"}
-                    </span>
+                    {submissionStatus?.status === "processing" && (
+                      <div
+                        className="space-y-3"
+                        role="group"
+                        aria-label={`IMRAD progress for ${item.teamName}: Part ${completedPartCount} of 4`}
+                      >
+                        <div className="flex items-end justify-between gap-3">
+                          <p className="text-sm text-muted-foreground">
+                            {completedPartCount} of 4 parts completed
+                          </p>
+                          <p
+                            role="progressbar"
+                            aria-label="IMRAD parts completed"
+                            aria-valuemin={0}
+                            aria-valuemax={4}
+                            aria-valuenow={completedPartCount}
+                            aria-valuetext={`Part ${completedPartCount} of 4`}
+                            className="text-2xl font-bold leading-none text-foreground"
+                          >
+                            Part {completedPartCount}/4
+                          </p>
+                        </div>
+                        <div
+                          className="mt-4 gap-1.5"
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${IMRAD_PARTS.length}, minmax(0, 1fr))`,
+                          }}
+                          aria-hidden="true"
+                        >
+                          {IMRAD_PARTS.map((part, index) => (
+                            <div
+                              key={part}
+                              className="h-2.5 rounded-full bg-muted transition-colors"
+                              style={{
+                                backgroundColor: completedParts.includes(index + 1)
+                                  ? "#10b981"
+                                  : undefined,
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <ol
+                          className="mt-4 list-none p-0"
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${IMRAD_PARTS.length}, minmax(0, 1fr))`,
+                          }}
+                        >
+                          {IMRAD_PARTS.map((part, index) => {
+                            const isComplete = completedParts.includes(index + 1);
+                            return (
+                              <li
+                                key={part}
+                                className="flex min-w-0 flex-col items-center gap-1.5 text-center"
+                              >
+                                <span
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                                    isComplete ? "text-white" : "bg-muted text-muted-foreground"
+                                  }`}
+                                  style={{
+                                    backgroundColor: isComplete ? "#059669" : undefined,
+                                  }}
+                                >
+                                  {isComplete && <Check className="h-5 w-5" aria-hidden="true" />}
+                                </span>
+                                <span
+                                  className="text-sm font-medium leading-tight text-muted-foreground"
+                                  style={{
+                                    color: isComplete ? "#10b981" : undefined,
+                                  }}
+                                >
+                                  {part}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  Part {index + 1}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                    )}
                     {submissionStatus?.status === "rejected" && submissionStatus.rejectionMessage && (
                       <p className="mt-2 text-sm text-destructive">
                         Admin feedback: {submissionStatus.rejectionMessage}

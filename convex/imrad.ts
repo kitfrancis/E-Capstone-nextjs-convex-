@@ -121,6 +121,7 @@ export const myInstructorSubmissions = query({
   args: {},
   returns: v.array(
     v.object({
+      submissionId: v.id("imradSubmissions"),
       projectId: v.id("capstoneProjects"),
       status: v.union(
         v.literal("submitted"),
@@ -128,6 +129,8 @@ export const myInstructorSubmissions = query({
         v.literal("rejected")
       ),
       rejectionMessage: v.union(v.string(), v.null()),
+      workingDocumentFileName: v.union(v.string(), v.null()),
+      completedParts: v.array(v.number()),
     })
   ),
   handler: async (ctx) => {
@@ -146,11 +149,28 @@ export const myInstructorSubmissions = query({
       .withIndex("by_instructor_status", (q) => q.eq("instructorId", user._id))
       .take(100);
 
-    return submissions.map((submission) => ({
-      projectId: submission.capstoneProjectId,
-      status: submission.status,
-      rejectionMessage: submission.rejectionMessage ?? null,
-    }));
+    return await Promise.all(
+      submissions.map(async (submission) => {
+        const workingDocument =
+          submission.status === "processing"
+            ? await ctx.db
+                .query("imradWorkingDocuments")
+                .withIndex("by_submission", (q) =>
+                  q.eq("submissionId", submission._id)
+                )
+                .unique()
+            : null;
+
+        return {
+          submissionId: submission._id,
+          projectId: submission.capstoneProjectId,
+          status: submission.status,
+          rejectionMessage: submission.rejectionMessage ?? null,
+          workingDocumentFileName: workingDocument?.fileName ?? null,
+          completedParts: workingDocument?.completedParts ?? [],
+        };
+      })
+    );
   },
 });
 
@@ -162,6 +182,15 @@ export const adminSubmissions = query({
       projectId: v.id("capstoneProjects"),
       teamName: v.string(),
       projectTitle: v.string(),
+      workingDocument: v.union(
+        v.object({
+          storageId: v.id("_storage"),
+          fileName: v.string(),
+          url: v.union(v.string(), v.null()),
+          completedParts: v.array(v.number()),
+        }),
+        v.null()
+      ),
       year: v.number(),
       instructorName: v.string(),
       description: v.string(),
@@ -195,7 +224,7 @@ export const adminSubmissions = query({
         if (submission.status !== "submitted" && submission.status !== "processing") {
           throw new Error("Unexpected IMRAD submission status.");
         }
-        const [project, instructor, evaluationFiles] = await Promise.all([
+        const [project, instructor, evaluationFiles, workingDocument] = await Promise.all([
           ctx.db.get(submission.capstoneProjectId),
           ctx.db.get(submission.instructorId),
           Promise.all(
@@ -204,6 +233,10 @@ export const adminSubmissions = query({
               url: await ctx.storage.getUrl(file.storageId),
             }))
           ),
+          ctx.db
+            .query("imradWorkingDocuments")
+            .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+            .unique(),
         ]);
 
         return {
@@ -211,6 +244,14 @@ export const adminSubmissions = query({
           projectId: submission.capstoneProjectId,
           teamName: project?.teamName ?? "Deleted team",
           projectTitle: project?.projectTitle ?? "Project unavailable",
+          workingDocument: workingDocument
+            ? {
+                storageId: workingDocument.storageId,
+                fileName: workingDocument.fileName,
+                url: await ctx.storage.getUrl(workingDocument.storageId),
+                completedParts: workingDocument.completedParts ?? [],
+              }
+            : null,
           year: project ? new Date(project._creationTime).getFullYear() : new Date(submission.submittedAt).getFullYear(),
           instructorName: instructor?.name ?? "Unknown instructor",
           description: submission.description,
@@ -220,6 +261,126 @@ export const adminSubmissions = query({
         };
       })
     );
+  },
+});
+
+const imradPartNames = [
+  "Introduction",
+  "Methodology",
+  "Results",
+  "Discussion",
+] as const;
+
+export const completeWorkingDocumentPart = mutation({
+  args: {
+    submissionId: v.id("imradSubmissions"),
+    partNumber: v.union(
+      v.literal(1),
+      v.literal(2),
+      v.literal(3),
+      v.literal(4)
+    ),
+  },
+  returns: v.number(),
+  handler: async (ctx, { submissionId, partNumber }) => {
+    const admin = await requireAdmin(ctx);
+    const submission = await ctx.db.get(submissionId);
+    if (!submission || submission.status !== "processing") {
+      throw new Error("This project is not in IMRAD processing.");
+    }
+
+    const project = await ctx.db.get(submission.capstoneProjectId);
+    if (!project) throw new Error("Project not found.");
+
+    const workingDocument = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
+      .unique();
+    if (!workingDocument) {
+      throw new Error("Create the team IMRAD guide copy before marking a part complete.");
+    }
+
+    const completedParts = workingDocument.completedParts ?? [];
+    if (completedParts.includes(partNumber)) return completedParts.length;
+    if (partNumber !== completedParts.length + 1) {
+      throw new Error("Complete the IMRAD parts in order.");
+    }
+
+    await ctx.db.patch(workingDocument._id, {
+      completedParts: [...completedParts, partNumber],
+    });
+    await ctx.db.insert("notifications", {
+      userId: submission.instructorId,
+      message: `${project.teamName}'s IMRAD conversion is complete through Part ${partNumber} - ${imradPartNames[partNumber - 1]} (${partNumber}/4).`,
+      read: false,
+      type: "imrad_progress",
+      relatedId: submission._id,
+      link: "/dashboard/instructor",
+    });
+    await logAction(
+      ctx,
+      admin,
+      `Completed IMRAD Part ${partNumber}`,
+      project.teamName
+    );
+
+    return partNumber;
+  },
+});
+
+export const saveWorkingDocument = mutation({
+  args: {
+    submissionId: v.id("imradSubmissions"),
+    storageId: v.id("_storage"),
+  },
+  returns: v.object({
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    url: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, { submissionId, storageId }) => {
+    const admin = await requireAdmin(ctx);
+    const submission = await ctx.db.get(submissionId);
+    if (!submission || submission.status !== "processing") {
+      throw new Error("This project is not in IMRAD processing.");
+    }
+
+    const project = await ctx.db.get(submission.capstoneProjectId);
+    if (!project) throw new Error("Project not found.");
+
+    const metadata = await ctx.db.system.get("_storage", storageId);
+    if (metadata?.contentType !== "application/pdf") {
+      throw new Error("The IMRAD working document must be a PDF.");
+    }
+
+    const existing = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
+      .unique();
+    if (existing) {
+      if (existing.storageId !== storageId) await ctx.storage.delete(storageId);
+      return {
+        storageId: existing.storageId,
+        fileName: existing.fileName,
+        url: await ctx.storage.getUrl(existing.storageId),
+      };
+    }
+
+    const fileName = `${project.teamName} - IMRAD Conversion Guide.pdf`;
+    await ctx.db.insert("imradWorkingDocuments", {
+      submissionId,
+      projectId: project._id,
+      storageId,
+      fileName,
+      createdBy: admin._id,
+      createdAt: Date.now(),
+    });
+    await logAction(ctx, admin, "Created IMRAD working document", project.teamName);
+    return {
+      storageId,
+      fileName,
+      url: await ctx.storage.getUrl(storageId),
+    };
   },
 });
 

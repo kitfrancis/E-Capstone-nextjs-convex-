@@ -110,6 +110,16 @@ export default defineSchema({
     .index("by_instructor_status", ["instructorId", "status"])
     .index("by_status_submitted_at", ["status", "submittedAt"]),
 
+  imradWorkingDocuments: defineTable({
+    submissionId: v.id("imradSubmissions"),
+    projectId: v.id("capstoneProjects"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    completedParts: v.optional(v.array(v.number())),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  }).index("by_submission", ["submissionId"]),
+
   deliverables: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),
     fileName: v.string(),

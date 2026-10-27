@@ -5,12 +5,13 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
-  BookOpen,
   CalendarDays,
   Check,
   ClipboardCheck,
   FileText,
   Search,
+  MoreVertical,
+  Play,
   X,
   Trash2,
   Upload,
@@ -19,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import AdminImradOnlyOffice from "@/app/components/admin-imrad-onlyoffice";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const IMRAD_PARTS = [
   "Introduction",
@@ -47,10 +55,31 @@ export default function AdminImradProcessingPage() {
     useState<Id<"imradSubmissions"> | null>(null);
   const [rejectionMessage, setRejectionMessage] = useState("");
   const [uploadedImradFiles, setUploadedImradFiles] = useState<Record<string, string[]>>({});
+  const [activeEditor, setActiveEditor] = useState<{
+    teamName: string;
+    projectTitle: string;
+    submissionId: Id<"imradSubmissions">;
+    fileId: Id<"_storage"> | null;
+    fileName: string | null;
+    fileUrl: string | null;
+  } | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedUploadProjectId, setSelectedUploadProjectId] = useState("");
   const [imradFile, setImradFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState("");
+
+  const startEditor = (
+    submission: NonNullable<typeof liveSubmissions>[number]
+  ) => {
+    setActiveEditor({
+      teamName: submission.teamName,
+      projectTitle: submission.projectTitle,
+      submissionId: submission.submissionId,
+      fileId: submission.workingDocument?.storageId ?? null,
+      fileName: submission.workingDocument?.fileName ?? null,
+      fileUrl: submission.workingDocument?.url ?? null,
+    });
+  };
 
   const years = useMemo(
     () =>
@@ -190,7 +219,19 @@ export default function AdminImradProcessingPage() {
     }
   };
 
-  return (
+  return activeEditor ? (
+    <div className="-m-4 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <AdminImradOnlyOffice
+        {...activeEditor}
+        completedParts={
+          liveSubmissions?.find(
+            (submission) => submission.submissionId === activeEditor.submissionId
+          )?.workingDocument?.completedParts ?? []
+        }
+        onClose={() => setActiveEditor(null)}
+      />
+    </div>
+  ) : (
     <div className="space-y-6 p-4 font-Poppins sm:p-6">
       <section className="rounded-2xl border border-purple-500/20 bg-linear-to-br from-purple-500/15 via-purple-500/5 to-transparent p-6 md:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -312,7 +353,14 @@ export default function AdminImradProcessingPage() {
           </div>
         ) : (
           <>
-          {filteredLiveProcessing.map((submission) => (
+          {filteredLiveProcessing.map((submission) => {
+            const workingDocumentName =
+              submission.workingDocument?.fileName ??
+              `${submission.teamName} - IMRAD Conversion Guide.pdf`;
+            const completedParts =
+              submission.workingDocument?.completedParts ?? [];
+            const completedPartCount = completedParts.length;
+            return (
             <article
               key={submission.submissionId}
               className="space-y-6 rounded-2xl border border-border bg-card p-5"
@@ -329,8 +377,17 @@ export default function AdminImradProcessingPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {submission.projectTitle} · {submission.year}
                   </p>
+                  <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                    <FileText className="h-4 w-4 shrink-0" />
+                    <span className="truncate" title={workingDocumentName}>
+                      {workingDocumentName}
+                    </span>
+                    {!submission.workingDocument && (
+                      <span className="shrink-0 text-xs">Created on Start</span>
+                    )}
+                  </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -338,29 +395,45 @@ export default function AdminImradProcessingPage() {
                   >
                     Cancel Process
                   </Button>
-                  <BookOpen className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Open actions for ${submission.teamName}`}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => startEditor(submission)}>
+                        <Play className="h-4 w-4" />
+                        Start
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
-
               <div
                 className="space-y-1.5"
                 role="group"
-                aria-label={`IMRAD progress for ${submission.teamName}: Part ${IMRAD_PARTS.length} of ${IMRAD_PARTS.length}`}
+                aria-label={`IMRAD progress for ${submission.teamName}: Part ${completedPartCount} of ${IMRAD_PARTS.length}`}
               >
                 <div className="flex items-end justify-between gap-3">
                   <p className="text-sm text-muted-foreground">
-                    {IMRAD_PARTS.length} of {IMRAD_PARTS.length} parts completed
+                    {completedPartCount} of {IMRAD_PARTS.length} parts completed
                   </p>
                   <p
                     role="progressbar"
                     aria-label="IMRAD parts completed"
                     aria-valuemin={0}
                     aria-valuemax={IMRAD_PARTS.length}
-                    aria-valuenow={IMRAD_PARTS.length}
-                    aria-valuetext={`Part ${IMRAD_PARTS.length} of ${IMRAD_PARTS.length}`}
+                    aria-valuenow={completedPartCount}
+                    aria-valuetext={`Part ${completedPartCount} of ${IMRAD_PARTS.length}`}
                     className="text-2xl font-bold leading-none text-foreground"
                   >
-                    Part {IMRAD_PARTS.length}/{IMRAD_PARTS.length}
+                    Part {completedPartCount}/{IMRAD_PARTS.length}
                   </p>
                 </div>
                 <div
@@ -368,12 +441,16 @@ export default function AdminImradProcessingPage() {
                   style={{ display: "grid", gridTemplateColumns: `repeat(${IMRAD_PARTS.length}, minmax(0, 1fr))` }}
                   aria-hidden="true"
                 >
-                  {IMRAD_PARTS.map((part) => (
-                    <div key={part} className="min-w-0">
-                      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full w-full rounded-full bg-emerald-500" />
-                      </div>
-                    </div>
+                  {IMRAD_PARTS.map((part, index) => (
+                    <div
+                      key={part}
+                      className="h-2.5 min-w-0 rounded-full bg-muted transition-colors"
+                      style={{
+                        backgroundColor: completedParts.includes(index + 1)
+                          ? "#10b981"
+                          : undefined,
+                      }}
+                    />
                   ))}
                 </div>
                 <ol
@@ -382,10 +459,32 @@ export default function AdminImradProcessingPage() {
                 >
                   {IMRAD_PARTS.map((part, index) => (
                     <li key={part} className="flex min-w-0 flex-col items-center gap-1.5 text-center">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white">
-                        <Check className="h-5 w-5" aria-hidden="true" />
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                          completedParts.includes(index + 1)
+                            ? "text-white"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                        style={{
+                          backgroundColor: completedParts.includes(index + 1)
+                            ? "#059669"
+                            : undefined,
+                        }}
+                      >
+                        {completedParts.includes(index + 1) && (
+                          <Check className="h-5 w-5" aria-hidden="true" />
+                        )}
                       </span>
-                      <span className="text-base font-medium leading-tight text-foreground">{part}</span>
+                      <span
+                        className="text-base font-medium leading-tight text-muted-foreground"
+                        style={{
+                          color: completedParts.includes(index + 1)
+                            ? "#10b981"
+                            : undefined,
+                        }}
+                      >
+                        {part}
+                      </span>
                       <span className="text-sm text-muted-foreground">Part {index + 1}</span>
                     </li>
                   ))}
@@ -406,7 +505,8 @@ export default function AdminImradProcessingPage() {
                 </ul>
               ) : null}
             </article>
-          ))}
+            );
+          })}
           </>
         )}
       </section>
