@@ -31,6 +31,7 @@ export default defineSchema({
     .index("by_email", ["email"]),
 
   projects: defineTable({
+    capstoneProjectId: v.optional(v.id("capstoneProjects")),
     title: v.string(),
     team: v.string(),
     year: v.number(),
@@ -42,7 +43,17 @@ export default defineSchema({
     members: v.array(v.string()),
     adviser: v.string(),
     storageId: v.optional(v.id("_storage")),
-  }),
+    additionalFiles: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          fileName: v.string(),
+        })
+      )
+    ),
+  })
+    .index("by_capstone_project", ["capstoneProjectId"])
+    .index("by_team_title", ["team", "title"]),
 
   capstoneProjects: defineTable({
     teamName: v.string(),
@@ -83,7 +94,51 @@ export default defineSchema({
     keywords: v.optional(v.array(v.string())),
     finalFileId: v.optional(v.id("_storage")),
     archivedAt: v.optional(v.number()),
-  }).index("by_inviteCode", ["inviteCode"]),
+  })
+    .index("by_inviteCode", ["inviteCode"])
+    .index("by_instructor_stage_result", ["instructorId", "stage", "defenseResult"]),
+
+  imradSubmissions: defineTable({
+    capstoneProjectId: v.id("capstoneProjects"),
+    instructorId: v.id("users"),
+    evaluationFiles: v.array(
+      v.object({
+        storageId: v.id("_storage"),
+        fileName: v.string(),
+      })
+    ),
+    description: v.string(),
+    status: v.union(
+      v.literal("submitted"),
+      v.literal("processing"),
+      v.literal("rejected"),
+      v.literal("verification"),
+      v.literal("changes_requested"),
+      v.literal("approved"),
+      v.literal("completed"),
+      v.literal("archived")
+    ),
+    submittedAt: v.number(),
+    processedAt: v.optional(v.number()),
+    rejectionMessage: v.optional(v.string()),
+    verificationComment: v.optional(v.string()),
+    requiredSaveRevision: v.optional(v.number()),
+  })
+    .index("by_project", ["capstoneProjectId"])
+    .index("by_instructor_status", ["instructorId", "status"])
+    .index("by_status_submitted_at", ["status", "submittedAt"]),
+
+  imradWorkingDocuments: defineTable({
+    submissionId: v.id("imradSubmissions"),
+    projectId: v.id("capstoneProjects"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    completedParts: v.optional(v.array(v.number())),
+    revision: v.optional(v.number()),
+    savedAt: v.optional(v.number()),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  }).index("by_submission", ["submissionId"]),
 
   deliverables: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),

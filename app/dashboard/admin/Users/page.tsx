@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, MoreHorizontal, Trash2 } from "lucide-react";
+import { Check, Eye, MoreHorizontal, Trash2 } from "lucide-react";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
 type AssignableRole = Exclude<Role, "admin">;
@@ -63,6 +63,15 @@ export default function UserManagementPage() {
     id: Id<"users">;
     name: string;
     email: string;
+  } | null>(null);
+  const [userToView, setUserToView] = useState<{
+    name: string;
+    email: string;
+    studentNo?: string;
+    program?: string;
+    section?: string;
+    role: Role;
+    status?: string;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -173,7 +182,7 @@ export default function UserManagementPage() {
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Email</th>
-              <th className="px-4 py-3 font-medium">Student No.</th>
+              <th className="px-4 py-3 font-medium">ID Number</th>
               <th className="px-4 py-3 font-medium">Program / Section</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
@@ -229,51 +238,70 @@ export default function UserManagementPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {isAdmin ? (
-                      <span className="text-xs text-muted-foreground">
-                        Locked
-                      </span>
-                    ) : (
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={pendingId === u._id}
-                            aria-label={`Actions for ${u.name}`}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuLabel>Change role</DropdownMenuLabel>
-                          {ASSIGNABLE_ROLES.map((r) => (
-                            <DropdownMenuItem
-                              key={r}
-                              disabled={r === u.role}
-                              onSelect={() => handleRoleChange(u._id, r)}
-                            >
-                              <span className="flex-1">{cap(r)}</span>
-                              {r === u.role && <Check className="h-4 w-4" />}
-                            </DropdownMenuItem>
-                          ))}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-red-500 focus:text-red-500"
-                            onSelect={() =>
-                              setUserToDelete({
-                                id: u._id,
-                                name: u.name,
-                                email: u.email,
-                              })
-                            }
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Remove user
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={pendingId === u._id}
+                          aria-label={`Actions for ${u.name}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            setUserToView({
+                              name: u.name,
+                              email: u.email,
+                              studentNo: u.studentNo,
+                              program: u.program,
+                              section: u.section,
+                              role: u.role as Role,
+                              status: u.status,
+                            })
+                          }
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          User details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {isAdmin ? (
+                          <DropdownMenuItem disabled className="text-muted-foreground">
+                            Role changes locked
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                        ) : (
+                          <>
+                            <DropdownMenuLabel>Change role</DropdownMenuLabel>
+                            {ASSIGNABLE_ROLES.map((r) => (
+                              <DropdownMenuItem
+                                key={r}
+                                disabled={r === u.role}
+                                onSelect={() => handleRoleChange(u._id, r)}
+                              >
+                                <span className="flex-1">{cap(r)}</span>
+                                {r === u.role && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-500 focus:text-red-500"
+                              onSelect={() =>
+                                setUserToDelete({
+                                  id: u._id,
+                                  name: u.name,
+                                  email: u.email,
+                                })
+                              }
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Remove user
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               );
@@ -346,6 +374,51 @@ export default function UserManagementPage() {
               {deleting ? "Removing…" : "Remove"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* User details */}
+      <Dialog open={!!userToView} onOpenChange={(open) => !open && setUserToView(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>User details</DialogTitle>
+            <DialogDescription>
+              Account information for {userToView?.name}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Name</p>
+              <p className="font-medium text-foreground">{userToView?.name}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="font-medium text-foreground">{userToView?.email}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Role</p>
+              {userToView && (
+                <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ${roleStyles[userToView.role]}`}>
+                  {userToView.role}
+                </span>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Account status</p>
+              <p className="font-medium capitalize text-foreground">{userToView?.status ?? "Not specified"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Student number</p>
+              <p className="font-medium text-foreground">{userToView?.studentNo || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Program / Section</p>
+              <p className="font-medium text-foreground">
+                {[userToView?.program, userToView?.section].filter(Boolean).join(" · ") || "—"}
+              </p>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

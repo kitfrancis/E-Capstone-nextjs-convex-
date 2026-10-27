@@ -94,9 +94,77 @@ export const deleteProject = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
 
-    if (project.storageId) await ctx.storage.delete(project.storageId);
+    const storageIds = new Set([
+      ...(project.storageId ? [project.storageId] : []),
+      ...(project.additionalFiles ?? []).map((file) => file.storageId),
+    ]);
+    await Promise.all([...storageIds].map((storageId) => ctx.storage.delete(storageId)));
     await ctx.db.delete(args.projectId);
     await logAction(ctx, admin, "Deleted archived project", project.title);
+  },
+});
+
+export const cancelPrajikArchiveForEvaluation = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, { projectId }) => {
+    const admin = await requireAdmin(ctx);
+    const archiveProject = await ctx.db.get(projectId);
+    if (!archiveProject) throw new Error("Archived project not found.");
+    if (
+      archiveProject.title.trim().toLowerCase() !== "prajik" &&
+      archiveProject.team.trim().toLowerCase() !== "prajik"
+    ) {
+      throw new Error("This action is only available for the Prajik archive entry.");
+    }
+
+    if (!archiveProject.capstoneProjectId) {
+      throw new Error("This archive entry is not linked to its accepted team.");
+    }
+
+    const capstoneProject = await ctx.db.get(archiveProject.capstoneProjectId);
+    if (!capstoneProject) throw new Error("The accepted team for this archive entry was not found.");
+
+    const submission = await ctx.db
+      .query("imradSubmissions")
+      .withIndex("by_project", (q) =>
+        q.eq("capstoneProjectId", capstoneProject._id)
+      )
+      .unique();
+    if (submission && submission.status !== "archived") {
+      throw new Error("The IMRaD submission must be archived before it can be restarted.");
+    }
+
+    const workingDocument = submission
+      ? await ctx.db
+          .query("imradWorkingDocuments")
+          .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+          .unique()
+      : null;
+    const storageIds = new Set([
+      ...(archiveProject.storageId ? [archiveProject.storageId] : []),
+      ...(archiveProject.additionalFiles ?? []).map((file) => file.storageId),
+      ...(submission?.evaluationFiles.map((file) => file.storageId) ?? []),
+      ...(workingDocument ? [workingDocument.storageId] : []),
+      ...(capstoneProject.finalFileId ? [capstoneProject.finalFileId] : []),
+    ]);
+
+    await Promise.all([...storageIds].map((storageId) => ctx.storage.delete(storageId)));
+    if (workingDocument) await ctx.db.delete(workingDocument._id);
+    if (submission) await ctx.db.delete(submission._id);
+    await ctx.db.delete(archiveProject._id);
+    await ctx.db.patch(capstoneProject._id, {
+      stage: "ready_to_archive",
+      archivedAt: undefined,
+      finalFileId: undefined,
+    });
+    await logAction(
+      ctx,
+      admin,
+      "Canceled Prajik archive and reset team for IMRaD evaluation",
+      capstoneProject.teamName
+    );
+    return null;
   },
 });
 
@@ -146,7 +214,7 @@ export const seed = mutation({
     ];
 
     for (const project of projects) {
-      await ctx.db.insert("projects", project as any);
+      await ctx.db.insert("projects", project);
     }
   },
 });

@@ -379,7 +379,9 @@ const handleStatus = async (
             const defense = defenseStatus(team, teamProgress);
             const badgeLabel = defense?.label ?? team.phase;
             const badgeCls = defense?.cls ?? "bg-blue-600 text-white";
-            const hasDefenseAction = defenseActionKind(team, teamProgress) !== null;
+            const defenseAction = defenseActionKind(team, teamProgress);
+            const hasDefenseAction =
+              defenseAction !== null && defenseAction !== "archive";
 
             return (
               <div key={team._id} className={rowClass}>
@@ -438,10 +440,9 @@ const handleStatus = async (
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 justify-between lg:justify-end">
-                    {hasDefenseAction ? (
+                    {defenseAction === "archive" ? null : hasDefenseAction ? (
                       <DefenseActionButton project={team} progress={teamProgress} />
                     ) : (
-                      /* TODO: change to your real team page route */
                       <Button asChild size="sm" className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700">
                         <Link href={`/dashboard/instructor/teams/${team._id}`}>
                           View Team <ArrowRight className="h-3.5 w-3.5" />

@@ -27,11 +27,12 @@ interface Props {
   userName?: string;
   open: boolean;
   onClose: () => void;
+  onConfirm?: () => void;
   initialPage?: number;
   onComment?: () => void;
 }
 
-export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, open, onClose, initialPage, onComment }: Props) {
+export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, open, onClose, onConfirm, initialPage, onComment }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageWidth, setPageWidth] = useState(500);
@@ -283,6 +284,17 @@ export function PDFViewer({ fileUrl, fileName, deliverableId, userId, userName, 
               }}
             >
               Cancel
+            </Button>
+          </div>
+        )}
+
+        {onConfirm && (
+          <div className="flex items-center justify-between gap-3 border-t px-4 py-3 bg-background shrink-0">
+            <p className="text-sm text-muted-foreground">
+              Review the PDF, then confirm it for submission.
+            </p>
+            <Button type="button" size="sm" onClick={onConfirm} disabled={numPages === 0}>
+              Confirm reviewed
             </Button>
           </div>
         )}

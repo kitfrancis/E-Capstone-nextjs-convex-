@@ -26,6 +26,7 @@ import {
   GraduationCap,
   ScrollText,
   UserCheck,
+  CheckCircle2,
 } from "lucide-react";
 
 
@@ -43,6 +44,7 @@ const studentLinks = [
 
 const instructorLinks = [
   { label: "Dashboard", href: "/dashboard/instructor", icon: LayoutDashboard },
+  { label: "Verification", href: "/dashboard/instructor/verification", icon: CheckCircle2 },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/instructor", icon: User },
 ];
@@ -57,7 +59,8 @@ const adminLinks = [
   { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
   { label: "User Management", href: "/dashboard/admin/Users", icon: Users },
   { label: "Approvals", href: "/dashboard/admin/approvals", icon: UserCheck },
-    { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
+  { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
+  { label: "Imrad Processing", href: "/dashboard/admin/imrad-processing", icon: FileText },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Reports", href: "/dashboard/admin/reports", icon: FileText },
   { label: "System Settings", href: "/dashboard/admin/system-settings", icon: ScrollText },
