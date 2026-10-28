@@ -212,8 +212,6 @@ export function TabsDemo({
     mode: "edit" | "view";
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
-  const [versionMessage, setVersionMessage] = useState("");
-  const [versionLabel, setVersionLabel] = useState("");
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -298,8 +296,6 @@ export function TabsDemo({
             fileSize: deliverable.fileSize,
           },
         });
-        setVersionMessage("");
-        setVersionLabel(`v${chapterOf(deliverable.phase) ?? 1}.${draft.baseVersion + 1}`);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
@@ -371,8 +367,6 @@ export function TabsDemo({
           fileSize: d.fileSize,
         },
       });
-      setVersionMessage("");
-      setVersionLabel(`v${chapterOf(d.phase) ?? 1}.${draft.baseVersion + 1}`);
       sessionStorage.setItem(
         EDITOR_SESSION_KEY,
         JSON.stringify({ deliverableId: d._id }),
@@ -417,13 +411,6 @@ export function TabsDemo({
   const submitDraft = async () => {
     const doc = officeDoc;
     if (!doc?.draft || !capstoneProjectId) throw new Error("Missing project.");
-    const enteredVersion = versionLabel.trim().startsWith("v")
-      ? versionLabel.trim()
-      : `v${versionLabel.trim()}`;
-    const chapter = chapterOf(doc.phase);
-    if (!/^v[1-5]\.\d+$/.test(enteredVersion) || (chapter && !enteredVersion.startsWith(`v${chapter}.`))) {
-      throw new Error(`Enter a version in the format v${chapter ?? 1}.1.`);
-    }
     const deliverableId = doc.deliverableId as Id<"deliverables">;
     const before =
       (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
@@ -454,41 +441,9 @@ export function TabsDemo({
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId,
-      message: versionMessage.trim() || undefined,
-      versionLabel: enteredVersion,
     });
     await finishDraft({ draftId: latest._id });
     toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
-    setVersionMessage("");
-    setVersionLabel("");
-  };
-
-  const officeVersions = useMemo(() => {
-    if (!officeDoc) return [];
-    return (deliverables ?? [])
-      .filter((deliverable) => deliverable.phase === officeDoc.phase)
-      .sort((a, b) => b.version - a.version)
-      .map((deliverable) => ({
-        id: deliverable._id,
-        version: deliverable.version,
-        message: deliverable.message,
-        versionLabel:
-          deliverable.versionLabel ||
-          `v${chapterOf(deliverable.phase) ?? 1}.${deliverable.version}`,
-        uploadedAt: deliverable.uploadedAt,
-      }));
-  }, [deliverables, officeDoc]);
-
-  const selectOfficeVersion = (versionId: string) => {
-    const version = (deliverables ?? []).find((deliverable) => deliverable._id === versionId);
-    if (!version?.storageId || !officeDoc) return;
-    setOfficeDoc({
-      fileName: version.fileName,
-      storageId: version.storageId,
-      deliverableId: version._id,
-      phase: version.phase,
-      mode: "view",
-    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -877,7 +832,8 @@ export function TabsDemo({
                     <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
                     <p className="text-muted-foreground text-xs mt-0.5 wrap-break-word">{task.description}</p>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                      <span>Assigned to: {task.assignedTo}</span>
+                      <span>Team: {task.assignedTo}</span>
+                      <span>Role: {task.targetRole ?? "All Roles"}</span>
                       <span className="inline-flex items-center gap-1">
                         <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
                       </span>
@@ -920,13 +876,6 @@ export function TabsDemo({
           baseVersion={officeDoc.draft?.baseVersion}
           onSubmit={officeDoc.draft ? submitDraft : undefined}
           onClose={closeEditor}
-          versionMessage={versionMessage}
-          onVersionMessageChange={setVersionMessage}
-          versionLabel={versionLabel}
-          onVersionLabelChange={setVersionLabel}
-          versions={officeVersions}
-          selectedVersionId={officeDoc.deliverableId}
-          onVersionSelect={selectOfficeVersion}
         />
       )}
       {isRestoringEditor && (

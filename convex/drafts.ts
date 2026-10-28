@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// Student starts editing a deliverable: create the draft, or return the existing one.
+// Student clicks "Edit & resubmit": create the draft, or return the existing one.
 export const startDraft = mutation({
   args: { deliverableId: v.id("deliverables") },
   handler: async (ctx, { deliverableId }) => {
@@ -9,8 +9,9 @@ export const startDraft = mutation({
     if (!identity) throw new Error("Not signed in");
     const d = await ctx.db.get(deliverableId);
     if (!d || !d.storageId) throw new Error("File not found");
+    if (d.status !== "needs_revision") throw new Error("Only chapters that need revision can be edited.");
 
-    // Fail with a clear message if the original file is gone.
+    // NEW: fail with a clear message if the original file is gone
     const originalUrl = await ctx.storage.getUrl(d.storageId);
     if (!originalUrl) throw new Error("The original file is missing. Please upload this chapter again.");
 

@@ -66,6 +66,20 @@ export default defineSchema({
     adviserId: v.optional(v.string()),
     instructorId: v.optional(v.string()),
     members: v.optional(v.array(v.string())),
+    teamRoles: v.optional(
+      v.array(
+        v.object({
+          memberId: v.id("users"),
+          role: v.union(
+            v.literal("Project Manager"),
+            v.literal("Programmer"),
+            v.literal("Designer"),
+            v.literal("System Analyst"),
+            v.literal("System Architect")
+          ),
+        })
+      )
+    ),
     inviteCode: v.optional(v.string()),
 
     // Defense pipeline
@@ -156,6 +170,7 @@ export default defineSchema({
     storageId: v.optional(v.id("_storage")),
     message: v.optional(v.string()),
     versionLabel: v.optional(v.string()),
+    submissionDraftId: v.optional(v.id("deliverableDrafts")),
   }),
 
     deliverableDrafts: defineTable({
@@ -190,7 +205,16 @@ export default defineSchema({
       v.literal("needs_revision")
     ),
     batchId: v.optional(v.string()),
-  }),
+    targetRole: v.optional(
+      v.union(
+        v.literal("Project Manager"),
+        v.literal("Programmer"),
+        v.literal("Designer"),
+        v.literal("System Analyst"),
+        v.literal("System Architect")
+      )
+    ),
+  }).index("by_capstone_project", ["capstoneProjectId"]),
 
   notifications: defineTable({
     userId: v.string(),

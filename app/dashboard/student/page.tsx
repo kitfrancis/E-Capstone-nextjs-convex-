@@ -11,6 +11,14 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SelectDemo } from "@/app/components/select";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
 import { toast } from "sonner";
@@ -38,6 +46,15 @@ import {
   Undo2,
   Info,
 } from "lucide-react";
+
+const TEAM_ROLES = [
+  "Project Manager",
+  "Programmer",
+  "Designer",
+  "System Analyst",
+  "System Architect",
+] as const;
+type TeamRole = (typeof TEAM_ROLES)[number];
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,12 +222,21 @@ function DashboardContent() {
   const me = mounted ? meQuery : undefined;
   const joinTeam = useMutation(api.dashboard.joinTeam);
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
+  const setMyTeamRole = useMutation(api.dashboard.setMyTeamRole);
+  const [selectedTeamRole, setSelectedTeamRole] = useState<TeamRole | "">("");
+  const [savingTeamRole, setSavingTeamRole] = useState(false);
 
   const projectQuery = useQuery(
     api.dashboard.getMyProject,
     me ? { clerkId: me.clerkId } : "skip"
   );
   const project = mounted ? projectQuery : undefined;
+  const currentTeamRole =
+    project?.teamRoles?.find((assignment) => assignment.memberId === me?._id)?.role ?? "";
+
+  useEffect(() => {
+    setSelectedTeamRole(currentTeamRole);
+  }, [currentTeamRole, project]);
 
   const teamMembers = useQuery(
     api.dashboard.getProjectMembers,
@@ -268,8 +294,6 @@ function DashboardContent() {
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
 
-  const [versionMessage, setVersionMessage] = useState("");
-  const [versionLabel, setVersionLabel] = useState("");
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
 
   const officeUrl = useQuery(
@@ -341,8 +365,6 @@ function DashboardContent() {
             fileSize: deliverable.fileSize,
           },
         });
-        setVersionMessage("");
-        setVersionLabel(`v${chapterOf(deliverable.phase) ?? 1}.${draft.baseVersion + 1}`);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
@@ -414,8 +436,6 @@ function DashboardContent() {
           fileSize: d.fileSize,
         },
       });
-      setVersionMessage("");
-      setVersionLabel(`v${chapterOf(d.phase) ?? 1}.${draft.baseVersion + 1}`);
       sessionStorage.setItem(
         EDITOR_SESSION_KEY,
         JSON.stringify({ deliverableId: d._id }),
@@ -458,13 +478,6 @@ function DashboardContent() {
   const submitDraft = async () => {
     const doc = officeDoc;
     if (!doc?.draft || !project?._id) throw new Error("Missing project.");
-    const enteredVersion = versionLabel.trim().startsWith("v")
-      ? versionLabel.trim()
-      : `v${versionLabel.trim()}`;
-    const chapter = chapterOf(doc.phase);
-    if (!/^v[1-5]\.\d+$/.test(enteredVersion) || (chapter && !enteredVersion.startsWith(`v${chapter}.`))) {
-      throw new Error(`Enter a version in the format v${chapter ?? 1}.1.`);
-    }
     const deliverableId = doc.deliverableId as Id<"deliverables">;
     const before =
       (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
@@ -492,41 +505,9 @@ function DashboardContent() {
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId: project._id as Id<"capstoneProjects">,
-      message: versionMessage.trim() || undefined,
-      versionLabel: enteredVersion,
     });
     await finishDraft({ draftId: latest._id });
     toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
-    setVersionMessage("");
-    setVersionLabel("");
-  };
-
-  const officeVersions = useMemo(() => {
-    if (!officeDoc) return [];
-    return (deliverables ?? [])
-      .filter((deliverable) => deliverable.phase === officeDoc.phase)
-      .sort((a, b) => b.version - a.version)
-      .map((deliverable) => ({
-        id: deliverable._id,
-        version: deliverable.version,
-        message: deliverable.message,
-        versionLabel:
-          deliverable.versionLabel ||
-          `v${chapterOf(deliverable.phase) ?? 1}.${deliverable.version}`,
-        uploadedAt: deliverable.uploadedAt,
-      }));
-  }, [deliverables, officeDoc]);
-
-  const selectOfficeVersion = (versionId: string) => {
-    const version = (deliverables ?? []).find((deliverable) => deliverable._id === versionId);
-    if (!version?.storageId || !officeDoc) return;
-    setOfficeDoc({
-      fileName: version.fileName,
-      storageId: version.storageId,
-      deliverableId: version._id,
-      phase: version.phase,
-      mode: "view",
-    });
   };
 
   // Upload handler
@@ -611,6 +592,23 @@ function DashboardContent() {
     } catch (err) {
       console.error(err);
       toast.error("Couldn't update the task. Try again.");
+    }
+  };
+
+  const saveTeamRole = async () => {
+    if (!project || !selectedTeamRole || selectedTeamRole === currentTeamRole) return;
+    setSavingTeamRole(true);
+    try {
+      await setMyTeamRole({
+        capstoneProjectId: project._id,
+        role: selectedTeamRole,
+      });
+      toast.success("Your team role has been updated.");
+    } catch (error) {
+      console.error("Failed to update team role:", error);
+      toast.error(error instanceof Error ? error.message : "Couldn't update your team role.");
+    } finally {
+      setSavingTeamRole(false);
     }
   };
 
@@ -776,6 +774,44 @@ function DashboardContent() {
                 </span>
               </div>
 
+              <div className="mt-5 flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1">
+                  <label htmlFor="student-team-role" className="text-sm font-medium">
+                    Your role in this team
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Instructors use team roles to assign role-specific tasks.
+                  </p>
+                  <Select
+                    value={selectedTeamRole}
+                    onValueChange={(value) => setSelectedTeamRole(value as TeamRole)}
+                  >
+                    <SelectTrigger id="student-team-role" className="w-full sm:w-64">
+                      <SelectValue placeholder="Choose your team role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {TEAM_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={saveTeamRole}
+                  disabled={
+                    savingTeamRole ||
+                    !selectedTeamRole ||
+                    selectedTeamRole === currentTeamRole
+                  }
+                >
+                  {savingTeamRole ? "Saving..." : "Save Role"}
+                </Button>
+              </div>
+
               <div className="mt-5">
                 <div className="flex items-end justify-between gap-3">
                   <p className="text-sm text-muted-foreground">
@@ -889,6 +925,9 @@ function DashboardContent() {
                               )}
                             </div>
                             <p className="text-xs lg:text-sm text-muted-foreground capitalize">{member.role}</p>
+                            <p className="text-xs lg:text-sm text-muted-foreground">
+                              Team role: {project.teamRoles?.find((assignment) => assignment.memberId === member._id)?.role ?? "Not selected"}
+                            </p>
                             <p className="text-xs lg:text-sm text-muted-foreground truncate">{member.email}</p>
                           </div>
                         </div>
@@ -1270,7 +1309,8 @@ function DashboardContent() {
                                 <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
                                 <p className="text-muted-foreground text-xs mt-0.5 break-words">{task.description}</p>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                                  <span>Assigned to: {task.assignedTo}</span>
+                                  <span>Team: {task.assignedTo}</span>
+                                  <span>Role: {task.targetRole ?? "All Roles"}</span>
                                   <span className="inline-flex items-center gap-1">
                                     <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
                                   </span>
@@ -1321,13 +1361,6 @@ function DashboardContent() {
                 baseVersion={officeDoc.draft?.baseVersion}
                 onSubmit={officeDoc.draft ? submitDraft : undefined}
                 onClose={closeEditor}
-                versionMessage={versionMessage}
-                onVersionMessageChange={setVersionMessage}
-                versionLabel={versionLabel}
-                onVersionLabelChange={setVersionLabel}
-                versions={officeVersions}
-                selectedVersionId={officeDoc.deliverableId}
-                onVersionSelect={selectOfficeVersion}
               />
             )}
 
