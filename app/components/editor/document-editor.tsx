@@ -115,7 +115,7 @@ export default function OnlyOfficeEditor({
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
-    process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL ||
+    process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL?.trim() ||
     (typeof window === "undefined"
       ? ""
       : `${window.location.origin}/api/onlyoffice/callback`);
