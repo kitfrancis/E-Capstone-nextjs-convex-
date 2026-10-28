@@ -1,7 +1,4 @@
-type DraftSaveState = {
-  updatedAt: number;
-  saveRevision?: number;
-};
+type DraftSaveState = { storageId: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -35,67 +32,74 @@ function validateOnlyOfficeCallbackTarget() {
 export async function forceSaveDraft<T extends DraftSaveState>(
   key: string,
   getDraft: () => Promise<T | null>,
+  initialStorageId: string,
 ): Promise<T> {
   validateOnlyOfficeCallbackTarget();
 
   const before = await getDraft();
   if (!before) throw new Error("Draft not found.");
+  if (before.storageId !== initialStorageId) return before;
 
-  const response = await fetch("/api/onlyoffice/forcesave", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key }),
-  });
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    if (response.redirected || response.url.includes("/sign-in")) {
+  const deadline = Date.now() + 30_000;
+  const hasDraftAdvanced = (draft: T | null) =>
+    !!draft && draft.storageId !== initialStorageId;
+
+  while (Date.now() < deadline) {
+    const response = await fetch("/api/onlyoffice/forcesave", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      if (response.redirected || response.url.includes("/sign-in")) {
+        throw new Error(
+          "Your sign-in session expired. Sign in again, then reopen your draft and submit it.",
+        );
+      }
+
       throw new Error(
-        "Your sign-in session expired. Sign in again, then reopen your draft and submit it.",
+        `Couldn't save your latest edits (HTTP ${response.status}). Refresh the page and try again.`,
       );
     }
 
-    throw new Error(
-      `Couldn't save your latest edits (HTTP ${response.status}). Refresh the page and try again.`,
-    );
-  }
-
-  let result: unknown;
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error("The save service returned an invalid response. Try again.");
-  }
-
-  if (
-    !response.ok ||
-    !isRecord(result) ||
-    result.ok !== true ||
-    typeof result.waitForCallback !== "boolean"
-  ) {
-    throw new Error("Couldn't save your latest edits. Try again.");
-  }
-
-  if (result.waitForCallback === true) {
-    const deadline = Date.now() + 30_000;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const current = await getDraft();
-      if (
-        current &&
-        ((current.saveRevision ?? 0) > (before.saveRevision ?? 0) ||
-          current.updatedAt > before.updatedAt)
-      ) {
-        return current;
-      }
+    let result: unknown;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("The save service returned an invalid response. Try again.");
     }
 
-    throw new Error(
-      "OnlyOffice did not confirm the latest save. Keep the editor open and try again.",
-    );
+    if (
+      !response.ok ||
+      !isRecord(result) ||
+      result.ok !== true ||
+      typeof result.waitForCallback !== "boolean"
+    ) {
+      const message =
+        isRecord(result) && typeof result.message === "string"
+          ? result.message
+          : "Couldn't save your latest edits. Try again.";
+      throw new Error(message);
+    }
+
+    if (result.waitForCallback) {
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const current = await getDraft();
+        if (current && hasDraftAdvanced(current)) return current;
+      }
+
+      break;
+    }
+
+    const latest = await getDraft();
+    if (latest && hasDraftAdvanced(latest)) return latest;
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  const latest = await getDraft();
-  if (!latest) throw new Error("Draft not found.");
-  return latest;
+  throw new Error(
+    "OnlyOffice has not confirmed your latest edits yet. Keep the editor open, wait for them to sync, and try submitting again.",
+  );
 }

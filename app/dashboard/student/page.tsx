@@ -445,13 +445,15 @@ function DashboardContent() {
     }
   };
 
-  const closeEditor = async () => {
+  const closeEditor = async (hasChanges: boolean) => {
     const doc = officeDoc;
-    if (doc?.draft) {
+    if (doc?.draft && hasChanges) {
       try {
         const deliverableId = doc.deliverableId as Id<"deliverables">;
-        await forceSaveDraft(doc.draft.docKey, () =>
-          convex.query(api.drafts.getByDeliverable, { deliverableId }),
+        await forceSaveDraft(
+          doc.draft.docKey,
+          () => convex.query(api.drafts.getByDeliverable, { deliverableId }),
+          doc.storageId,
         );
       } catch (err) {
         console.error(err);
@@ -463,13 +465,16 @@ function DashboardContent() {
     sessionStorage.removeItem(EDITOR_SESSION_KEY);
   };
 
-  const submitDraft = async () => {
+  const submitDraft = async (hasChanges: boolean) => {
     const doc = officeDoc;
     if (!doc?.draft || !project?._id) throw new Error("Missing project.");
     const deliverableId = doc.deliverableId as Id<"deliverables">;
-    const latest = await forceSaveDraft(doc.draft.docKey, () =>
-      convex.query(api.drafts.getByDeliverable, { deliverableId }),
-    );
+    const getDraft = () =>
+      convex.query(api.drafts.getByDeliverable, { deliverableId });
+    const latest = hasChanges
+      ? await forceSaveDraft(doc.draft.docKey, getDraft, doc.storageId)
+      : await getDraft();
+    if (!latest) throw new Error("Draft not found.");
     const version = await saveDeliverable({
       storageId: latest.storageId,
       fileName: doc.fileName,

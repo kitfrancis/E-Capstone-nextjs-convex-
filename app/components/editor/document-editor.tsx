@@ -10,12 +10,12 @@ type OnlyOfficeEditorProps = {
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
-  onClose: () => void | Promise<void>; // CHANGED: can be async so Close can wait for the save
+  onClose: (hasChanges: boolean) => void | Promise<void>;
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
   draftId?: string;                // tells the callback to save into the draft, not a version
   baseVersion?: number;            // shows "Draft based on v1" and labels the button "Submit as v2"
-  onSubmit?: () => Promise<void>;  // parent calls POST /submit; throws on failure
+  onSubmit?: (hasChanges: boolean) => Promise<void>;
 };
 
 type DocsApi = {
@@ -107,6 +107,8 @@ export default function OnlyOfficeEditor({
   onSubmit,
 }: OnlyOfficeEditorProps) {
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
+  const hasPendingChangesRef = useRef(false);
+  const hasChangesRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -183,6 +185,11 @@ export default function OnlyOfficeEditor({
           onAppReady: () => {
             if (!cancelled) setLoading(false);
           },
+          onDocumentStateChange: (event: { data?: boolean }) => {
+            if (typeof event.data !== "boolean") return;
+            hasPendingChangesRef.current = event.data;
+            if (event.data) hasChangesRef.current = true;
+          },
           onError: (event: { data?: { errorDescription?: string } }) => {
             console.error("OnlyOffice error:", event?.data);
             if (!cancelled) {
@@ -217,7 +224,8 @@ export default function OnlyOfficeEditor({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onSubmit(); // server forcesaves, then creates the new version
+      await waitForDocumentSync();
+      await onSubmit(hasChangesRef.current);
       editorRef.current?.destroyEditor();
       editorRef.current = null;
     } catch (error) {
@@ -234,7 +242,8 @@ export default function OnlyOfficeEditor({
     setClosing(true);
     setSubmitError(null);
     try {
-      await onClose();
+      if (mode === "edit" && draftId) await waitForDocumentSync();
+      await onClose(hasChangesRef.current);
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Couldn't save your latest edits before closing.",
@@ -242,6 +251,22 @@ export default function OnlyOfficeEditor({
     } finally {
       setClosing(false);
     }
+  }
+
+  async function waitForDocumentSync() {
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      if (!hasPendingChangesRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (!hasPendingChangesRef.current) return;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+
+    throw new Error(
+      "OnlyOffice is still syncing your edits. Wait a moment and try again.",
+    );
   }
 
   return (
