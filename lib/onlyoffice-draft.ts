@@ -7,10 +7,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function validateOnlyOfficeCallbackTarget() {
+  if (typeof window === "undefined") return;
+
+  const callbackUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL?.trim();
+  if (!callbackUrl) return;
+
+  let callbackOrigin: string;
+  try {
+    callbackOrigin = new URL(callbackUrl).origin;
+  } catch {
+    throw new Error("The OnlyOffice save callback URL is invalid.");
+  }
+
+  const localAliases = new Set(["host.docker.internal", "localhost", "127.0.0.1"]);
+  const usesLocalDockerAlias =
+    ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
+    localAliases.has(new URL(callbackUrl).hostname);
+
+  if (callbackOrigin !== window.location.origin && !usesLocalDockerAlias) {
+    throw new Error(
+      "The OnlyOffice save callback points to a different site than this editor. Open the matching deployed site, or configure a callback URL that reaches this app.",
+    );
+  }
+}
+
 export async function forceSaveDraft<T extends DraftSaveState>(
   key: string,
   getDraft: () => Promise<T | null>,
 ): Promise<T> {
+  validateOnlyOfficeCallbackTarget();
+
   const before = await getDraft();
   if (!before) throw new Error("Draft not found.");
 
