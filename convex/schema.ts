@@ -171,14 +171,15 @@ export default defineSchema({
     message: v.optional(v.string()),
     versionLabel: v.optional(v.string()),
     submissionDraftId: v.optional(v.id("deliverableDrafts")),
-  }),
+  }).index("by_submission_draft", ["submissionDraftId"]),
 
     deliverableDrafts: defineTable({
     deliverableId: v.id("deliverables"),
     storageId: v.id("_storage"),
     baseVersion: v.number(),
     updatedAt: v.number(),
-  }).index("by_deliverable", ["deliverableId"]),
+    saveRevision: v.optional(v.number()),
+    }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({
     deliverableId: v.id("deliverables"),

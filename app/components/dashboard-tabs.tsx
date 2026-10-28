@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { forceSaveDraft } from "@/lib/onlyoffice-draft";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { SelectDemo } from "@/app/components/select";
@@ -251,7 +252,6 @@ export function TabsDemo({
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
   const studentUpdateTask = useMutation(api.dashboard.studentUpdateTask);
   const startDraft = useMutation(api.drafts.startDraft);
-  const finishDraft = useMutation(api.drafts.finish);
 
   const [activeTab, setActiveTab] = useState("deliverables");
   const deliverables = useQuery(
@@ -382,25 +382,13 @@ export function TabsDemo({
     if (doc?.draft) {
       try {
         const deliverableId = doc.deliverableId as Id<"deliverables">;
-        const before =
-          (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
-
-        const res = await fetch("/api/onlyoffice/forcesave", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: doc.draft.docKey }),
-        }).then((r) => r.json());
-
-        if (res.ok && res.waitForCallback) {
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 500));
-            const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-            if (cur && cur.updatedAt > before) break;
-          }
-        }
+        await forceSaveDraft(doc.draft.docKey, () =>
+          convex.query(api.drafts.getByDeliverable, { deliverableId }),
+        );
       } catch (err) {
         console.error(err);
-        toast.error("Couldn't save your latest edits before closing.");
+        toast.error(err instanceof Error ? err.message : "Couldn't save your latest edits before closing.");
+        throw err;
       }
     }
     setOfficeDoc(null);
@@ -412,38 +400,20 @@ export function TabsDemo({
     const doc = officeDoc;
     if (!doc?.draft || !capstoneProjectId) throw new Error("Missing project.");
     const deliverableId = doc.deliverableId as Id<"deliverables">;
-    const before =
-      (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
-
-    // 1. make OnlyOffice push the latest edits to the callback
-    const res = await fetch("/api/onlyoffice/forcesave", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: doc.draft.docKey }),
-    }).then((r) => r.json());
-    if (!res.ok) throw new Error("Couldn't save your latest edits. Try again.");
-
-    // 2. wait until the draft row is updated (up to ~10s)
-    if (res.waitForCallback) {
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-        if (cur && cur.updatedAt > before) break;
-      }
-    }
-
-    // 3. create the new version with your existing saveDeliverable
-    const latest = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-    if (!latest) throw new Error("Draft not found.");
-    await saveDeliverable({
+    const latest = await forceSaveDraft(doc.draft.docKey, () =>
+      convex.query(api.drafts.getByDeliverable, { deliverableId }),
+    );
+    const version = await saveDeliverable({
       storageId: latest.storageId,
       fileName: doc.fileName,
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId,
+      draftId: latest._id,
     });
-    await finishDraft({ draftId: latest._id });
-    toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
+    toast.success(`Submitted as version ${version}.`);
+    setOfficeDoc(null);
+    sessionStorage.removeItem(EDITOR_SESSION_KEY);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

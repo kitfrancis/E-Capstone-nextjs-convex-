@@ -529,7 +529,9 @@ export const saveDeliverable = mutation({
     capstoneProjectId: v.id("capstoneProjects"),
     message: v.optional(v.string()),
     versionLabel: v.optional(v.string()),
+    draftId: v.optional(v.id("deliverableDrafts")),
   },
+  returns: v.number(),
   handler: async (ctx, args) => {
     const caller = await requireCaller(ctx);
 
@@ -537,6 +539,32 @@ export const saveDeliverable = mutation({
     if (!project) throw new Error("Team not found");
     if (caller.role !== "admin" && !(project.members ?? []).includes(caller._id)) {
       throw new Error("Not authorized");
+    }
+
+    let storageId = args.storageId;
+    let draft: Doc<"deliverableDrafts"> | null = null;
+    if (args.draftId) {
+      draft = await ctx.db.get(args.draftId);
+      if (!draft) {
+        const submitted = await ctx.db
+          .query("deliverables")
+          .withIndex("by_submission_draft", (q) =>
+            q.eq("submissionDraftId", args.draftId),
+          )
+          .first();
+        if (submitted) return submitted.version;
+        throw new Error("This draft was already submitted or is no longer available.");
+      }
+
+      const original = await ctx.db.get(draft.deliverableId);
+      if (
+        !original ||
+        original.capstoneProjectId !== args.capstoneProjectId ||
+        original.phase !== args.phase
+      ) {
+        throw new Error("Draft does not match this project and chapter.");
+      }
+      storageId = draft.storageId;
     }
 
     // Next version = highest existing version for this chapter in this project, plus 1
@@ -560,10 +588,13 @@ export const saveDeliverable = mutation({
       fileSize: args.fileSize,
       uploadedAt: new Date().toISOString(),
       comments: 0,
-      storageId: args.storageId,
+      storageId,
       ...(args.message ? { message: args.message } : {}),
       ...(args.versionLabel ? { versionLabel: args.versionLabel } : {}),
+      ...(draft ? { submissionDraftId: draft._id } : {}),
     });
+
+    if (draft) await ctx.db.delete(draft._id);
 
     await logAction(
       ctx,
@@ -594,6 +625,8 @@ export const saveDeliverable = mutation({
             : "/dashboard/instructor",
       });
     }
+
+    return version;
   },
 });
 

@@ -9,7 +9,6 @@ export const startDraft = mutation({
     if (!identity) throw new Error("Not signed in");
     const d = await ctx.db.get(deliverableId);
     if (!d || !d.storageId) throw new Error("File not found");
-    if (d.status !== "needs_revision") throw new Error("Only chapters that need revision can be edited.");
 
     // NEW: fail with a clear message if the original file is gone
     const originalUrl = await ctx.storage.getUrl(d.storageId);
@@ -70,7 +69,11 @@ export const saveDraftFile = mutation({
     if (!draft) return; // draft already submitted: ignore a late callback
     // CHANGED: no longer deletes the previous draft file, so it can never
     // remove a file that a submitted version is now using
-    await ctx.db.patch(draftId, { storageId, updatedAt: Date.now() });
+    await ctx.db.patch(draftId, {
+      storageId,
+      updatedAt: Date.now(),
+      saveRevision: (draft.saveRevision ?? 0) + 1,
+    });
   },
 });
 

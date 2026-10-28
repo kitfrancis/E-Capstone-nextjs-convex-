@@ -220,7 +220,6 @@ export default function OnlyOfficeEditor({
       await onSubmit(); // server forcesaves, then creates the new version
       editorRef.current?.destroyEditor();
       editorRef.current = null;
-      onClose();
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Submit failed. Your draft is still saved.",
@@ -233,8 +232,13 @@ export default function OnlyOfficeEditor({
   // NEW: Close waits for the parent to save the draft before closing
   async function handleClose() {
     setClosing(true);
+    setSubmitError(null);
     try {
       await onClose();
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Couldn't save your latest edits before closing.",
+      );
     } finally {
       setClosing(false);
     }
