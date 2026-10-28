@@ -178,7 +178,8 @@ export default defineSchema({
     storageId: v.id("_storage"),
     baseVersion: v.number(),
     updatedAt: v.number(),
-  }).index("by_deliverable", ["deliverableId"]),
+    saveRevision: v.optional(v.number()),
+    }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({
     deliverableId: v.id("deliverables"),
