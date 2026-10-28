@@ -69,8 +69,8 @@ export default function AdminArchivePage() {
   const generateUploadUrl = useMutation(api.archive.generateUploadUrl);
   const addProject = useMutation(api.archive.addProject);
   const deleteProject = useMutation(api.archive.deleteProject);
-  const cancelPrajikArchiveForEvaluation = useMutation(
-    api.archive.cancelPrajikArchiveForEvaluation
+  const resetPrajikProjectProcess = useMutation(
+    api.archive.resetPrajikProjectProcess
   );
 
   const [search, setSearch] = useState("");
@@ -190,7 +190,7 @@ export default function AdminArchivePage() {
   ) => {
     if (
       !window.confirm(
-        `Cancel and remove the entire "${title}" archive entry for ${team}? This permanently deletes the archive record and all its PDFs, including the final IMRaD PDF and evaluation files. The accepted team remains and will be reset so the instructor can submit evaluations again.`
+        `Reset "${title}" for ${team}? This permanently deletes the archive entry, all chapter uploads and versions, drafts, document comments, evaluation files, and the final PDF. The project and student team assignments will remain, and the students can restart from Chapter 1. This cannot be undone.`
       )
     ) {
       return;
@@ -198,7 +198,7 @@ export default function AdminArchivePage() {
 
     setRestartingArchiveId(projectId);
     try {
-      await cancelPrajikArchiveForEvaluation({ projectId });
+      await resetPrajikProjectProcess({ projectId });
     } catch (err) {
       console.error("Failed to cancel the Prajik archive:", err);
       alert(err instanceof Error ? err.message : "Could not reset the archived project.");
@@ -360,16 +360,19 @@ export default function AdminArchivePage() {
                           <Trash2 className="mr-2 h-4 w-4" />
                           {restartingArchiveId === p._id
                             ? "Resetting..."
-                            : "Cancel archive and restart evaluations"}
+                            : "Reset project process"}
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem
-                        className="text-red-500 focus:text-red-600"
-                        onSelect={() => handleDelete(p._id, p.title)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
+                      {p.title.trim().toLowerCase() !== "prajik" &&
+                      p.team.trim().toLowerCase() !== "prajik" ? (
+                        <DropdownMenuItem
+                          className="text-red-500 focus:text-red-600"
+                          onSelect={() => handleDelete(p._id, p.title)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>

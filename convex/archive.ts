@@ -93,6 +93,13 @@ export const deleteProject = mutation({
 
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
+    if (
+      project.capstoneProjectId &&
+      (project.title.trim().toLowerCase() === "prajik" ||
+        project.team.trim().toLowerCase() === "prajik")
+    ) {
+      throw new Error("Use Reset project process to remove Prajik and clear its student workflow.");
+    }
 
     const storageIds = new Set([
       ...(project.storageId ? [project.storageId] : []),
@@ -104,7 +111,7 @@ export const deleteProject = mutation({
   },
 });
 
-export const cancelPrajikArchiveForEvaluation = mutation({
+export const resetPrajikProjectProcess = mutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, { projectId }) => {
@@ -125,44 +132,139 @@ export const cancelPrajikArchiveForEvaluation = mutation({
     const capstoneProject = await ctx.db.get(archiveProject.capstoneProjectId);
     if (!capstoneProject) throw new Error("The accepted team for this archive entry was not found.");
 
-    const submission = await ctx.db
+    const archiveEntries = await ctx.db
+      .query("projects")
+      .withIndex("by_capstone_project", (q) =>
+        q.eq("capstoneProjectId", capstoneProject._id)
+      )
+      .take(50);
+    if (archiveEntries.length === 50) {
+      throw new Error("Too many archive records are linked to this team to reset safely.");
+    }
+
+    const submissions = await ctx.db
       .query("imradSubmissions")
       .withIndex("by_project", (q) =>
         q.eq("capstoneProjectId", capstoneProject._id)
       )
-      .unique();
-    if (submission && submission.status !== "archived") {
-      throw new Error("The IMRaD submission must be archived before it can be restarted.");
+      .take(10);
+    if (submissions.length === 10) {
+      throw new Error("Too many IMRaD submissions are linked to this team to reset safely.");
     }
 
-    const workingDocument = submission
-      ? await ctx.db
-          .query("imradWorkingDocuments")
-          .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
-          .unique()
-      : null;
-    const storageIds = new Set([
-      ...(archiveProject.storageId ? [archiveProject.storageId] : []),
-      ...(archiveProject.additionalFiles ?? []).map((file) => file.storageId),
-      ...(submission?.evaluationFiles.map((file) => file.storageId) ?? []),
-      ...(workingDocument ? [workingDocument.storageId] : []),
+    const deliverables = await ctx.db
+      .query("deliverables")
+      .withIndex("by_capstone_project", (q) =>
+        q.eq("capstoneProjectId", capstoneProject._id)
+      )
+      .take(500);
+    if (deliverables.length === 500) {
+      throw new Error("Too many deliverables are linked to this team to reset safely.");
+    }
+
+    const workingDocuments = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_project", (q) =>
+        q.eq("projectId", capstoneProject._id)
+      )
+      .take(50);
+    if (workingDocuments.length === 50) {
+      throw new Error("Too many working documents are linked to this team to reset safely.");
+    }
+
+    const storageIds = new Set<Id<"_storage">>([
       ...(capstoneProject.finalFileId ? [capstoneProject.finalFileId] : []),
+      ...archiveEntries.flatMap((entry) => [
+        ...(entry.storageId ? [entry.storageId] : []),
+        ...(entry.additionalFiles ?? []).map((file) => file.storageId),
+      ]),
+      ...submissions.flatMap((submission) =>
+        submission.evaluationFiles.map((file) => file.storageId)
+      ),
+      ...deliverables.flatMap((deliverable) =>
+        deliverable.storageId ? [deliverable.storageId] : []
+      ),
+      ...workingDocuments.map((document) => document.storageId),
     ]);
 
+    const drafts = [];
+    const comments = [];
+    let relatedRecordCount =
+      archiveEntries.length +
+      submissions.length +
+      deliverables.length +
+      workingDocuments.length;
+    for (const deliverable of deliverables) {
+      const deliverableDrafts = await ctx.db
+        .query("deliverableDrafts")
+        .withIndex("by_deliverable", (q) =>
+          q.eq("deliverableId", deliverable._id)
+        )
+        .take(50);
+      if (deliverableDrafts.length === 50) {
+        throw new Error("Too many drafts are linked to this team to reset safely.");
+      }
+      drafts.push(...deliverableDrafts);
+      relatedRecordCount += deliverableDrafts.length;
+      for (const draft of deliverableDrafts) storageIds.add(draft.storageId);
+
+      const deliverableComments = await ctx.db
+        .query("pdfComments")
+        .withIndex("by_deliverable", (q) =>
+          q.eq("deliverableId", deliverable._id)
+        )
+        .take(500);
+      if (deliverableComments.length === 500) {
+        throw new Error("Too many document comments are linked to this team to reset safely.");
+      }
+      comments.push(...deliverableComments);
+      relatedRecordCount += deliverableComments.length;
+      if (relatedRecordCount > 500) {
+        throw new Error("This project has too much history to reset in one operation.");
+      }
+    }
+
     await Promise.all([...storageIds].map((storageId) => ctx.storage.delete(storageId)));
-    if (workingDocument) await ctx.db.delete(workingDocument._id);
-    if (submission) await ctx.db.delete(submission._id);
-    await ctx.db.delete(archiveProject._id);
+    for (const document of workingDocuments) {
+      await ctx.db.delete(document._id);
+    }
+    for (const submission of submissions) {
+      await ctx.db.delete(submission._id);
+    }
+    for (const comment of comments) {
+      await ctx.db.delete(comment._id);
+    }
+    for (const draft of drafts) {
+      await ctx.db.delete(draft._id);
+    }
+    for (const deliverable of deliverables) {
+      await ctx.db.delete(deliverable._id);
+    }
+    for (const entry of archiveEntries) {
+      await ctx.db.delete(entry._id);
+    }
+
     await ctx.db.patch(capstoneProject._id, {
-      stage: "ready_to_archive",
+      phase: "Proposal",
+      progress: 0,
+      approved: 0,
+      underReview: 0,
+      needsRevision: 0,
+      stage: undefined,
+      endorsedAt: undefined,
+      defenseDate: undefined,
+      defenseVenue: undefined,
+      defensePanel: undefined,
+      defenseResult: undefined,
+      finalGrade: undefined,
       archivedAt: undefined,
       finalFileId: undefined,
     });
     await logAction(
       ctx,
       admin,
-      "Canceled Prajik archive and reset team for IMRaD evaluation",
-      capstoneProject.teamName
+      "Reset Prajik project process for evaluation",
+      `${capstoneProject.teamName}: removed ${deliverables.length} deliverables`
     );
     return null;
   },
