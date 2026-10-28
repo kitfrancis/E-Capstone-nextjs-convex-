@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useState, useEffect, useMemo, type ReactNode } from "react"
+import { useState, useMemo, type ReactNode } from "react"
 import { Pencil } from "lucide-react"
 import { useMutation, useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
@@ -24,8 +24,16 @@ interface EditTeamProps {
   initialTeamName: string;
   initialProjectTitle: string;
   initialPhase: string;
+  initialAdviserId?: string;
   initialMembers?: string[];
   trigger?: ReactNode;
+}
+
+type TeamPhase = "Proposal" | "Development" | "Testing" | "Final";
+const TEAM_PHASES: TeamPhase[] = ["Proposal", "Development", "Testing", "Final"];
+
+function normalizeTeamPhase(value: string): TeamPhase {
+  return TEAM_PHASES.includes(value as TeamPhase) ? (value as TeamPhase) : "Proposal";
 }
 
 export function EditTeam({
@@ -33,18 +41,21 @@ export function EditTeam({
   initialTeamName,
   initialProjectTitle,
   initialPhase,
+  initialAdviserId,
   initialMembers = [],
   trigger,
 }: EditTeamProps) {
   const [open, setOpen] = useState(false);
   const [teamName, setTeamName] = useState(initialTeamName);
   const [projectTitle, setProjectTitle] = useState(initialProjectTitle);
-  const [phase, setPhase] = useState(initialPhase);
+  const [phase, setPhase] = useState<TeamPhase>(normalizeTeamPhase(initialPhase));
+  const [adviserId, setAdviserId] = useState(initialAdviserId ?? "");
   const [selectedMembers, setSelectedMembers] = useState<string[]>(initialMembers?? []);
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
 
     const students = useQuery(api.dashboard.getStudents);
+    const advisers = useQuery(api.users.getAdvisers);
   const updateTeam = useMutation(api.dashboard.updateTeam);
   const updateTeamMembers = useMutation(api.dashboard.updateTeamMembers);
   const allTeam = useQuery(api.dashboard.getTeams);
@@ -63,17 +74,6 @@ const studentsInOtherTeams = useMemo(() => {
 
 
 
-  useEffect(() => {
-    if (open) {
-      setTeamName(initialTeamName);
-      setProjectTitle(initialProjectTitle);
-      setPhase(initialPhase);
-      setSelectedMembers(initialMembers ?? []);
-      setSearch("");
-    }
-  }, [open, initialTeamName, initialProjectTitle, initialPhase, initialMembers]);
-
-
   const filteredStudents = students?.filter(s =>
   !selectedMembers.includes(s._id) &&  
   !studentsInOtherTeams.has(s._id) &&   
@@ -90,7 +90,17 @@ const studentsInOtherTeams = useMemo(() => {
     setSelectedMembers(prev => prev.filter(m => m !== id));
   };
 
-
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setTeamName(initialTeamName);
+      setProjectTitle(initialProjectTitle);
+      setPhase(normalizeTeamPhase(initialPhase));
+      setAdviserId(initialAdviserId ?? "");
+      setSelectedMembers(initialMembers);
+      setSearch("");
+    }
+    setOpen(nextOpen);
+  };
 
   const handleSubmit = async () => {
     if (!teamName || !projectTitle || !phase) {
@@ -102,7 +112,8 @@ const studentsInOtherTeams = useMemo(() => {
         teamId,
         teamName,
         projectTitle,
-        phase: phase as any,
+        phase,
+        adviserId: adviserId || null,
       });
       await updateTeamMembers({teamId, members: selectedMembers});
       setOpen(false);
@@ -119,7 +130,7 @@ const studentsInOtherTeams = useMemo(() => {
     return s?.name ?? s?.email ?? id;
   };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ? (
           trigger
@@ -155,7 +166,7 @@ const studentsInOtherTeams = useMemo(() => {
           </div>
           <div className="space-y-1 mb-3">
             <Label>Phase</Label>
-            <Select value={phase} onValueChange={setPhase}>
+            <Select value={phase} onValueChange={(value) => setPhase(normalizeTeamPhase(value))}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a phase" />
               </SelectTrigger>
@@ -165,6 +176,24 @@ const studentsInOtherTeams = useMemo(() => {
                   <SelectItem value="Development">Development</SelectItem>
                   <SelectItem value="Testing">Testing</SelectItem>
                   <SelectItem value="Final">Final</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Adviser</Label>
+            <Select value={adviserId || "unassigned"} onValueChange={(value) => setAdviserId(value === "unassigned" ? "" : value)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select an adviser" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="unassigned">No adviser assigned</SelectItem>
+                  {advisers?.map((adviser) => (
+                    <SelectItem key={adviser._id} value={adviser._id}>
+                      {adviser.name}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>

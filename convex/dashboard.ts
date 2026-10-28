@@ -785,7 +785,9 @@ export const updateTeam = mutation({
       v.literal("Testing"),
       v.literal("Final")
     ),
+    adviserId: v.optional(v.union(v.string(), v.null())),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
@@ -793,13 +795,34 @@ export const updateTeam = mutation({
     if (!team) throw new Error("Team not found");
     if (!canManage(caller, team)) throw new Error("Not authorized");
 
-    await ctx.db.patch(args.teamId, {
+    const updates: Partial<Doc<"capstoneProjects">> = {
       teamName: args.teamName,
       projectTitle: args.projectTitle,
       phase: args.phase,
-    });
+    };
+
+    if (args.adviserId !== undefined) {
+      if (args.adviserId === null) {
+        updates.adviserId = undefined;
+      } else {
+        const adviserId = ctx.db.normalizeId("users", args.adviserId);
+        const adviser = adviserId ? await ctx.db.get(adviserId) : null;
+        if (
+          !adviser ||
+          adviser.role !== "adviser" ||
+          adviser.status === "pending" ||
+          adviser.status === "rejected"
+        ) {
+          throw new Error("Please choose a valid, approved adviser.");
+        }
+        updates.adviserId = adviser._id;
+      }
+    }
+
+    await ctx.db.patch(args.teamId, updates);
 
     await logAction(ctx, caller, "Updated team", `${args.teamName} (${args.phase})`);
+    return null;
   },
 });
 
