@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -154,11 +154,9 @@ export function InstructorTeamDetailsDialog({
             </section>
 
             <div className="flex justify-end">
-              <Button asChild variant="outline">
-                <Link href={`/dashboard/instructor/teams/${team._id}`}>
-                  Open full team page
-                </Link>
-              </Button>
+              <DialogClose asChild>
+                <Button variant="outline">Close</Button>
+              </DialogClose>
             </div>
           </>
         )}
