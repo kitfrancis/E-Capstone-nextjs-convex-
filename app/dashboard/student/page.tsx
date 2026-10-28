@@ -955,26 +955,8 @@ function DashboardContent() {
                         const cp = chNum ? progress.chapters[chNum - 1] : null;
                         const isLatest = !!cp && cp.latestId === d._id;
                         const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
-                        const canOpenForEditing = isLatest && isOffice(d.fileName);
-
                         return (
-                          <div
-                            key={d._id}
-                            className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""} ${
-                              canOpenForEditing ? "cursor-pointer" : ""
-                            }`}
-                            onClick={() => {
-                              if (canOpenForEditing) void startEdit(d);
-                            }}
-                            onKeyDown={(event) => {
-                              if (canOpenForEditing && (event.key === "Enter" || event.key === " ")) {
-                                event.preventDefault();
-                                void startEdit(d);
-                              }
-                            }}
-                            role={canOpenForEditing ? "button" : undefined}
-                            tabIndex={canOpenForEditing ? 0 : undefined}
-                          >
+                          <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
@@ -1001,7 +983,6 @@ function DashboardContent() {
                                     <button
                                       className="p-1.5 rounded-md hover:bg-muted transition-colors"
                                       aria-label="File options"
-                                      onClick={(event) => event.stopPropagation()}
                                     >
                                       <MoreVertical className="h-4 w-4 text-muted-foreground" />
                                     </button>

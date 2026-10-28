@@ -16,10 +16,29 @@ export async function forceSaveDraft<T extends DraftSaveState>(
 
   const response = await fetch("/api/onlyoffice/forcesave", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key }),
   });
-  const result: unknown = await response.json();
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    if (response.redirected || response.url.includes("/sign-in")) {
+      throw new Error(
+        "Your sign-in session expired. Sign in again, then reopen your draft and submit it.",
+      );
+    }
+
+    throw new Error(
+      `Couldn't save your latest edits (HTTP ${response.status}). Refresh the page and try again.`,
+    );
+  }
+
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("The save service returned an invalid response. Try again.");
+  }
 
   if (
     !response.ok ||
