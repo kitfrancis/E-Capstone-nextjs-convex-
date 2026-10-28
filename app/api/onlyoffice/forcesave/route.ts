@@ -26,6 +26,7 @@ export async function POST(req: Request) {
 
   let commandResponse: Response;
   try {
+    // Use OnlyOffice's Command Service endpoint; /command is not the force-save API.
     commandResponse = await fetch(`${server}/coauthoring/CommandService.ashx`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
