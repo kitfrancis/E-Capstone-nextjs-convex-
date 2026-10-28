@@ -152,7 +152,9 @@ export default defineSchema({
     savedAt: v.optional(v.number()),
     createdBy: v.id("users"),
     createdAt: v.number(),
-  }).index("by_submission", ["submissionId"]),
+  })
+    .index("by_submission", ["submissionId"])
+    .index("by_project", ["projectId"]),
 
   deliverables: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),
@@ -171,7 +173,9 @@ export default defineSchema({
     message: v.optional(v.string()),
     versionLabel: v.optional(v.string()),
     submissionDraftId: v.optional(v.id("deliverableDrafts")),
-  }).index("by_submission_draft", ["submissionDraftId"]),
+  })
+    .index("by_submission_draft", ["submissionDraftId"])
+    .index("by_capstone_project", ["capstoneProjectId"]),
 
     deliverableDrafts: defineTable({
     deliverableId: v.id("deliverables"),
