@@ -1,9 +1,9 @@
 "use client";
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,7 @@ import { DeleteTask } from "./deleteTask";
 import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
+import { InstructorTeamDetailsDialog } from "@/app/components/instructor-team-details-dialog";
 import {
   DefenseActionButton,
   defenseActionKind,
@@ -209,6 +210,8 @@ export function InstructorTabsDemo({
 
   // Invite code
   const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
+  const [viewingTeam, setViewingTeam] =
+    useState<Doc<"capstoneProjects"> | null>(null);
 
   const copyInviteCode = (code: string, teamId: string) => {
     navigator.clipboard.writeText(code);
@@ -443,10 +446,12 @@ const handleStatus = async (
                     {defenseAction === "archive" ? null : hasDefenseAction ? (
                       <DefenseActionButton project={team} progress={teamProgress} />
                     ) : (
-                      <Button asChild size="sm" className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700">
-                        <Link href={`/dashboard/instructor/teams/${team._id}`}>
-                          View Team <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
+                      <Button
+                        size="sm"
+                        onClick={() => setViewingTeam(team)}
+                        className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700"
+                      >
+                        View Team <ArrowRight className="h-3.5 w-3.5" />
                       </Button>
                     )}
 
@@ -490,15 +495,12 @@ const handleStatus = async (
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="space-y-1 p-1">
-                          {/* "View Team" moves here while the row's button is a defense action */}
-                          {hasDefenseAction && (
-                            <Link
-                              href={`/dashboard/instructor/teams/${team._id}`}
-                              className="block w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors"
-                            >
-                              View team
-                            </Link>
-                          )}
+                          <button
+                            className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors"
+                            onClick={() => setViewingTeam(team)}
+                          >
+                            View team
+                          </button>
                           {/* Jump to this team's files with the team filter already set */}
                           <button
                             className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors"
@@ -514,6 +516,7 @@ const handleStatus = async (
                             initialTeamName={team.teamName}
                             initialProjectTitle={team.projectTitle}
                             initialPhase={team.phase}
+                            initialAdviserId={team.adviserId}
                             initialMembers={team.members ?? []}
                             trigger={
                               <button className="w-full text-left text-xs rounded-md px-2 py-2 hover:bg-muted transition-colors">
@@ -538,6 +541,29 @@ const handleStatus = async (
               </div>
             );
           })
+        )}
+        {viewingTeam && (
+          <InstructorTeamDetailsDialog
+            team={viewingTeam}
+            progress={progressByTeam.get(viewingTeam._id) ?? 0}
+            deliverableCount={
+              allDeliverables?.filter(
+                (deliverable) => deliverable.capstoneProjectId === viewingTeam._id,
+              ).length ?? 0
+            }
+            taskCount={
+              allTasks?.filter((task) => task.capstoneProjectId === viewingTeam._id)
+                .length ?? 0
+            }
+            completedTaskCount={
+              allTasks?.filter(
+                (task) =>
+                  task.capstoneProjectId === viewingTeam._id &&
+                  task.status === "completed",
+              ).length ?? 0
+            }
+            onClose={() => setViewingTeam(null)}
+          />
         )}
       </TabsContent>
 
