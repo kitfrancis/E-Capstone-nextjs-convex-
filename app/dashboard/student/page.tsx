@@ -294,8 +294,6 @@ function DashboardContent() {
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
 
-  const [versionMessage, setVersionMessage] = useState("");
-  const [versionLabel, setVersionLabel] = useState("");
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
 
   const officeUrl = useQuery(
@@ -367,8 +365,6 @@ function DashboardContent() {
             fileSize: deliverable.fileSize,
           },
         });
-        setVersionMessage("");
-        setVersionLabel(`v${chapterOf(deliverable.phase) ?? 1}.${draft.baseVersion + 1}`);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
@@ -440,8 +436,6 @@ function DashboardContent() {
           fileSize: d.fileSize,
         },
       });
-      setVersionMessage("");
-      setVersionLabel(`v${chapterOf(d.phase) ?? 1}.${draft.baseVersion + 1}`);
       sessionStorage.setItem(
         EDITOR_SESSION_KEY,
         JSON.stringify({ deliverableId: d._id }),
@@ -484,13 +478,6 @@ function DashboardContent() {
   const submitDraft = async () => {
     const doc = officeDoc;
     if (!doc?.draft || !project?._id) throw new Error("Missing project.");
-    const enteredVersion = versionLabel.trim().startsWith("v")
-      ? versionLabel.trim()
-      : `v${versionLabel.trim()}`;
-    const chapter = chapterOf(doc.phase);
-    if (!/^v[1-5]\.\d+$/.test(enteredVersion) || (chapter && !enteredVersion.startsWith(`v${chapter}.`))) {
-      throw new Error(`Enter a version in the format v${chapter ?? 1}.1.`);
-    }
     const deliverableId = doc.deliverableId as Id<"deliverables">;
     const before =
       (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
@@ -518,41 +505,9 @@ function DashboardContent() {
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId: project._id as Id<"capstoneProjects">,
-      message: versionMessage.trim() || undefined,
-      versionLabel: enteredVersion,
     });
     await finishDraft({ draftId: latest._id });
     toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
-    setVersionMessage("");
-    setVersionLabel("");
-  };
-
-  const officeVersions = useMemo(() => {
-    if (!officeDoc) return [];
-    return (deliverables ?? [])
-      .filter((deliverable) => deliverable.phase === officeDoc.phase)
-      .sort((a, b) => b.version - a.version)
-      .map((deliverable) => ({
-        id: deliverable._id,
-        version: deliverable.version,
-        message: deliverable.message,
-        versionLabel:
-          deliverable.versionLabel ||
-          `v${chapterOf(deliverable.phase) ?? 1}.${deliverable.version}`,
-        uploadedAt: deliverable.uploadedAt,
-      }));
-  }, [deliverables, officeDoc]);
-
-  const selectOfficeVersion = (versionId: string) => {
-    const version = (deliverables ?? []).find((deliverable) => deliverable._id === versionId);
-    if (!version?.storageId || !officeDoc) return;
-    setOfficeDoc({
-      fileName: version.fileName,
-      storageId: version.storageId,
-      deliverableId: version._id,
-      phase: version.phase,
-      mode: "view",
-    });
   };
 
   // Upload handler
@@ -1406,13 +1361,6 @@ function DashboardContent() {
                 baseVersion={officeDoc.draft?.baseVersion}
                 onSubmit={officeDoc.draft ? submitDraft : undefined}
                 onClose={closeEditor}
-                versionMessage={versionMessage}
-                onVersionMessageChange={setVersionMessage}
-                versionLabel={versionLabel}
-                onVersionLabelChange={setVersionLabel}
-                versions={officeVersions}
-                selectedVersionId={officeDoc.deliverableId}
-                onVersionSelect={selectOfficeVersion}
               />
             )}
 
