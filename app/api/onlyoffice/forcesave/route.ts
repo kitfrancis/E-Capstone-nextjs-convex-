@@ -76,7 +76,11 @@ export async function POST(req: Request) {
 
   console.error("OnlyOffice force-save command failed with error", result.error);
   return NextResponse.json(
-    { ok: false, message: "OnlyOffice could not save the latest edits.", error: result.error },
+    {
+      ok: false,
+      message: "OnlyOffice could not save the latest edits.",
+      error: result.error,
+    },
     { status: 502 },
   );
 }
