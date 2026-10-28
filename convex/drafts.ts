@@ -69,7 +69,11 @@ export const saveDraftFile = mutation({
     if (!draft) return; // draft already submitted: ignore a late callback
     // CHANGED: no longer deletes the previous draft file, so it can never
     // remove a file that a submitted version is now using
-    await ctx.db.patch(draftId, { storageId, updatedAt: Date.now() });
+    await ctx.db.patch(draftId, {
+      storageId,
+      updatedAt: Date.now(),
+      saveRevision: (draft.saveRevision ?? 0) + 1,
+    });
   },
 });
 

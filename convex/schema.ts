@@ -171,7 +171,7 @@ export default defineSchema({
     message: v.optional(v.string()),
     versionLabel: v.optional(v.string()),
     submissionDraftId: v.optional(v.id("deliverableDrafts")),
-  }),
+  }).index("by_submission_draft", ["submissionDraftId"]),
 
     deliverableDrafts: defineTable({
     deliverableId: v.id("deliverables"),

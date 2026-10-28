@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status-card";
 import { Id } from "@/convex/_generated/dataModel";
+import { forceSaveDraft } from "@/lib/onlyoffice-draft";
 import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -259,7 +260,6 @@ function DashboardContent() {
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
   const studentUpdateTask = useMutation(api.dashboard.studentUpdateTask);
   const startDraft = useMutation(api.drafts.startDraft);
-  const finishDraft = useMutation(api.drafts.finish);
 
   // Upload Form State
   const [file, setFile] = useState<File | null>(null);
@@ -450,25 +450,13 @@ function DashboardContent() {
     if (doc?.draft) {
       try {
         const deliverableId = doc.deliverableId as Id<"deliverables">;
-        const before =
-          (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
-
-        const res = await fetch("/api/onlyoffice/forcesave", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: doc.draft.docKey }),
-        }).then((r) => r.json());
-
-        if (res.ok && res.waitForCallback) {
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 500));
-            const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-            if (cur && cur.updatedAt > before) break;
-          }
-        }
+        await forceSaveDraft(doc.draft.docKey, () =>
+          convex.query(api.drafts.getByDeliverable, { deliverableId }),
+        );
       } catch (err) {
         console.error(err);
-        toast.error("Couldn't save your latest edits before closing.");
+        toast.error(err instanceof Error ? err.message : "Couldn't save your latest edits before closing.");
+        throw err;
       }
     }
     setOfficeDoc(null);
@@ -479,35 +467,20 @@ function DashboardContent() {
     const doc = officeDoc;
     if (!doc?.draft || !project?._id) throw new Error("Missing project.");
     const deliverableId = doc.deliverableId as Id<"deliverables">;
-    const before =
-      (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
-
-    const res = await fetch("/api/onlyoffice/forcesave", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: doc.draft.docKey }),
-    }).then((r) => r.json());
-    if (!res.ok) throw new Error("Couldn't save your latest edits. Try again.");
-
-    if (res.waitForCallback) {
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-        if (cur && cur.updatedAt > before) break;
-      }
-    }
-
-    const latest = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-    if (!latest) throw new Error("Draft not found.");
-    await saveDeliverable({
+    const latest = await forceSaveDraft(doc.draft.docKey, () =>
+      convex.query(api.drafts.getByDeliverable, { deliverableId }),
+    );
+    const version = await saveDeliverable({
       storageId: latest.storageId,
       fileName: doc.fileName,
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId: project._id as Id<"capstoneProjects">,
+      draftId: latest._id,
     });
-    await finishDraft({ draftId: latest._id });
-    toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
+    toast.success(`Submitted as version ${version}.`);
+    setOfficeDoc(null);
+    sessionStorage.removeItem(EDITOR_SESSION_KEY);
   };
 
   // Upload handler
