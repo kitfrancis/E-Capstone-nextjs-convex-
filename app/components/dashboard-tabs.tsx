@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { forceSaveDraft } from "@/lib/onlyoffice-draft";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { SelectDemo } from "@/app/components/select";
@@ -208,12 +209,9 @@ export function TabsDemo({
     fileName: string;
     storageId: string;
     deliverableId: string;
-    phase: string;
     mode: "edit" | "view";
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
-  const [versionMessage, setVersionMessage] = useState("");
-  const [versionLabel, setVersionLabel] = useState("");
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -288,7 +286,6 @@ export function TabsDemo({
           fileName: deliverable.fileName,
           storageId: draft.storageId,
           deliverableId: deliverable._id,
-          phase: deliverable.phase,
           mode: "edit",
           draft: {
             id: draft.draftId,
@@ -298,8 +295,6 @@ export function TabsDemo({
             fileSize: deliverable.fileSize,
           },
         });
-        setVersionMessage("");
-        setVersionLabel(`v${chapterOf(deliverable.phase) ?? 1}.${draft.baseVersion + 1}`);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
@@ -361,7 +356,6 @@ export function TabsDemo({
         fileName: d.fileName,
         storageId: draft.storageId,
         deliverableId: d._id,
-        phase: d.phase,
         mode: "edit",
         draft: {
           id: draft.draftId,
@@ -371,8 +365,6 @@ export function TabsDemo({
           fileSize: d.fileSize,
         },
       });
-      setVersionMessage("");
-      setVersionLabel(`v${chapterOf(d.phase) ?? 1}.${draft.baseVersion + 1}`);
       sessionStorage.setItem(
         EDITOR_SESSION_KEY,
         JSON.stringify({ deliverableId: d._id }),
@@ -388,25 +380,13 @@ export function TabsDemo({
     if (doc?.draft) {
       try {
         const deliverableId = doc.deliverableId as Id<"deliverables">;
-        const before =
-          (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
-
-        const res = await fetch("/api/onlyoffice/forcesave", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: doc.draft.docKey }),
-        }).then((r) => r.json());
-
-        if (res.ok && res.waitForCallback) {
-          for (let i = 0; i < 20; i++) {
-            await new Promise((r) => setTimeout(r, 500));
-            const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-            if (cur && cur.updatedAt > before) break;
-          }
-        }
+        await forceSaveDraft(doc.draft.docKey, () =>
+          convex.query(api.drafts.getByDeliverable, { deliverableId }),
+        );
       } catch (err) {
         console.error(err);
-        toast.error("Couldn't save your latest edits before closing.");
+        toast.error(err instanceof Error ? err.message : "Couldn't save your latest edits before closing.");
+        throw err;
       }
     }
     setOfficeDoc(null);
@@ -417,78 +397,21 @@ export function TabsDemo({
   const submitDraft = async () => {
     const doc = officeDoc;
     if (!doc?.draft || !capstoneProjectId) throw new Error("Missing project.");
-    const enteredVersion = versionLabel.trim().startsWith("v")
-      ? versionLabel.trim()
-      : `v${versionLabel.trim()}`;
-    const chapter = chapterOf(doc.phase);
-    if (!/^v[1-5]\.\d+$/.test(enteredVersion) || (chapter && !enteredVersion.startsWith(`v${chapter}.`))) {
-      throw new Error(`Enter a version in the format v${chapter ?? 1}.1.`);
-    }
     const deliverableId = doc.deliverableId as Id<"deliverables">;
-    const before =
-      (await convex.query(api.drafts.getByDeliverable, { deliverableId }))?.updatedAt ?? 0;
-
-    // 1. make OnlyOffice push the latest edits to the callback
-    const res = await fetch("/api/onlyoffice/forcesave", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: doc.draft.docKey }),
-    }).then((r) => r.json());
-    if (!res.ok) throw new Error("Couldn't save your latest edits. Try again.");
-
-    // 2. wait until the draft row is updated (up to ~10s)
-    if (res.waitForCallback) {
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        const cur = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-        if (cur && cur.updatedAt > before) break;
-      }
-    }
-
-    // 3. create the new version with your existing saveDeliverable
-    const latest = await convex.query(api.drafts.getByDeliverable, { deliverableId });
-    if (!latest) throw new Error("Draft not found.");
+    const latest = await forceSaveDraft(doc.draft.docKey, () =>
+      convex.query(api.drafts.getByDeliverable, { deliverableId }),
+    );
     await saveDeliverable({
       storageId: latest.storageId,
       fileName: doc.fileName,
       phase: doc.draft.phase,
       fileSize: doc.draft.fileSize,
       capstoneProjectId,
-      message: versionMessage.trim() || undefined,
-      versionLabel: enteredVersion,
     });
     await finishDraft({ draftId: latest._id });
     toast.success(`Submitted as version ${doc.draft.baseVersion + 1}.`);
-    setVersionMessage("");
-    setVersionLabel("");
-  };
-
-  const officeVersions = useMemo(() => {
-    if (!officeDoc) return [];
-    return (deliverables ?? [])
-      .filter((deliverable) => deliverable.phase === officeDoc.phase)
-      .sort((a, b) => b.version - a.version)
-      .map((deliverable) => ({
-        id: deliverable._id,
-        version: deliverable.version,
-        message: deliverable.message,
-        versionLabel:
-          deliverable.versionLabel ||
-          `v${chapterOf(deliverable.phase) ?? 1}.${deliverable.version}`,
-        uploadedAt: deliverable.uploadedAt,
-      }));
-  }, [deliverables, officeDoc]);
-
-  const selectOfficeVersion = (versionId: string) => {
-    const version = (deliverables ?? []).find((deliverable) => deliverable._id === versionId);
-    if (!version?.storageId || !officeDoc) return;
-    setOfficeDoc({
-      fileName: version.fileName,
-      storageId: version.storageId,
-      deliverableId: version._id,
-      phase: version.phase,
-      mode: "view",
-    });
+    setOfficeDoc(null);
+    sessionStorage.removeItem(EDITOR_SESSION_KEY);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -635,25 +558,8 @@ export function TabsDemo({
             const isLatest = !!cp && cp.latestId === d._id;
             // Locked once the chapter (or this file) is approved. Only admins can delete.
             const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
-            const canOpenForEditing = isLatest && isOffice(d.fileName);
             return (
-              <div
-                key={d._id}
-                className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""} ${
-                  canOpenForEditing ? "cursor-pointer" : ""
-                }`}
-                onClick={() => {
-                  if (canOpenForEditing) void startEdit(d);
-                }}
-                onKeyDown={(event) => {
-                  if (canOpenForEditing && (event.key === "Enter" || event.key === " ")) {
-                    event.preventDefault();
-                    void startEdit(d);
-                  }
-                }}
-                role={canOpenForEditing ? "button" : undefined}
-                tabIndex={canOpenForEditing ? 0 : undefined}
-              >
+              <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
@@ -674,11 +580,7 @@ export function TabsDemo({
                     <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button
-                          className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                          aria-label="File options"
-                          onClick={(event) => event.stopPropagation()}
-                        >
+                        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="File options">
                           <MoreVertical className="h-4 w-4 text-muted-foreground" />
                         </button>
                       </DropdownMenuTrigger>
@@ -703,7 +605,6 @@ export function TabsDemo({
                                   fileName: d.fileName,
                                   storageId: d.storageId!,
                                   deliverableId: d._id,
-                                  phase: d.phase,
                                   mode: "view",
                                 })
                               }
@@ -720,7 +621,6 @@ export function TabsDemo({
                                     fileName: d.fileName,
                                     storageId: d.storageId!,
                                     deliverableId: d._id,
-                                    phase: d.phase,
                                     mode: "view",
                                   })
                             }
@@ -921,13 +821,6 @@ export function TabsDemo({
           baseVersion={officeDoc.draft?.baseVersion}
           onSubmit={officeDoc.draft ? submitDraft : undefined}
           onClose={closeEditor}
-          versionMessage={versionMessage}
-          onVersionMessageChange={setVersionMessage}
-          versionLabel={versionLabel}
-          onVersionLabelChange={setVersionLabel}
-          versions={officeVersions}
-          selectedVersionId={officeDoc.deliverableId}
-          onVersionSelect={selectOfficeVersion}
         />
       )}
       {isRestoringEditor && (

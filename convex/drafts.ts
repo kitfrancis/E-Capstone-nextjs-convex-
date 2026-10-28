@@ -63,13 +63,19 @@ export const generateDraftUploadUrl = mutation({
 
 export const saveDraftFile = mutation({
   args: { secret: v.string(), draftId: v.id("deliverableDrafts"), storageId: v.id("_storage") },
+  returns: v.null(),
   handler: async (ctx, { secret, draftId, storageId }) => {
     if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
     const draft = await ctx.db.get(draftId);
-    if (!draft) return; // draft already submitted: ignore a late callback
+    if (!draft) return null; // draft already submitted: ignore a late callback
     // CHANGED: no longer deletes the previous draft file, so it can never
     // remove a file that a submitted version is now using
-    await ctx.db.patch(draftId, { storageId, updatedAt: Date.now() });
+    await ctx.db.patch(draftId, {
+      storageId,
+      updatedAt: Date.now(),
+      saveRevision: (draft.saveRevision ?? 0) + 1,
+    });
+    return null;
   },
 });
 

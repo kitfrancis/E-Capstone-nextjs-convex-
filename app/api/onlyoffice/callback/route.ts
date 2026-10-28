@@ -5,9 +5,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -115,17 +112,24 @@ export async function POST(req: Request) {
         const buf = await documentResponse.arrayBuffer();
 
         const uploadUrl = await convex.mutation(api.drafts.generateDraftUploadUrl, { secret });
-        const up = await fetch(uploadUrl, {
+        const uploadResponse = await fetch(uploadUrl, {
           method: "POST",
-          headers: { "Content-Type": DOCX_MIME },
+          headers: { "Content-Type": documentResponse.headers.get("content-type") ?? "application/octet-stream" },
           body: buf,
         });
-        const { storageId } = await up.json();
+        if (!uploadResponse.ok) throw new Error("Convex draft upload failed.");
+        const uploadResult: unknown = await uploadResponse.json();
+        if (
+          !isRecord(uploadResult) ||
+          typeof uploadResult.storageId !== "string"
+        ) {
+          throw new Error("Convex returned an invalid draft storage ID.");
+        }
 
         await convex.mutation(api.drafts.saveDraftFile, {
           secret,
           draftId: draftId as Id<"deliverableDrafts">,
-          storageId,
+          storageId: uploadResult.storageId as Id<"_storage">,
         });
       } catch (err) {
         console.error("Draft save failed:", err);

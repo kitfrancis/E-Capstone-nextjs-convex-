@@ -14,21 +14,8 @@ type OnlyOfficeEditorProps = {
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
   draftId?: string;                // tells the callback to save into the draft, not a version
-  baseVersion?: number;
+  baseVersion?: number;            // shows "Draft based on v1" and labels the button "Submit as v2"
   onSubmit?: () => Promise<void>;  // parent calls POST /submit; throws on failure
-  versionMessage?: string;
-  onVersionMessageChange?: (message: string) => void;
-  versionLabel?: string;
-  onVersionLabelChange?: (version: string) => void;
-  versions?: Array<{
-    id: string;
-    version: number;
-    versionLabel?: string;
-    message?: string;
-    uploadedAt: string;
-  }>;
-  selectedVersionId?: string;
-  onVersionSelect?: (versionId: string) => void;
 };
 
 type DocsApi = {
@@ -118,13 +105,6 @@ export default function OnlyOfficeEditor({
   draftId,
   baseVersion,
   onSubmit,
-  versionMessage = "",
-  onVersionMessageChange,
-  versionLabel = "",
-  onVersionLabelChange,
-  versions = [],
-  selectedVersionId = "",
-  onVersionSelect,
 }: OnlyOfficeEditorProps) {
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -135,7 +115,7 @@ export default function OnlyOfficeEditor({
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
-    process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL ||
+    process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL?.trim() ||
     (typeof window === "undefined"
       ? ""
       : `${window.location.origin}/api/onlyoffice/callback`);
@@ -240,7 +220,6 @@ export default function OnlyOfficeEditor({
       await onSubmit(); // server forcesaves, then creates the new version
       editorRef.current?.destroyEditor();
       editorRef.current = null;
-      onClose();
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Submit failed. Your draft is still saved.",
@@ -253,8 +232,13 @@ export default function OnlyOfficeEditor({
   // NEW: Close waits for the parent to save the draft before closing
   async function handleClose() {
     setClosing(true);
+    setSubmitError(null);
     try {
       await onClose();
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Couldn't save your latest edits before closing.",
+      );
     } finally {
       setClosing(false);
     }
@@ -262,115 +246,51 @@ export default function OnlyOfficeEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#17232b]">
-      <div className="flex min-h-0 flex-1">
-        <aside
-          className="flex shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white"
-          style={{ width: "18rem", minWidth: "18rem", flex: "0 0 18rem", color: "#0f172a" }}
-        >
-          <div className="border-b border-slate-200 px-4 py-3">
-            <p className="truncate text-sm font-bold" style={{ color: "#0f172a" }}>{fileName}</p>
-            {draftId && baseVersion !== undefined && (
-              <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs" style={{ color: "#475569" }}>
-                Draft based on v{baseVersion}
-              </span>
-            )}
-          </div>
-          <div className="p-3">
-            <h2 className="text-sm font-semibold" style={{ color: "#0f172a" }}>Version control</h2>
-            <p className="mt-1 text-xs" style={{ color: "#475569" }}>Document history</p>
-            {submitError && <p className="mt-3 text-xs" style={{ color: "#b45309" }}>{submitError}</p>}
-            {canSubmit && (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting || closing || loading || !!loadError}
-                className="mb-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-              >
-                {submitting ? "Submitting…" : "Submit"}
-              </button>
-            )}
-            {mode === "edit" && onSubmit && (
-              <label className="mb-4 block">
-                <span className="text-xs font-medium" style={{ color: "#334155" }}>
-                  Message for this version
-                </span>
-                <input
-                  value={versionMessage}
-                  onChange={(event) => onVersionMessageChange?.(event.target.value)}
-                  placeholder="Describe your changes"
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  style={{ color: "#0f172a" }}
-                />
-                <span className="mt-3 block text-xs font-medium" style={{ color: "#334155" }}>
-                  Version
-                </span>
-                <input
-                  value={versionLabel}
-                  onChange={(event) => onVersionLabelChange?.(event.target.value)}
-                  placeholder="v1.1"
-                  pattern="v?[1-5]\.[0-9]+"
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  style={{ color: "#0f172a" }}
-                />
-              </label>
-            )}
-            <div className="space-y-2">
-              {versions.length === 0 ? (
-                <p className="text-xs" style={{ color: "#475569" }}>No submitted versions yet.</p>
-              ) : (
-                versions.map((version) => (
-                  <button
-                    key={version.id}
-                    type="button"
-                    onClick={() => onVersionSelect?.(version.id)}
-                    className={`w-full rounded-lg border px-3 py-2 text-left transition ${
-                      selectedVersionId === version.id
-                        ? "border-blue-300 bg-blue-50"
-                        : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="block text-xs font-semibold" style={{ color: "#0f172a" }}>
-                      {version.versionLabel || `v${version.version}`}
-                    </span>
-                    <span className="mt-1 block truncate text-xs" style={{ color: "#475569" }}>
-                      {version.message || "No message"}
-                    </span>
-                    <span className="mt-1 block text-[11px]" style={{ color: "#64748b" }}>
-                      {new Date(version.uploadedAt).toLocaleString()}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-          <div className="mt-auto border-t border-slate-200 p-3">
+      <div className="flex items-center justify-between gap-3 bg-[#173f4a] px-4 py-3 text-white">
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="truncate text-sm font-bold">{fileName}</p>
+          {draftId && baseVersion !== undefined && (
+            <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs">
+              Draft based on v{baseVersion}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {submitError && <span className="text-xs text-amber-300">{submitError}</span>}
+          {canSubmit && (
             <button
               type="button"
-              onClick={handleClose}
-              disabled={submitting || closing}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              style={{ color: "#334155" }}
+              onClick={handleSubmit}
+              disabled={submitting || closing || loading || !!loadError}
+              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
             >
-              {closing ? "Saving…" : "Close"}
+              {submitting ? "Submitting…" : `Submit as v${(baseVersion ?? 1) + 1}`}
             </button>
-          </div>
-        </aside>
-
-        {loadError ? (
-          <div className="flex min-w-0 flex-1 items-center justify-center px-6 text-center text-sm text-white">
-            {loadError}
-          </div>
-        ) : (
-          <div className="relative min-w-0 flex-1">
-            {loading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70 pointer-events-none">
-                Loading editor...
-              </div>
-            )}
-            <div id={elementId} className="h-full w-full" />
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={submitting || closing}
+            className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10 disabled:opacity-50"
+          >
+            {closing ? "Saving…" : "Close"}
+          </button>
+        </div>
       </div>
+      {loadError ? (
+        <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white">
+          {loadError}
+        </div>
+      ) : (
+        <div className="relative min-h-0 flex-1">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70 pointer-events-none">
+              Loading editor...
+            </div>
+          )}
+          <div id={elementId} className="h-full w-full" />
+        </div>
+      )}
     </div>
   );
 }

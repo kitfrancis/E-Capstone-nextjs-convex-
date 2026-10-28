@@ -170,6 +170,7 @@ export default defineSchema({
     storageId: v.optional(v.id("_storage")),
     message: v.optional(v.string()),
     versionLabel: v.optional(v.string()),
+    submissionDraftId: v.optional(v.id("deliverableDrafts")),
   }),
 
     deliverableDrafts: defineTable({
@@ -177,6 +178,7 @@ export default defineSchema({
     storageId: v.id("_storage"),
     baseVersion: v.number(),
     updatedAt: v.number(),
+    saveRevision: v.optional(v.number()),
   }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({
