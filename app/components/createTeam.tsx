@@ -1,4 +1,4 @@
-"use client"  
+"use client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog, DialogClose, DialogContent, DialogDescription,
@@ -11,8 +11,11 @@ import { Plus, Copy, Check, CheckCircle2, ChevronRight } from "lucide-react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { useState, useRef } from "react"
+import type { ReactNode } from "react"
 
-export function DialogDemo() {
+// `trigger` is optional: pass a compact button for headers, or omit it to get
+// the original full-width card button.
+export function DialogDemo({ trigger }: { trigger?: ReactNode }) {
   const advisers = useQuery(api.users.getAdvisers);
   const me = useQuery(api.users.getMe);
   const createProject = useMutation(api.dashboard.createCapstoneProject);
@@ -78,19 +81,21 @@ export function DialogDemo() {
   return (
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) resetForm(); }}>
       <DialogTrigger asChild>
-  <Button className="group h-auto w-full justify-between rounded-2xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700 hover:text-white">
-    <span className="flex items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
-        <Plus className="h-5 w-5" />
-      </span>
-      <span className="flex flex-col items-start text-left">
-        <span className="text-sm font-semibold leading-tight">Create Team</span>
-        <span className="text-xs font-normal text-white/80">Start a new capstone team</span>
-      </span>
-    </span>
-    <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-  </Button>
-</DialogTrigger>
+        {trigger ?? (
+          <Button className="group h-auto w-full justify-between rounded-2xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700 hover:text-white">
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+                <Plus className="h-5 w-5" />
+              </span>
+              <span className="flex flex-col items-start text-left">
+                <span className="text-sm font-semibold leading-tight">Create Team</span>
+                <span className="text-xs font-normal text-white/80">Start a new capstone team</span>
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+          </Button>
+        )}
+      </DialogTrigger>
 
       <DialogContent className="sm:max-w-sm">
         {createdCode ? (
@@ -108,7 +113,7 @@ export function DialogDemo() {
             <div className="flex flex-col gap-3 py-2">
               <div className="flex flex-col gap-1.5 p-4 rounded-lg border bg-muted/50">
                 <p className="text-xs text-muted-foreground">
-                  Share this invite code with your students. They'll enter it during sign-up to join this team.
+                  Share this invite code with your students. They&apos;ll enter it during sign-up to join this team.
                 </p>
                 <div className="flex items-center justify-between bg-background border rounded-md px-4 py-3 mt-1">
                   <span className="font-mono text-base tracking-widest font-semibold">

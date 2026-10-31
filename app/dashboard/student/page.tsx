@@ -1266,7 +1266,7 @@ function DashboardContent() {
                               </div>
                               <div className="min-w-0">
                                 <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
-                                <p className="text-muted-foreground text-xs mt-0.5 break-words">{task.description}</p>
+                                <p className="text-muted-foreground text-xs mt-0.5 wrap-break-words">{task.description}</p>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                                   <span>Team: {task.assignedTo}</span>
                                   <span>Role: {task.targetRole ?? "All Roles"}</span>
@@ -1324,7 +1324,7 @@ function DashboardContent() {
             )}
 
             {isRestoringEditor && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 text-white">
+              <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/80 text-white">
                 <div className="text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin" />
                   <p className="mt-3 text-sm">Restoring your document editor…</p>
