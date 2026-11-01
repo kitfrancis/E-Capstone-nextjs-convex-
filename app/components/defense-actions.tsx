@@ -25,13 +25,22 @@ const LABEL = "text-xs font-medium text-foreground";
 const BLUE = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
 const GREEN = "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
 const AMBER = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+const VIOLET = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
 
-// "endorse" is gone: at 100% the project becomes "Ready for defense" automatically
-// (see syncDefenseReadiness in convex/defense.ts).
-export type DefenseActionKind = "schedule" | "result" | "archive";
+// "endorse" is gone: the project becomes "Ready for defense" automatically
+// (see syncDefenseReadiness in convex/defense.ts):
+//   Chapters 1-3 approved -> proposal defense, then every chapter approved -> final defense.
+export type DefenseActionKind =
+  | "proposal_schedule"
+  | "proposal_result"
+  | "schedule"
+  | "result"
+  | "archive";
 
 // Which button (if any) this team needs right now
 export function defenseActionKind(project: Project, progress: number): DefenseActionKind | null {
+  if (project.stage === "proposal_endorsed") return "proposal_schedule";
+  if (project.stage === "proposal_scheduled") return "proposal_result";
   if (project.stage === "endorsed") return "schedule";
   if (project.stage === "defense_scheduled") return "result";
   if (project.stage === "ready_to_archive") return "archive";
@@ -42,6 +51,12 @@ export function defenseActionKind(project: Project, progress: number): DefenseAc
 // so the row can keep showing the normal phase badge.
 export function defenseStatus(project: Project, progress: number): { label: string; cls: string } | null {
   switch (project.stage) {
+    case "proposal_endorsed":
+      return project.proposalResult === "failed"
+        ? { label: "Proposal re-defense", cls: AMBER }
+        : { label: "Proposal defense", cls: BLUE };
+    case "proposal_scheduled":
+      return { label: "Proposal scheduled", cls: VIOLET };
     case "endorsed":
       return project.defenseResult === "failed"
         ? { label: "Re-defense needed", cls: AMBER }
@@ -62,12 +77,25 @@ export function defenseStatus(project: Project, progress: number): { label: stri
 
 /* ------------------------------ Dialogs ------------------------------ */
 
-function ScheduleDialog({ project, open, onOpenChange }: DialogProps) {
-  const schedule = useMutation(api.defense.scheduleDefense);
-  const [date, setDate] = useState(project.defenseDate?.slice(0, 10) ?? "");
-  const [time, setTime] = useState(project.defenseDate?.slice(11, 16) ?? "");
-  const [venue, setVenue] = useState(project.defenseVenue ?? "");
-  const [panel, setPanel] = useState(project.defensePanel ?? "");
+// Used for both the proposal defense and the final defense
+function ScheduleDialog({
+  project,
+  open,
+  onOpenChange,
+  proposal = false,
+}: DialogProps & { proposal?: boolean }) {
+  const scheduleFinal = useMutation(api.defense.scheduleDefense);
+  const scheduleProposal = useMutation(api.defense.scheduleProposalDefense);
+  const schedule = proposal ? scheduleProposal : scheduleFinal;
+
+  const current = proposal
+    ? { date: project.proposalDate, venue: project.proposalVenue, panel: project.proposalPanel }
+    : { date: project.defenseDate, venue: project.defenseVenue, panel: project.defensePanel };
+
+  const [date, setDate] = useState(current.date?.slice(0, 10) ?? "");
+  const [time, setTime] = useState(current.date?.slice(11, 16) ?? "");
+  const [venue, setVenue] = useState(current.venue ?? "");
+  const [panel, setPanel] = useState(current.panel ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -90,8 +118,12 @@ function ScheduleDialog({ project, open, onOpenChange }: DialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Schedule defense</DialogTitle>
-          <DialogDescription>{project.teamName} will see the date, venue and panel.</DialogDescription>
+          <DialogTitle>{proposal ? "Schedule proposal defense" : "Schedule defense"}</DialogTitle>
+          <DialogDescription>
+            {proposal
+              ? `${project.teamName} finished Chapters 1–3. They will see the date, venue and panel.`
+              : `${project.teamName} will see the date, venue and panel.`}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -131,20 +163,42 @@ const RESULTS = [
   { value: "failed", title: "Failed", sub: "A re-defense will be needed." },
 ] as const;
 
-function ResultDialog({ project, open, onOpenChange }: DialogProps) {
-  const record = useMutation(api.defense.recordDefenseResult);
+const PROPOSAL_RESULTS = [
+  { value: "passed", title: "Passed", sub: "The team continues with Chapters 4–5." },
+  { value: "passed_with_revisions", title: "Passed with revisions", sub: "The team continues and applies the panel's comments." },
+  { value: "failed", title: "Failed", sub: "A proposal re-defense will be needed." },
+] as const;
+
+// Used for both the proposal defense (no grade) and the final defense
+function ResultDialog({
+  project,
+  open,
+  onOpenChange,
+  proposal = false,
+}: DialogProps & { proposal?: boolean }) {
+  const recordFinal = useMutation(api.defense.recordDefenseResult);
+  const recordProposal = useMutation(api.defense.recordProposalResult);
   const [result, setResult] = useState<(typeof RESULTS)[number]["value"]>("passed");
   const [grade, setGrade] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const valid = result === "failed" || grade.trim().length > 0;
+  const options = proposal ? PROPOSAL_RESULTS : RESULTS;
+  const valid = proposal || result === "failed" || grade.trim().length > 0;
 
   const save = async () => {
     setBusy(true);
     setError("");
     try {
-      await record({ projectId: project._id, result, grade: result === "failed" ? undefined : grade });
+      if (proposal) {
+        await recordProposal({ projectId: project._id, result });
+      } else {
+        await recordFinal({
+          projectId: project._id,
+          result,
+          grade: result === "failed" ? undefined : grade,
+        });
+      }
       onOpenChange(false);
     } catch {
       setError("Couldn't save the result. Please try again.");
@@ -157,11 +211,11 @@ function ResultDialog({ project, open, onOpenChange }: DialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Record defense result</DialogTitle>
+          <DialogTitle>{proposal ? "Record proposal defense result" : "Record defense result"}</DialogTitle>
           <DialogDescription>Save the panel&apos;s decision for {project.teamName}.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          {RESULTS.map((r) => (
+          {options.map((r) => (
             <button
               key={r.value}
               type="button"
@@ -174,7 +228,7 @@ function ResultDialog({ project, open, onOpenChange }: DialogProps) {
               <p className="text-xs text-muted-foreground">{r.sub}</p>
             </button>
           ))}
-          {result !== "failed" && (
+          {!proposal && result !== "failed" && (
             <div className="space-y-1.5 pt-1">
               <label className={LABEL}>Final grade</label>
               <Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="e.g. A or 1.25" />
@@ -287,18 +341,32 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
 
 /* ------------------------------- Button ------------------------------- */
 
+type DialogKind = DefenseActionKind;
+
 // The one button a team row shows for its current step. Renders nothing when
 // the team has no action (still in chapters, waiting on the student, or archived).
 export function DefenseActionButton({ project, progress }: { project: Project; progress: number }) {
   const kind = defenseActionKind(project, progress);
-  const [dialog, setDialog] = useState<"schedule" | "result" | "archive" | null>(null);
+  const [dialog, setDialog] = useState<DialogKind | null>(null);
 
   if (!kind) return null;
 
   const cls = "rounded-full bg-blue-600 px-4 gap-1.5 text-white hover:bg-blue-700";
+  const close = (o: boolean) => !o && setDialog(null);
 
   return (
     <>
+      {kind === "proposal_schedule" && (
+        <Button size="sm" onClick={() => setDialog("proposal_schedule")} className={cls}>
+          <CalendarDays className="h-3.5 w-3.5" />
+          {project.proposalResult === "failed" ? "Schedule re-defense" : "Schedule proposal"}
+        </Button>
+      )}
+      {kind === "proposal_result" && (
+        <Button size="sm" onClick={() => setDialog("proposal_result")} className={cls}>
+          <ClipboardCheck className="h-3.5 w-3.5" /> Record proposal result
+        </Button>
+      )}
       {kind === "schedule" && (
         <Button size="sm" onClick={() => setDialog("schedule")} className={cls}>
           <CalendarDays className="h-3.5 w-3.5" /> Schedule defense
@@ -315,9 +383,11 @@ export function DefenseActionButton({ project, progress }: { project: Project; p
         </Button>
       )}
 
-      {dialog === "schedule" && <ScheduleDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
-      {dialog === "result" && <ResultDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
-      {dialog === "archive" && <ArchiveDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
+      {dialog === "proposal_schedule" && <ScheduleDialog project={project} open onOpenChange={close} proposal />}
+      {dialog === "proposal_result" && <ResultDialog project={project} open onOpenChange={close} proposal />}
+      {dialog === "schedule" && <ScheduleDialog project={project} open onOpenChange={close} />}
+      {dialog === "result" && <ResultDialog project={project} open onOpenChange={close} />}
+      {dialog === "archive" && <ArchiveDialog project={project} open onOpenChange={close} />}
     </>
   );
 }

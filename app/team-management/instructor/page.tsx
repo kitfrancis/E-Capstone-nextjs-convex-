@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -334,6 +334,38 @@ export default function InstructorTeamManagementPage() {
     return map;
   }, [allTeams, allDeliverables]);
 
+  // ---------- Auto-sync defense readiness ----------
+  // The adviser approves chapters, but the stage only updates when
+  // syncDefenseReadiness runs. Run it here so the instructor sees the
+  // "Schedule proposal" button as soon as Chapters 1-3 are approved.
+  const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
+  const syncedRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!allTeams || !allDeliverables) return;
+    for (const team of allTeams) {
+      if (team.stage) continue; // already in the defense pipeline
+
+      const p = computeProgress(
+        allDeliverables.filter((d) => d.capstoneProjectId === team._id)
+      );
+      const ch13Done = p.chapters.slice(0, 3).every((c) => c.status === "approved");
+      const proposalDone =
+        team.proposalResult === "passed" || team.proposalResult === "passed_with_revisions";
+      // Same rule the server uses
+      const needsSync = proposalDone ? p.total >= 100 : ch13Done;
+
+      // The key includes the phase so the final-defense sync can run later
+      const key = `${team._id}:${proposalDone ? "final" : "proposal"}`;
+      if (needsSync && !syncedRef.current.has(key)) {
+        syncedRef.current.add(key);
+        syncReadiness({ projectId: team._id }).catch(() => {
+          syncedRef.current.delete(key);
+        });
+      }
+    }
+  }, [allTeams, allDeliverables, syncReadiness]);
+
   // If the selected team no longer exists (e.g. it was deleted), fall back to all teams
   const activeTeam =
     teamFilter === "all" || allTeams?.some((t) => t._id === teamFilter) ? teamFilter : "all";
@@ -593,8 +625,6 @@ export default function InstructorTeamManagementPage() {
                       {/* Actions: every row has a primary action */}
                       <div className="order-3 flex w-full items-center gap-1 sm:order-2 sm:ml-auto sm:w-auto">
                         {defenseAction !== null ? (
-                          // NOTE: this now also renders for the "archive" step. If
-                          // DefenseActionButton doesn't handle "archive", handle it here.
                           <div className="min-w-0 flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
                             <DefenseActionButton project={team} progress={teamProgress} />
                           </div>

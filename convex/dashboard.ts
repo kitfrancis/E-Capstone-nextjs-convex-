@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
@@ -89,6 +89,7 @@ async function requireRole(ctx: MutationCtx, roles: Role[]) {
 }
 
 // Deletes a deliverable together with its comments and stored file
+// Deletes a deliverable together with its comments, drafts and stored files
 async function deleteDeliverableCascade(
   ctx: MutationCtx,
   d: Doc<"deliverables">
@@ -99,7 +100,26 @@ async function deleteDeliverableCascade(
     .collect();
   for (const c of comments) await ctx.db.delete(c._id);
 
-  if (d.storageId) await ctx.storage.delete(d.storageId);
+  const drafts = await ctx.db
+    .query("deliverableDrafts")
+    .withIndex("by_deliverable", (q) => q.eq("deliverableId", d._id))
+    .collect();
+
+  // Each file is deleted once; a file that's already gone is ignored
+  const files = new Set<string>();
+  if (d.storageId) files.add(d.storageId);
+  for (const draft of drafts) {
+    files.add(draft.storageId);
+    await ctx.db.delete(draft._id);
+  }
+  for (const id of files) {
+    try {
+      await ctx.storage.delete(id as Id<"_storage">);
+    } catch {
+      // already deleted
+    }
+  }
+
   await ctx.db.delete(d._id);
 }
 
@@ -535,10 +555,21 @@ export const saveDeliverable = mutation({
   handler: async (ctx, args) => {
     const caller = await requireCaller(ctx);
 
-    const project = await ctx.db.get(args.capstoneProjectId);
+        const project = await ctx.db.get(args.capstoneProjectId);
     if (!project) throw new Error("Team not found");
     if (caller.role !== "admin" && !(project.members ?? []).includes(caller._id)) {
       throw new Error("Not authorized");
+    }
+
+    // Chapters 4-5 stay locked until the proposal defense is passed
+    const chapterNum = Number(args.phase.match(/\d+/)?.[0]);
+    if (chapterNum >= 4) {
+      const proposalPassed =
+        project.proposalResult === "passed" ||
+        project.proposalResult === "passed_with_revisions";
+      if (!proposalPassed) {
+        throw new Error("Chapters 4–5 unlock after the proposal defense is passed.");
+      }
     }
 
     let storageId = args.storageId;
@@ -629,6 +660,8 @@ export const saveDeliverable = mutation({
     return version;
   },
 });
+
+
 
 // Students: only their own team. Advisers/instructors: only teams they supervise.
 // Admin: anything. Also removes the file and its comments.

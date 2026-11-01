@@ -4,6 +4,7 @@ import { useQuery, useMutation, useConvex } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status-card";
+import { ProposalScheduleCard } from "@/app/components/proposal-schedule-card";
 import { Id } from "@/convex/_generated/dataModel";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
 import { useState, useMemo, useEffect, useRef, Suspense, Fragment } from "react";
@@ -113,15 +114,17 @@ const EDITOR_SESSION_KEY = "student-editor-session";
 
 /**
  * Maps project.stage to the index of the CURRENT step in the journey below.
- * Adjust these keys to match the stage values your defense code actually uses.
- * If the stage is missing or not listed, the step is worked out from chapter progress.
+ * When there is no stage, the step is worked out from the proposal result and chapter progress.
+ * Archived = 6, so every step shows as Completed.
  */
 const STAGE_STEP: Record<string, number> = {
-  pre_oral_defense: 1,
-  ready_for_defense: 3,
-  final_defense: 3,
+  proposal_endorsed: 1,
+  proposal_scheduled: 1,
+  endorsed: 3,
+  defense_scheduled: 3,
   final_revisions: 4,
-  archived: 5,
+  ready_to_archive: 5,
+  archived: 6,
 };
 
 const JOURNEY = [
@@ -426,12 +429,19 @@ function DashboardContent() {
 
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
 
-  // At 100% the project becomes "Ready for defense" on its own
+  // Chapter checks + proposal state (used by the readiness sync and the stepper)
+  const ch13Done = progress.chapters.slice(0, 3).every((c) => c.status === "approved");
+  const ch45Done = progress.chapters.slice(3, 5).every((c) => c.status === "approved");
+  const proposalDone =
+    project?.proposalResult === "passed" || project?.proposalResult === "passed_with_revisions";
+
+  // Same rule the server uses: Chapters 1-3 -> proposal defense, then 100% -> final defense
+  const needsSync = proposalDone ? progress.total >= 100 : ch13Done;
   useEffect(() => {
-    if (project && !project.stage && progress.total >= 100) {
+    if (project && !project.stage && needsSync) {
       syncReadiness({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
     }
-  }, [project?._id, project?.stage, progress.total, syncReadiness]);
+  }, [project?._id, project?.stage, needsSync, syncReadiness]);
 
   const handleJoin = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -547,9 +557,14 @@ function DashboardContent() {
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
   const alreadyApproved = chosen?.status === "approved";
 
+  // Chapters 4-5 stay locked until the proposal defense is passed
+  const proposalLocked = !!chosenChapter && chosenChapter >= 4 && !proposalDone;
+
   let uploadHint = "";
   if (chosenChapter && chosen) {
-    if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
+    if (proposalLocked)
+      uploadHint = `Chapter ${chosenChapter} unlocks after you pass the proposal defense.`;
+    else if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
     else if (chosen.status === "needs_revision")
       uploadHint = `Resubmitting sends Chapter ${chosenChapter} back to your adviser for review.`;
     else if (chosen.status === "under_review")
@@ -574,6 +589,10 @@ function DashboardContent() {
     }
     if (alreadyApproved) {
       toast.error("This chapter is already approved.");
+      return;
+    }
+    if (proposalLocked) {
+      toast.error("Pass the proposal defense before uploading Chapter 4 or 5.");
       return;
     }
 
@@ -719,12 +738,16 @@ function DashboardContent() {
 
   // Project journey (Dashboard stepper)
   const stage = project?.stage ? String(project.stage) : undefined;
-  const chaptersApproved = (from: number, to: number) =>
-    progress.chapters.slice(from, to).every((c) => c.status === "approved");
-  const ch13Done = chaptersApproved(0, 3);
-  const ch45Done = chaptersApproved(3, 5);
   const currentStep =
-    stage && stage in STAGE_STEP ? STAGE_STEP[stage] : !ch13Done ? 0 : !ch45Done ? 2 : 3;
+    stage && stage in STAGE_STEP
+      ? STAGE_STEP[stage]
+      : proposalDone
+        ? ch45Done
+          ? 3
+          : 2
+        : ch13Done
+          ? 1
+          : 0;
 
   // Banner: welcome on the dashboard, manuscript banner on the other pages
   const onManuscriptPages = !!project && currentTab !== "dashboard";
@@ -925,6 +948,7 @@ function DashboardContent() {
                   </div>
 
                   <DefenseStatusCard project={project} progress={progress.total} />
+                  <ProposalScheduleCard project={project} />
                 </div>
 
                 {/* Members / Adviser / Quick info */}
@@ -1395,12 +1419,16 @@ function DashboardContent() {
                     {uploadHint && (
                       <div
                         className={`flex items-start gap-2 rounded-xl p-3 text-xs leading-relaxed ${
-                          alreadyApproved
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                            : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                          proposalLocked
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                            : alreadyApproved
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                         }`}
                       >
-                        {alreadyApproved ? (
+                        {proposalLocked ? (
+                          <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
+                        ) : alreadyApproved ? (
                           <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                         ) : (
                           <Info className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1475,7 +1503,7 @@ function DashboardContent() {
 
                     <Button
                       onClick={handleUpload}
-                      disabled={!file || !phase || uploading || alreadyApproved}
+                      disabled={!file || !phase || uploading || alreadyApproved || proposalLocked}
                       className="h-11 px-6 rounded-lg gap-2 bg-blue-600 text-white hover:bg-blue-700"
                     >
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}

@@ -67,6 +67,7 @@ function ManuscriptContent() {
     <div className="lg:px-5 pb-8">
       <TabsDemo
         capstoneProjectId={project._id as Id<"capstoneProjects">}
+        proposalResult={project.proposalResult}
         highlightDeliverableId={deliverableId}
         highlightPage={pageParam ? parseInt(pageParam) : null}
       />

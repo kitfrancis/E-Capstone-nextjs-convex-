@@ -106,10 +106,12 @@ export const generateUploadUrl = mutation({
 });
 
 /**
- * Auto "ready for defense": once every chapter is approved (progress = 100%),
- * the project moves to the "endorsed" stage by itself. Progress is recomputed
- * on the server, so a client can't fake it. Safe to call repeatedly: it does
- * nothing if the project already has a stage.
+ * Auto "ready for defense". Progress is recomputed on the server, so a client
+ * can't fake it. Safe to call repeatedly: it does nothing if the project
+ * already has a stage.
+ *
+ *  1. Chapters 1-3 approved (and no passed proposal yet) -> "proposal_endorsed"
+ *  2. Proposal passed and every chapter approved (100%) -> "endorsed" (final defense)
  */
 export const syncDefenseReadiness = mutation({
   args: { projectId: v.id("capstoneProjects") },
@@ -129,9 +131,26 @@ export const syncDefenseReadiness = mutation({
       .query("deliverables")
       .filter((q) => q.eq(q.field("capstoneProjectId"), project._id))
       .collect();
+    const progress = computeProgress(deliverables);
 
-    if (computeProgress(deliverables).total < 100) return;
+    const proposalDone =
+      project.proposalResult === "passed" ||
+      project.proposalResult === "passed_with_revisions";
 
+    // Step 1: chapters 1-3 approved -> proposal defense
+    if (!proposalDone) {
+      const ch13Done = progress.chapters.slice(0, 3).every((c) => c.status === "approved");
+      if (!ch13Done) return;
+      await ctx.db.patch(project._id, {
+        stage: "proposal_endorsed",
+        proposalEndorsedAt: Date.now(),
+      });
+      await logAction(ctx, user, "Auto-endorsed for proposal defense", project.teamName);
+      return;
+    }
+
+    // Step 2: proposal passed and all chapters approved -> final defense
+    if (progress.total < 100) return;
     await ctx.db.patch(project._id, { stage: "endorsed", endorsedAt: Date.now() });
     await logAction(ctx, user, "Auto-endorsed for defense", project.teamName);
   },
@@ -148,6 +167,77 @@ export const endorseForDefense = mutation({
     await logAction(ctx, user, "Endorsed for defense", project.teamName);
   },
 });
+
+// ───────────── Proposal defense (after Chapters 1-3) ─────────────
+
+export const scheduleProposalDefense = mutation({
+  args: {
+    projectId: v.id("capstoneProjects"),
+    date: v.string(), // "YYYY-MM-DDTHH:mm"
+    venue: v.string(),
+    panel: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { user, project } = await requireSupervisor(ctx, args.projectId);
+    if (project.stage !== "proposal_endorsed" && project.stage !== "proposal_scheduled") {
+      throw new Error("This project isn't ready for a proposal defense.");
+    }
+    if (!args.date.trim() || !args.venue.trim() || !args.panel.trim()) {
+      throw new Error("Date, venue and panel are required.");
+    }
+
+    await ctx.db.patch(project._id, {
+      stage: "proposal_scheduled",
+      proposalDate: args.date,
+      proposalVenue: args.venue.trim(),
+      proposalPanel: args.panel.trim(),
+      proposalResult: undefined, // clears a previous "failed" result on re-defense
+    });
+    await logAction(ctx, user, "Scheduled proposal defense", `${project.teamName}: ${args.date}`);
+  },
+});
+
+export const recordProposalResult = mutation({
+  args: {
+    projectId: v.id("capstoneProjects"),
+    result: v.union(
+      v.literal("passed"),
+      v.literal("passed_with_revisions"),
+      v.literal("failed")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { user, project } = await requireSupervisor(ctx, args.projectId);
+    if (project.stage !== "proposal_scheduled") {
+      throw new Error("There's no scheduled proposal defense to record a result for.");
+    }
+
+    if (args.result === "failed") {
+      // Back to "proposal_endorsed" so the instructor can schedule a re-defense
+      await ctx.db.patch(project._id, {
+        stage: "proposal_endorsed",
+        proposalResult: "failed",
+        proposalDate: undefined,
+        proposalVenue: undefined,
+        proposalPanel: undefined,
+      });
+    } else {
+      // Leaves the pipeline so the student can work on Chapters 4-5
+      await ctx.db.patch(project._id, {
+        stage: undefined,
+        proposalResult: args.result,
+      });
+    }
+    await logAction(
+      ctx,
+      user,
+      "Recorded proposal defense result",
+      `${project.teamName}: ${args.result}`
+    );
+  },
+});
+
+// ───────────── Final defense ─────────────
 
 export const scheduleDefense = mutation({
   args: {
