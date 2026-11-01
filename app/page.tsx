@@ -105,16 +105,16 @@ export default function LandingPage() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-right bg-no-repeat opacity-60 dark:opacity-25"
-        style={{ backgroundImage: "url('/campus.jpg')" }}
+        style={{ backgroundImage: "url('/CCISbuilding.jpg')" }}
       />
       {/* Fade from the page color (left) to transparent (right) so text stays readable */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white via-white/80 to-white/10 dark:from-slate-950 dark:via-slate-950/85 dark:to-slate-950/40"
+        className="pointer-events-none absolute inset-0 bg-linear-to-r from-white via-white/80 to-white/10 dark:from-slate-950 dark:via-slate-950/85 dark:to-slate-950/40"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white to-transparent dark:from-slate-950"
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-linear-to-b from-white to-transparent dark:from-slate-950"
       />
 
       {/* Admin access */}
@@ -204,7 +204,7 @@ export default function LandingPage() {
                   {/* Soft tinted wave at the bottom of the card */}
                   <div
                     aria-hidden
-                    className={`pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-t-[100%] bg-gradient-to-t ${wave}`}
+                    className={`pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-t-[100%] bg-linear-to-t ${wave}`}
                   />
                 </div>
               )

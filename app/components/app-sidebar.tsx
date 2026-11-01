@@ -33,11 +33,8 @@ import {
 import { useSearchParams } from "next/navigation";
 
 const studentLinks = [
-  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard, children: [
-    { label: "Deliverables", href: "/dashboard/student?tab=deliverables", icon: FileText },
-    { label: "Upload", href: "/dashboard/student?tab=uploads", icon: Upload },
-    { label: "Tasks", href: "/dashboard/student?tab=tasks", icon: ClipboardList },
-  ]},
+  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
+  { label: "ManuScript & Task Management", href: "/dashboard/student/manuscript", icon: Users },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/student", icon: User },
 ];
