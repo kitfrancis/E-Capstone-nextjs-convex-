@@ -374,6 +374,7 @@ export const recordDefenseResult = mutation({
       v.literal("passed_with_revisions"),
       v.literal("failed")
     ),
+    grade: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
