@@ -1,4 +1,4 @@
-
+"use client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog, DialogClose, DialogContent, DialogDescription,
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { useState } from "react"
+import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
 import type { Id } from "@/convex/_generated/dataModel"
@@ -25,7 +26,9 @@ const TEAM_ROLES = [
 ] as const;
 type TaskTargetRole = (typeof TEAM_ROLES)[number] | "all_roles";
 
-export function TaskDialogDemo() {
+// `trigger` is optional: pass a compact button for headers, or omit it to get
+// the original full-width card button.
+export function TaskDialogDemo({ trigger }: { trigger?: ReactNode }) {
   const teams = useQuery(api.dashboard.getTeams);
   const me = useQuery(api.users.getMe);
   const createTask = useMutation(api.dashboard.createTask);
@@ -115,30 +118,29 @@ export function TaskDialogDemo() {
     }
   };
 
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-
       <DialogTrigger asChild>
-  <Button
-    variant="outline"
-    className="group h-auto w-full justify-between rounded-2xl border-blue-100 bg-blue-50 px-4 py-3 text-foreground hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:hover:bg-blue-950/70"
-  >
-    <span className="flex items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
-        <FileText className="h-5 w-5" />
-      </span>
-      <span className="flex flex-col items-start text-left">
-        <span className="text-sm font-semibold leading-tight">Create Task</span>
-        <span className="text-xs font-normal text-muted-foreground">Assign a task to one or all your teams</span>
-      </span>
-    </span>
-    <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
-  </Button>
-</DialogTrigger>
+        {trigger ?? (
+          <Button
+            variant="outline"
+            className="group h-auto w-full justify-between rounded-2xl border-blue-100 bg-blue-50 px-4 py-3 text-foreground hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:hover:bg-blue-950/70"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
+                <FileText className="h-5 w-5" />
+              </span>
+              <span className="flex flex-col items-start text-left">
+                <span className="text-sm font-semibold leading-tight">Create Task</span>
+                <span className="text-xs font-normal text-muted-foreground">Assign a task to one or all your teams</span>
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
+          </Button>
+        )}
+      </DialogTrigger>
 
       <DialogContent className="sm:max-w-sm">
-
         <DialogHeader>
           <DialogTitle>Create New Task</DialogTitle>
           <DialogDescription>
@@ -255,9 +257,8 @@ export function TaskDialogDemo() {
                 ? "Create for All Teams"
                 : "Create Task"}
           </Button>
-
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
-} 
+}
