@@ -43,7 +43,6 @@ function statusOf(p: Project, progress: number) {
     case "archived":
       return { label: "Archived", cls: "bg-muted text-muted-foreground" };
   }
-  // 100% but the stage hasn't synced yet: already show it as ready
   if (progress >= 100) return { label: "Ready for defense", cls: BLUE };
   if (progress > 0) return { label: "In Progress", cls: BLUE };
   return { label: "Not Started", cls: "bg-muted text-muted-foreground" };
@@ -216,7 +215,7 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
         if (!res.ok) throw new Error("upload failed");
         fileId = (await res.json()).storageId;
       }
-      await archive({ projectId: project._id, grade, abstract, keywords: keywordList, fileId });
+      await archive({ projectId: project._id, abstract, keywords: keywordList, fileId });
       onOpenChange(false);
     } catch {
       setError("Couldn't archive the project. Please try again.");
@@ -284,7 +283,6 @@ function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: ()
 
   const [dialog, setDialog] = useState<"schedule" | "result" | "archive" | null>(null);
 
-  // At 100% the project becomes "Ready for defense" on its own
   useEffect(() => {
     if (!project.stage && progress >= 100) {
       syncReadiness({ projectId: project._id }).catch(() => {});
@@ -309,7 +307,6 @@ function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: ()
   } else if (project.stage === "archived") {
     action = <span className="text-xs text-muted-foreground">Read-only</span>;
   } else if (progress >= 100) {
-    // Stage is syncing; the Schedule button appears as soon as it lands
     action = (
       <Button size="sm" disabled className={primary}>
         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Getting ready...
