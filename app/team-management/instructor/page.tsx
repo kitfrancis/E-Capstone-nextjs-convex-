@@ -68,6 +68,9 @@ const OnlyOfficeEditor = dynamic(
 
 const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 
+// Phase name the student's final IMRaD upload is saved under
+const IMRAD_PHASE = "IMRaD Final";
+
 type SubmissionFilter = "all" | "under_review" | "needs_revision" | "approved";
 type TaskFilter = "all" | "overdue" | "under_review";
 type TeamTab = "active" | "archived";
@@ -314,6 +317,22 @@ export default function InstructorTeamManagementPage() {
     }
   };
 
+  // Approve final revisions: moves the project to "ready_to_archive"
+  const approveFinalRevisions = useMutation(api.dashboard.approveFinalRevisions);
+  const handleApproveFinal = async (team: Doc<"capstoneProjects">) => {
+    const ok = window.confirm(
+      `Approve the final revisions of ${team.teamName}? The team will be asked to upload their IMRaD manuscript for archiving or binding.`
+    );
+    if (!ok) return;
+    try {
+      await approveFinalRevisions({ projectId: team._id });
+      toast.success(`${team.teamName} is now ready for archiving.`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Couldn't approve the final revisions.");
+    }
+  };
+
   const allDeliverables = useQuery(
     api.dashboard.getInstructorDeliverables,
     myId ? { instructorId: myId } : "skip"
@@ -556,6 +575,11 @@ export default function InstructorTeamManagementPage() {
                 const badgeCls = defense?.cls ?? "bg-blue-600 text-white";
                 const defenseAction = defenseActionKind(team, teamProgress);
 
+                // Final revisions / archive flow
+                const stageStr = String(team.stage ?? "");
+                const awaitingFinalApproval = stageStr === "final_revisions";
+                const imradSubmitted = teamDeliverables.some((d) => d.phase === IMRAD_PHASE);
+
                 return (
                   <div key={team._id} className={rowClass}>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-4">
@@ -577,6 +601,19 @@ export default function InstructorTeamManagementPage() {
                           <p className="truncate text-xs text-muted-foreground" title={team.projectTitle}>
                             {team.projectTitle}
                           </p>
+                          {stageStr === "ready_to_archive" && (
+                            <p
+                              className={`mt-0.5 text-xs font-medium ${
+                                imradSubmitted
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-amber-600 dark:text-amber-400"
+                              }`}
+                            >
+                              {imradSubmitted
+                                ? "IMRaD submitted. Ready for binding."
+                                : "Waiting for the team's IMRaD upload."}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -624,7 +661,15 @@ export default function InstructorTeamManagementPage() {
 
                       {/* Actions: every row has a primary action */}
                       <div className="order-3 flex w-full items-center gap-1 sm:order-2 sm:ml-auto sm:w-auto">
-                        {defenseAction !== null ? (
+                        {awaitingFinalApproval ? (
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveFinal(team)}
+                            className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Approve Final Revisions
+                          </Button>
+                        ) : defenseAction !== null ? (
                           <div className="min-w-0 flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
                             <DefenseActionButton project={team} progress={teamProgress} />
                           </div>

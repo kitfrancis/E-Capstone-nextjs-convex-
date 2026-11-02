@@ -6,6 +6,10 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
+
+// Phase name the student's final IMRaD upload is saved under
+const IMRAD_PHASE = "IMRaD Final";
+
 const teamRoleValidator = v.union(
   v.literal("Project Manager"),
   v.literal("Programmer"),
@@ -88,7 +92,6 @@ async function requireRole(ctx: MutationCtx, roles: Role[]) {
   return user;
 }
 
-// Deletes a deliverable together with its comments and stored file
 // Deletes a deliverable together with its comments, drafts and stored files
 async function deleteDeliverableCascade(
   ctx: MutationCtx,
@@ -248,17 +251,59 @@ export const getInstructorDashboardData = query({
     const allDeliverables = await ctx.db.query("deliverables").collect();
     const deliverables = allDeliverables.filter((d) => myProjectIds.has(d.capstoneProjectId));
 
-    const now = new Date().toISOString();
+    // A task is overdue only AFTER its due day (due dates are "YYYY-MM-DD"),
+    // so this matches the count shown on the Team Management page
+    const today = new Date().toISOString().slice(0, 10);
 
     return {
       totalTeams: myProjects.length,
       activeProjects: myProjects.length,
       pendingReviews: deliverables.filter((d) => d.status === "under_review").length,
-      overdueTasks: tasks.filter((t) => t.dueDate < now && t.status !== "completed").length,
+      overdueTasks: tasks.filter((t) => t.dueDate.slice(0, 10) < today && t.status !== "completed")
+        .length,
       approvedCount: deliverables.filter((d) => d.status === "approved").length,
       underReviewCount: deliverables.filter((d) => d.status === "under_review").length,
       needsRevisionCount: deliverables.filter((d) => d.status === "needs_revision").length,
     };
+  },
+});
+
+// Per-team milestone facts for the instructor dashboard pipeline.
+// The page works out the 9 stages from these.
+export const getInstructorPipeline = query({
+  args: { instructorId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getCaller(ctx);
+    if (!user || (user._id !== args.instructorId && user.role !== "admin")) return [];
+
+    const allProjects = await ctx.db.query("capstoneProjects").collect();
+    const projects = allProjects.filter((p) => p.instructorId === args.instructorId);
+    const ids = new Set(projects.map((p) => p._id));
+
+    const allDeliverables = await ctx.db.query("deliverables").collect();
+    const deliverables = allDeliverables.filter((d) => ids.has(d.capstoneProjectId));
+
+    return projects.map((p) => {
+      const mine = deliverables.filter((d) => d.capstoneProjectId === p._id);
+
+      // Chapter n is done when the LATEST version of it is approved
+      // (same rule as computeProgress on the frontend)
+      const chapters = [1, 2, 3, 4, 5].map((n) => {
+        const versions = mine.filter((d) => Number(d.phase.match(/\d+/)?.[0]) === n);
+        if (versions.length === 0) return false;
+        const latest = versions.reduce((a, b) => (b.version > a.version ? b : a));
+        return latest.status === "approved";
+      });
+
+      return {
+        id: p._id as string,
+        name: p.teamName,
+        chapters,
+        preOralCleared:
+          p.proposalResult === "passed" || p.proposalResult === "passed_with_revisions",
+        stage: p.stage ? String(p.stage) : undefined,
+      };
+    });
   },
 });
 
@@ -407,11 +452,13 @@ export const getDashboardData = query({
     const underReviewCount = deliverables.filter((d) => d.status === "under_review").length;
     const needsRevisionCount = deliverables.filter((d) => d.status === "needs_revision").length;
 
-    const now = new Date().toISOString();
+    // Overdue only AFTER the due day
+    const today = new Date().toISOString().slice(0, 10);
 
     return {
       pendingReviews: underReviewCount,
-      overdueTasks: tasks.filter((t) => t.dueDate < now && t.status !== "completed").length,
+      overdueTasks: tasks.filter((t) => t.dueDate.slice(0, 10) < today && t.status !== "completed")
+        .length,
       approvedCount,
       underReviewCount,
       needsRevisionCount,
@@ -498,7 +545,6 @@ export const getStudents = query({
   },
 });
 
-// Only returns a URL if the file belongs to a deliverable you can access
 // Returns a URL if the file belongs to a deliverable you can access,
 // or to a draft of one of those deliverables
 export const getFileUrl = query({
@@ -555,7 +601,7 @@ export const saveDeliverable = mutation({
   handler: async (ctx, args) => {
     const caller = await requireCaller(ctx);
 
-        const project = await ctx.db.get(args.capstoneProjectId);
+    const project = await ctx.db.get(args.capstoneProjectId);
     if (!project) throw new Error("Team not found");
     if (caller.role !== "admin" && !(project.members ?? []).includes(caller._id)) {
       throw new Error("Not authorized");
@@ -569,6 +615,21 @@ export const saveDeliverable = mutation({
         project.proposalResult === "passed_with_revisions";
       if (!proposalPassed) {
         throw new Error("Chapters 4–5 unlock after the proposal defense is passed.");
+      }
+    }
+
+    // The final IMRaD manuscript: only after the instructor approved the
+    // final revisions, and only as a PDF
+    const isImrad = args.phase === IMRAD_PHASE;
+    if (isImrad) {
+      if (project.stage !== "ready_to_archive") {
+        throw new Error("The IMRaD upload unlocks after your final revisions are approved.");
+      }
+      if (!args.fileName.toLowerCase().endsWith(".pdf")) {
+        throw new Error("The IMRaD manuscript must be a PDF.");
+      }
+      if (args.draftId) {
+        throw new Error("The IMRaD manuscript must be uploaded as a PDF file.");
       }
     }
 
@@ -608,6 +669,12 @@ export const saveDeliverable = mutation({
         )
       )
       .collect();
+
+    // One IMRaD per team (delete the old one first if it needs replacing)
+    if (isImrad && existing.length > 0) {
+      throw new Error("Your IMRaD manuscript is already submitted.");
+    }
+
     const version = existing.reduce((max, d) => Math.max(max, d.version), 0) + 1;
 
     const deliverableId = await ctx.db.insert("deliverables", {
@@ -630,7 +697,7 @@ export const saveDeliverable = mutation({
     await logAction(
       ctx,
       caller,
-      "Uploaded deliverable",
+      isImrad ? "Uploaded IMRaD manuscript" : "Uploaded deliverable",
       `${args.fileName} (v${version}) for team "${project.teamName}"`
     );
 
@@ -644,9 +711,11 @@ export const saveDeliverable = mutation({
     for (const userId of recipients) {
       await ctx.runMutation(api.notifications.sendNotification, {
         userId,
-        message: isResubmission
-          ? `Team "${project.teamName}" resubmitted "${args.fileName}" as version ${version}. It's waiting for your review.`
-          : `Team "${project.teamName}" uploaded a deliverable: "${args.fileName}".`,
+        message: isImrad
+          ? `Team "${project.teamName}" submitted their final IMRaD manuscript: "${args.fileName}". It's ready for archiving or binding.`
+          : isResubmission
+            ? `Team "${project.teamName}" resubmitted "${args.fileName}" as version ${version}. It's waiting for your review.`
+            : `Team "${project.teamName}" uploaded a deliverable: "${args.fileName}".`,
         type: isResubmission ? "deliverable_resubmitted" : "deliverable_uploaded",
         relatedId: deliverableId,
         // adviser link as before; instructor has no link until you tell me the route
@@ -661,7 +730,46 @@ export const saveDeliverable = mutation({
   },
 });
 
+// INSTRUCTOR (this team's) or admin: approve the final revisions.
+// Moves the team from "final_revisions" to "ready_to_archive", which shows the
+// "Upload IMRaD File" banner on the students' dashboard.
+export const approveFinalRevisions = mutation({
+  args: { projectId: v.id("capstoneProjects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const caller = await requireRole(ctx, ["instructor", "admin"]);
 
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Team not found");
+    if (!canManage(caller, project)) throw new Error("Not authorized");
+    if (project.stage !== "final_revisions") {
+      throw new Error("This team isn't in the final revisions stage.");
+    }
+
+    await ctx.db.patch(args.projectId, { stage: "ready_to_archive" });
+
+    await logAction(
+      ctx,
+      caller,
+      "Approved final revisions",
+      `Team "${project.teamName}" is ready for archiving`
+    );
+
+    // Tell every student they can upload the IMRaD now
+    for (const memberId of project.members ?? []) {
+      if (memberId === caller._id) continue;
+      await ctx.runMutation(api.notifications.sendNotification, {
+        userId: memberId,
+        message: `${caller.name} approved your final revisions. Upload your final IMRaD manuscript (PDF) for archiving or binding.`,
+        type: "deliverable_approved",
+        relatedId: args.projectId,
+        link: "/dashboard/student",
+      });
+    }
+
+    return null;
+  },
+});
 
 // Students: only their own team. Advisers/instructors: only teams they supervise.
 // Admin: anything. Also removes the file and its comments.
