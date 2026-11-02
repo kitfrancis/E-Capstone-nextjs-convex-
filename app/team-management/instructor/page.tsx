@@ -16,6 +16,7 @@ import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
   Check,
+  Clock,
   Copy,
   Key,
   MoreVertical,
@@ -579,6 +580,9 @@ export default function InstructorTeamManagementPage() {
                 const stageStr = String(team.stage ?? "");
                 const awaitingFinalApproval = stageStr === "final_revisions";
                 const imradSubmitted = teamDeliverables.some((d) => d.phase === IMRAD_PHASE);
+                // Ready to archive, but the team hasn't uploaded the IMRaD yet:
+                // the Archive button stays disabled until they do
+                const awaitingImrad = stageStr === "ready_to_archive" && !imradSubmitted;
 
                 return (
                   <div key={team._id} className={rowClass}>
@@ -668,6 +672,15 @@ export default function InstructorTeamManagementPage() {
                             className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
                           >
                             <Check className="h-3.5 w-3.5" /> Approve Final Revisions
+                          </Button>
+                        ) : awaitingImrad ? (
+                          <Button
+                            size="sm"
+                            disabled
+                            title="The team hasn't uploaded their IMRaD manuscript yet"
+                            className="flex-1 rounded-full px-4 sm:flex-none"
+                          >
+                            <Clock className="h-3.5 w-3.5" /> Waiting for IMRaD
                           </Button>
                         ) : defenseAction !== null ? (
                           <div className="min-w-0 flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
@@ -1093,4 +1106,4 @@ export default function InstructorTeamManagementPage() {
       )}
     </div>
   );
-}
+} 
