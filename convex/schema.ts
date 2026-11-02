@@ -91,6 +91,7 @@ export default defineSchema({
         v.literal("defense_scheduled"),
         v.literal("final_revisions"),
         v.literal("ready_to_archive"),
+        
         v.literal("archived")
       )
     ),
@@ -125,6 +126,17 @@ export default defineSchema({
     keywords: v.optional(v.array(v.string())),
     finalFileId: v.optional(v.id("_storage")),
     archivedAt: v.optional(v.number()),
+    archiveEndorsedAt: v.optional(v.number()),
+    defenseRecordedAt: v.optional(v.number()),
+    evaluationForms: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          fileName: v.string(),
+        })
+      )
+    ),
+    
   })
     .index("by_inviteCode", ["inviteCode"])
     .index("by_instructor_stage_result", ["instructorId", "stage", "defenseResult"]),

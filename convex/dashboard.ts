@@ -606,6 +606,9 @@ export const saveDeliverable = mutation({
     if (caller.role !== "admin" && !(project.members ?? []).includes(caller._id)) {
       throw new Error("Not authorized");
     }
+    if (project.stage === "archived") {
+      throw new Error("This project is archived and read-only.");
+    }
 
     // Chapters 4-5 stay locked until the proposal defense is passed
     const chapterNum = Number(args.phase.match(/\d+/)?.[0]);
@@ -618,9 +621,19 @@ export const saveDeliverable = mutation({
       }
     }
 
-    // The final IMRaD manuscript: only after the instructor approved the
-    // final revisions, and only as a PDF
     const isImrad = args.phase === IMRAD_PHASE;
+
+    // Final revisions only open once the instructor uploaded the 3 evaluation forms
+    const inFinalRevisions = project.stage === "final_revisions";
+    const formsReady = (project.evaluationForms ?? []).length >= 3;
+    if (inFinalRevisions && !isImrad && !formsReady) {
+      throw new Error(
+        "Wait for your instructor to upload the panel evaluation forms before submitting revisions."
+      );
+    }
+    const revisionsOpen = inFinalRevisions && formsReady;
+
+    // The final IMRaD manuscript: only after the final revisions are approved, and only as a PDF
     if (isImrad) {
       if (project.stage !== "ready_to_archive") {
         throw new Error("The IMRaD upload unlocks after your final revisions are approved.");
@@ -669,10 +682,23 @@ export const saveDeliverable = mutation({
         )
       )
       .collect();
+    const latest = existing.reduce<Doc<"deliverables"> | null>(
+      (a, d) => (!a || d.version > a.version ? d : a),
+      null
+    );
 
-    // One IMRaD per team (delete the old one first if it needs replacing)
-    if (isImrad && existing.length > 0) {
+    // One IMRaD per team, unless the instructor sent it back for changes
+    if (isImrad && latest && latest.status !== "needs_revision") {
       throw new Error("Your IMRaD manuscript is already submitted.");
+    }
+
+    // Approved chapters are locked, except once during the final revisions
+    if (!isImrad && Number.isFinite(chapterNum) && latest?.status === "approved") {
+      const alreadyRevised =
+        revisionsOpen && Date.parse(latest.uploadedAt) > (project.defenseRecordedAt ?? 0);
+      if (!revisionsOpen || alreadyRevised) {
+        throw new Error("This chapter is already approved.");
+      }
     }
 
     const version = existing.reduce((max, d) => Math.max(max, d.version), 0) + 1;
@@ -712,13 +738,12 @@ export const saveDeliverable = mutation({
       await ctx.runMutation(api.notifications.sendNotification, {
         userId,
         message: isImrad
-          ? `Team "${project.teamName}" submitted their final IMRaD manuscript: "${args.fileName}". It's ready for archiving or binding.`
+          ? `Team "${project.teamName}" submitted their final IMRaD manuscript: "${args.fileName}". It's waiting for your verification.`
           : isResubmission
             ? `Team "${project.teamName}" resubmitted "${args.fileName}" as version ${version}. It's waiting for your review.`
             : `Team "${project.teamName}" uploaded a deliverable: "${args.fileName}".`,
         type: isResubmission ? "deliverable_resubmitted" : "deliverable_uploaded",
         relatedId: deliverableId,
-        // adviser link as before; instructor has no link until you tell me the route
         link:
           userId === project.adviserId
             ? `/dashboard/adviser?projectId=${args.capstoneProjectId}&deliverableId=${deliverableId}`
@@ -839,7 +864,12 @@ export const adviserDeliverableStatus = mutation({
         });
       }
     }
+        // Last revised chapter approved -> unlock the IMRaD upload right away
+    if (changed && args.status === "approved" && project.stage === "final_revisions") {
+      await ctx.runMutation(api.defense.syncFinalRevisions, { projectId: project._id });
+    }
   },
+  
 });
 
 // ---------------------------------------------------------------------------

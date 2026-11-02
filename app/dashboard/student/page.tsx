@@ -64,6 +64,7 @@ import {
   FolderOpen,
   GraduationCap,
 } from "lucide-react";
+import { FinalRevisionsCard } from "@/app/components/final-revisions-card";
 
 const TEAM_ROLES = [
   "Project Manager",
@@ -256,6 +257,7 @@ function DashboardContent() {
   const me = mounted ? meQuery : undefined;
   const joinTeam = useMutation(api.dashboard.joinTeam);
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
+    const syncFinalRevisions = useMutation(api.defense.syncFinalRevisions);
   const setMyTeamRole = useMutation(api.dashboard.setMyTeamRole);
   const [selectedTeamRole, setSelectedTeamRole] = useState<TeamRole | "">("");
   const [savingTeamRole, setSavingTeamRole] = useState(false);
@@ -443,8 +445,9 @@ function DashboardContent() {
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
 
   // IMRaD: available once the instructor approves the final revisions
-  const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
-  const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
+const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
+const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
+  
 
   // Chapter checks + proposal state (used by the readiness sync and the stepper)
   const ch13Done = progress.chapters.slice(0, 3).every((c) => c.status === "approved");
@@ -459,6 +462,13 @@ function DashboardContent() {
       syncReadiness({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
     }
   }, [project?._id, project?.stage, needsSync, syncReadiness]);
+
+    // Final revisions: unlock IMRaD once every chapter was resubmitted and approved
+  useEffect(() => {
+    if (project?.stage === "final_revisions" && progress.total >= 100) {
+      syncFinalRevisions({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
+    }
+  }, [project?._id, project?.stage, progress.total, syncFinalRevisions]);
 
   const handleJoin = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -572,21 +582,28 @@ function DashboardContent() {
   // Upload handler
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
-  const alreadyApproved = chosen?.status === "approved";
+    // Approved chapters can be resubmitted during final revisions (after the forms are up)
+  const revisionsOpen =
+    project?.stage === "final_revisions" && (project.evaluationForms?.length ?? 0) >= 3;
+  const alreadyApproved = chosen?.status === "approved" && !revisionsOpen;
 
   // Chapters 4-5 stay locked until the proposal defense is passed
   const proposalLocked = !!chosenChapter && chosenChapter >= 4 && !proposalDone;
 
   // IMRaD upload is blocked until final revisions are approved, or once already submitted
-  const imradBlocked = isImradUpload && (!readyToArchive || !!imradDoc);
+ const imradNeedsRevision = imradDoc?.status === "needs_revision";
+const imradBlocked =
+  isImradUpload && (!readyToArchive || (!!imradDoc && !imradNeedsRevision));
 
   let uploadHint = "";
-  if (isImradUpload) {
-    if (imradDoc) uploadHint = "Your IMRaD manuscript is already submitted.";
-    else if (!readyToArchive)
-      uploadHint = "IMRaD upload unlocks after your final revisions are approved.";
-    else uploadHint = "Upload your final formatted IMRaD manuscript (PDF) for archiving or binding.";
-  } else if (chosenChapter && chosen) {
+ if (isImradUpload) {
+  if (imradDoc && !imradNeedsRevision) uploadHint = "Your IMRaD manuscript is already submitted.";
+  else if (imradNeedsRevision)
+    uploadHint = "Your instructor asked for changes. Upload a corrected version.";
+  else if (!readyToArchive)
+    uploadHint = "IMRaD upload unlocks after your final revisions are approved.";
+  else uploadHint = "Upload your final formatted IMRaD manuscript (PDF) for archiving or binding.";
+} else if (chosenChapter && chosen) {
     if (proposalLocked)
       uploadHint = `Chapter ${chosenChapter} unlocks after you pass the proposal defense.`;
     else if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
@@ -612,13 +629,13 @@ function DashboardContent() {
       toast.error("Please select a chapter and choose a file first.");
       return;
     }
+    if (imradDoc && !imradNeedsRevision) {
+  toast.error("Your IMRaD manuscript is already submitted.");
+  return;
+}
     if (isImradUpload) {
       if (!readyToArchive) {
         toast.error("IMRaD upload is only available after your final revisions are approved.");
-        return;
-      }
-      if (imradDoc) {
-        toast.error("Your IMRaD manuscript is already submitted.");
         return;
       }
       if (!isPdf(file.name)) {
@@ -954,36 +971,44 @@ function DashboardContent() {
                   </div>
 
                   {/* Final revisions approved: ready for archiving / binding */}
-                  {readyToArchive && (
-                    <div className="mt-6 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900 dark:bg-emerald-950/30">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
-                          <FileText className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">
-                            {imradDoc ? "IMRaD Submitted" : "Final Revisions Completed!"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {imradDoc
-                              ? `${imradDoc.fileName} is waiting for archiving or binding.`
-                              : "Upload your final formatted IMRaD manuscript for archival and final approval."}
-                          </p>
-                        </div>
-                      </div>
-                      {!imradDoc && (
-                        <Button
-                          asChild
-                          className="rounded-lg gap-2 bg-emerald-600 text-white hover:bg-emerald-700 self-start sm:self-auto"
-                        >
-                          <Link href="/dashboard/student?tab=uploads&type=imrad" scroll={false}>
-                            <UploadCloud className="h-4 w-4" />
-                            Upload IMRaD File
-                          </Link>
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                  {readyToArchive && (() => {
+  const endorsed = !!project.archiveEndorsedAt;
+  const s = imradDoc?.status;
+  const needsUpload = !imradDoc || s === "needs_revision";
+  const [title, text] = !imradDoc
+    ? ["Final Revisions Completed!", "Upload your final formatted IMRaD manuscript for archival and final approval."]
+    : s === "needs_revision"
+      ? ["IMRaD Needs Revision", "Your instructor asked for changes. Fix them and upload a new version."]
+      : s === "under_review"
+        ? ["IMRaD Submitted", `${imradDoc.fileName} is waiting for your instructor to verify it.`]
+        : endorsed
+          ? ["Endorsed for Archiving", "Your instructor endorsed the project. The admin is doing the final verification."]
+          : ["IMRaD Verified", "Waiting for your instructor to endorse the project for archiving."];
+  return (
+    <div className="mt-6 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900 dark:bg-emerald-950/30">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+          <FileText className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{text}</p>
+        </div>
+      </div>
+      {needsUpload && (
+        <Button
+          asChild
+          className="rounded-lg gap-2 bg-emerald-600 text-white hover:bg-emerald-700 self-start sm:self-auto"
+        >
+          <Link href="/dashboard/student?tab=uploads&type=imrad" scroll={false}>
+            <UploadCloud className="h-4 w-4" />
+            {imradDoc ? "Re-upload IMRaD File" : "Upload IMRaD File"}
+          </Link>
+        </Button>
+      )}
+    </div>
+  );
+})()}
 
                   {/* Chapter detail */}
                   <div className="mt-6 border-t pt-4">
@@ -1025,6 +1050,7 @@ function DashboardContent() {
 
                   <DefenseStatusCard project={project} progress={progress.total} />
                   <ProposalScheduleCard project={project} />
+                  <FinalRevisionsCard projectId={project._id as Id<"capstoneProjects">} />
                 </div>
 
                 {/* Members / Adviser / Quick info */}

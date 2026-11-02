@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Archive, CalendarDays, CheckCircle2, ClipboardCheck, Circle, Loader2 } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, ClipboardCheck, Circle, FileUp, Loader2 } from "lucide-react";
+
 
 type Project = Doc<"capstoneProjects">;
 type DialogProps = { project: Project; open: boolean; onOpenChange: (o: boolean) => void };
@@ -27,6 +28,8 @@ const GREEN = "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-
 const AMBER = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
 const VIOLET = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
 
+const formCount = (project: Project) => project.evaluationForms?.length ?? 0;
+
 // "endorse" is gone: the project becomes "Ready for defense" automatically
 // (see syncDefenseReadiness in convex/defense.ts):
 //   Chapters 1-3 approved -> proposal defense, then every chapter approved -> final defense.
@@ -35,6 +38,8 @@ export type DefenseActionKind =
   | "proposal_result"
   | "schedule"
   | "result"
+  | "evaluation_forms"
+  | "endorse_archive"
   | "archive";
 
 // Which button (if any) this team needs right now
@@ -43,7 +48,10 @@ export function defenseActionKind(project: Project, progress: number): DefenseAc
   if (project.stage === "proposal_scheduled") return "proposal_result";
   if (project.stage === "endorsed") return "schedule";
   if (project.stage === "defense_scheduled") return "result";
-  if (project.stage === "ready_to_archive") return "archive";
+  if (project.stage === "final_revisions" && formCount(project) < 3) return "evaluation_forms";
+  if (project.stage === "ready_to_archive") {
+    return project.archiveEndorsedAt ? "archive" : "endorse_archive";
+  }
   return null;
 }
 
@@ -64,9 +72,13 @@ export function defenseStatus(project: Project, progress: number): { label: stri
     case "defense_scheduled":
       return { label: "Defense scheduled", cls: BLUE };
     case "final_revisions":
-      return { label: "Final revisions", cls: AMBER };
+      return formCount(project) < 3
+        ? { label: "Awaiting evaluation forms", cls: AMBER }
+        : { label: "Final revisions", cls: AMBER };
     case "ready_to_archive":
-      return { label: "Ready to archive", cls: GREEN };
+      return project.archiveEndorsedAt
+        ? { label: "Awaiting admin verification", cls: VIOLET }
+        : { label: "Ready to archive", cls: GREEN };
     case "archived":
       return { label: "Archived", cls: "bg-muted text-muted-foreground" };
   }
@@ -158,8 +170,8 @@ function ScheduleDialog({
 }
 
 const RESULTS = [
-  { value: "passed", title: "Passed", sub: "No changes needed. Goes straight to archive." },
-  { value: "passed_with_revisions", title: "Passed with revisions", sub: "Team must submit final revisions first." },
+  { value: "passed", title: "Passed", sub: "No changes needed. IMRaD upload opens right away." },
+  { value: "passed_with_revisions", title: "Passed with revisions", sub: "Upload the 3 evaluation forms next. The team then submits final revisions." },
   { value: "failed", title: "Failed", sub: "A re-defense will be needed." },
 ] as const;
 
@@ -169,7 +181,7 @@ const PROPOSAL_RESULTS = [
   { value: "failed", title: "Failed", sub: "A proposal re-defense will be needed." },
 ] as const;
 
-// Used for both the proposal defense (no grade) and the final defense
+// Used for both the proposal defense and the final defense (status only, no grade)
 function ResultDialog({
   project,
   open,
@@ -179,12 +191,10 @@ function ResultDialog({
   const recordFinal = useMutation(api.defense.recordDefenseResult);
   const recordProposal = useMutation(api.defense.recordProposalResult);
   const [result, setResult] = useState<(typeof RESULTS)[number]["value"]>("passed");
-  const [grade, setGrade] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const options = proposal ? PROPOSAL_RESULTS : RESULTS;
-  const valid = proposal || result === "failed" || grade.trim().length > 0;
 
   const save = async () => {
     setBusy(true);
@@ -193,11 +203,7 @@ function ResultDialog({
       if (proposal) {
         await recordProposal({ projectId: project._id, result });
       } else {
-        await recordFinal({
-          projectId: project._id,
-          result,
-          grade: result === "failed" ? undefined : grade,
-        });
+        await recordFinal({ projectId: project._id, result });
       }
       onOpenChange(false);
     } catch {
@@ -228,18 +234,83 @@ function ResultDialog({
               <p className="text-xs text-muted-foreground">{r.sub}</p>
             </button>
           ))}
-          {!proposal && result !== "failed" && (
-            <div className="space-y-1.5 pt-1">
-              <label className={LABEL}>Final grade</label>
-              <Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="e.g. A or 1.25" />
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={busy} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save result
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Instructor uploads the 3 panel evaluation forms
+function EvaluationFormsDialog({ project, open, onOpenChange }: DialogProps) {
+  const generateUrl = useMutation(api.defense.generateUploadUrl);
+  const saveForms = useMutation(api.defense.uploadEvaluationForms);
+  const [files, setFiles] = useState<(File | null)[]>([null, null, null]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const valid = files.every(Boolean);
+
+  const setFile = (i: number, f: File | null) =>
+    setFiles((prev) => prev.map((p, idx) => (idx === i ? f : p)));
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const uploaded: { storageId: Id<"_storage">; fileName: string }[] = [];
+      for (const file of files) {
+        if (!file) continue;
+        const url = await generateUrl();
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": file.type || "application/pdf" },
+          body: file,
+        });
+        if (!res.ok) throw new Error("upload failed");
+        uploaded.push({ storageId: (await res.json()).storageId, fileName: file.name });
+      }
+      await saveForms({ projectId: project._id, files: uploaded });
+      onOpenChange(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't upload the forms. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Upload evaluation forms</DialogTitle>
+          <DialogDescription>
+            Upload the 3 panel evaluation forms. {project.teamName} will see them before starting their final revisions.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-1.5">
+              <label className={LABEL}>Panel member {i + 1}</label>
+              <Input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(e) => setFile(i, e.target.files?.[0] ?? null)}
+              />
             </div>
-          )}
+          ))}
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save} disabled={!valid || busy} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save result
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />} Upload forms
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -250,7 +321,6 @@ function ResultDialog({
 function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
   const generateUrl = useMutation(api.defense.generateUploadUrl);
   const archive = useMutation(api.defense.archiveProject);
-  const [grade, setGrade] = useState(project.finalGrade ?? "");
   const [abstract, setAbstract] = useState("");
   const [keywords, setKeywords] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -259,10 +329,8 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
 
   const keywordList = keywords.split(",").map((k) => k.trim()).filter(Boolean);
   const checks = [
-    { label: "Grade", ok: grade.trim().length > 0 },
     { label: "Abstract", ok: abstract.trim().length > 0 },
     { label: "Keywords (at least 3)", ok: keywordList.length >= 3 },
-    { label: "Final file", ok: !!file || !!project.finalFileId },
   ];
   const valid = checks.every((c) => c.ok);
 
@@ -281,10 +349,10 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
         if (!res.ok) throw new Error("upload failed");
         fileId = (await res.json()).storageId;
       }
-      await archive({ projectId: project._id, grade, abstract, keywords: keywordList, fileId });
+      await archive({ projectId: project._id, abstract, keywords: keywordList, fileId });
       onOpenChange(false);
-    } catch {
-      setError("Couldn't archive the project. Please try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't archive the project. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -294,16 +362,12 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Archive project</DialogTitle>
+          <DialogTitle>Verify &amp; archive project</DialogTitle>
           <DialogDescription>
             Fill in what the archive needs. {project.teamName} becomes read-only once archived.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className={LABEL}>Grade</label>
-            <Input value={grade} onChange={(e) => setGrade(e.target.value)} />
-          </div>
           <div className="space-y-1.5">
             <label className={LABEL}>Abstract</label>
             <textarea rows={4} value={abstract} onChange={(e) => setAbstract(e.target.value)} className={FIELD} />
@@ -313,9 +377,7 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
             <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="thesis, capstone, web" />
           </div>
           <div className="space-y-1.5">
-            <label className={LABEL}>
-              Final manuscript (PDF){project.finalFileId ? " (student already submitted one)" : ""}
-            </label>
+            <label className={LABEL}>Final PDF (optional, uses the approved IMRaD file by default)</label>
             <Input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
           <div className="grid grid-cols-2 gap-2 rounded-lg border p-3">
@@ -339,6 +401,46 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
   );
 }
 
+function EndorseDialog({ project, open, onOpenChange }: DialogProps) {
+  const endorse = useMutation(api.defense.endorseForArchiving);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await endorse({ projectId: project._id });
+      onOpenChange(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't endorse this project.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Endorse for archiving</DialogTitle>
+          <DialogDescription>
+            {project.teamName}&apos;s record and documents will be sent to the Super Admin for final verification.
+          </DialogDescription>
+        </DialogHeader>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={busy} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+            Endorse
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ------------------------------- Button ------------------------------- */
 
 type DialogKind = DefenseActionKind;
@@ -348,8 +450,25 @@ type DialogKind = DefenseActionKind;
 export function DefenseActionButton({ project, progress }: { project: Project; progress: number }) {
   const kind = defenseActionKind(project, progress);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
+  const me = useQuery(api.users.getMe);
+  const imradStatus = useQuery(
+    api.defense.imradStatus,
+    project.stage === "ready_to_archive" ? { projectId: project._id } : "skip"
+  );
+  const syncFinal = useMutation(api.defense.syncFinalRevisions);
+
+  // Final revisions: once every chapter is back at 100%, the server checks that all of them
+  // were resubmitted and approved, then unlocks the IMRaD upload.
+  useEffect(() => {
+    if (project.stage === "final_revisions" && progress >= 100) {
+      syncFinal({ projectId: project._id }).catch(() => {});
+    }
+  }, [project._id, project.stage, progress, syncFinal]);
 
   if (!kind) return null;
+  // Only the instructor endorses (once the IMRaD file is approved); only the admin archives
+  if (kind === "endorse_archive" && (me?.role !== "instructor" || imradStatus !== "approved")) return null;
+  if (kind === "archive" && me?.role !== "admin") return null;
 
   const cls = "rounded-full bg-blue-600 px-4 gap-1.5 text-white hover:bg-blue-700";
   const close = (o: boolean) => !o && setDialog(null);
@@ -377,9 +496,19 @@ export function DefenseActionButton({ project, progress }: { project: Project; p
           <ClipboardCheck className="h-3.5 w-3.5" /> Record result
         </Button>
       )}
+      {kind === "evaluation_forms" && (
+        <Button size="sm" onClick={() => setDialog("evaluation_forms")} className={cls}>
+          <FileUp className="h-3.5 w-3.5" /> Upload evaluation forms
+        </Button>
+      )}
+      {kind === "endorse_archive" && (
+        <Button size="sm" onClick={() => setDialog("endorse_archive")} className={cls}>
+          <Archive className="h-3.5 w-3.5" /> Endorse for Archiving
+        </Button>
+      )}
       {kind === "archive" && (
         <Button size="sm" onClick={() => setDialog("archive")} className={cls}>
-          <Archive className="h-3.5 w-3.5" /> Archive project
+          <Archive className="h-3.5 w-3.5" /> Verify &amp; Archive
         </Button>
       )}
 
@@ -387,6 +516,8 @@ export function DefenseActionButton({ project, progress }: { project: Project; p
       {dialog === "proposal_result" && <ResultDialog project={project} open onOpenChange={close} proposal />}
       {dialog === "schedule" && <ScheduleDialog project={project} open onOpenChange={close} />}
       {dialog === "result" && <ResultDialog project={project} open onOpenChange={close} />}
+      {dialog === "evaluation_forms" && <EvaluationFormsDialog project={project} open onOpenChange={close} />}
+      {dialog === "endorse_archive" && <EndorseDialog project={project} open onOpenChange={close} />}
       {dialog === "archive" && <ArchiveDialog project={project} open onOpenChange={close} />}
     </>
   );
