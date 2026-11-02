@@ -85,13 +85,31 @@ export default defineSchema({
     // Defense pipeline
     stage: v.optional(
       v.union(
+        v.literal("proposal_endorsed"),
+        v.literal("proposal_scheduled"),
         v.literal("endorsed"),
         v.literal("defense_scheduled"),
         v.literal("final_revisions"),
         v.literal("ready_to_archive"),
+        
         v.literal("archived")
       )
     ),
+
+    // Proposal defense (after Chapters 1-3)
+    proposalEndorsedAt: v.optional(v.number()),
+    proposalDate: v.optional(v.string()), // "2026-11-12T09:00"
+    proposalVenue: v.optional(v.string()),
+    proposalPanel: v.optional(v.string()),
+    proposalResult: v.optional(
+      v.union(
+        v.literal("passed"),
+        v.literal("passed_with_revisions"),
+        v.literal("failed")
+      )
+    ),
+
+    // Final defense
     endorsedAt: v.optional(v.number()),
     defenseDate: v.optional(v.string()), // "2026-11-12T09:00"
     defenseVenue: v.optional(v.string()),
@@ -108,6 +126,17 @@ export default defineSchema({
     keywords: v.optional(v.array(v.string())),
     finalFileId: v.optional(v.id("_storage")),
     archivedAt: v.optional(v.number()),
+    archiveEndorsedAt: v.optional(v.number()),
+    defenseRecordedAt: v.optional(v.number()),
+    evaluationForms: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          fileName: v.string(),
+        })
+      )
+    ),
+    
   })
     .index("by_inviteCode", ["inviteCode"])
     .index("by_instructor_stage_result", ["instructorId", "stage", "defenseResult"]),
@@ -177,13 +206,13 @@ export default defineSchema({
     .index("by_submission_draft", ["submissionDraftId"])
     .index("by_capstone_project", ["capstoneProjectId"]),
 
-    deliverableDrafts: defineTable({
+  deliverableDrafts: defineTable({
     deliverableId: v.id("deliverables"),
     storageId: v.id("_storage"),
     baseVersion: v.number(),
     updatedAt: v.number(),
     saveRevision: v.optional(v.number()),
-    }).index("by_deliverable", ["deliverableId"]),
+  }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({
     deliverableId: v.id("deliverables"),

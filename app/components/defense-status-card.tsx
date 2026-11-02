@@ -1,11 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
 import Link from "next/link";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import { Archive, ArrowRight, Calendar, Check, CheckCircle2 } from "lucide-react";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { Archive, ArrowRight, Calendar, Check, CheckCircle2, Loader2, Upload } from "lucide-react";
 
 type Project = Doc<"capstoneProjects">;
 
@@ -15,6 +12,7 @@ const BADGE = "rounded-full px-2.5 py-0.5 text-xs font-medium";
 const BLUE = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
 const AMBER = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
 const GREEN = "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+const VIOLET = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
 
 // Which step (1-5) is current; 6 means everything is done
 function currentStep(p: Project, progress: number) {
@@ -40,11 +38,11 @@ export function DefenseBadge({ project, progress }: { project: Project; progress
     label = project.defenseResult === "failed" ? "Re-defense needed" : "Ready for defense";
     if (project.defenseResult === "failed") cls = AMBER;
   } else if (project.stage === "final_revisions") {
-    label = "Final revisions";
+    label = (project.evaluationForms?.length ?? 0) < 3 ? "Awaiting evaluation forms" : "Final revisions";
     cls = AMBER;
   } else if (project.stage === "ready_to_archive") {
-    label = "Awaiting archive";
-    cls = GREEN;
+    label = project.archiveEndorsedAt ? "Awaiting admin verification" : "IMRaD stage";
+    cls = project.archiveEndorsedAt ? VIOLET : GREEN;
   } else if (project.stage === "archived") {
     label = "Archived";
     cls = "bg-muted text-muted-foreground";
@@ -68,57 +66,6 @@ const RESULT_LABEL = {
   passed_with_revisions: "Passed with revisions",
   failed: "Failed",
 } as const;
-
-function FinalUpload({ project }: { project: Project }) {
-  const generateUrl = useMutation(api.defense.generateUploadUrl);
-  const submit = useMutation(api.defense.submitFinalManuscript);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleFile = async (file: File) => {
-    setBusy(true);
-    setError("");
-    try {
-      const url = await generateUrl();
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": file.type || "application/pdf" },
-        body: file,
-      });
-      if (!res.ok) throw new Error("upload failed");
-      const { storageId } = await res.json();
-      await submit({ projectId: project._id, fileId: storageId });
-    } catch {
-      setError("Upload failed. Please try again.");
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-
-  return (
-    <div className="mt-3">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-      />
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-      >
-        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-        Upload final manuscript
-      </button>
-      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-    </div>
-  );
-}
 
 export function DefenseStatusCard({ project, progress }: { project: Project; progress: number }) {
   const step = currentStep(project, progress);
@@ -145,12 +92,21 @@ export function DefenseStatusCard({ project, progress }: { project: Project; pro
       </Link>
     );
   } else if (project.stage === "ready_to_archive") {
-    title = "Waiting to be archived.";
-    text = "Your instructor will archive the project once everything is in.";
+    if (project.archiveEndorsedAt) {
+      title = "Endorsed for archiving.";
+      text = "Your instructor forwarded your record and documents to the Super Admin for final verification.";
+    } else {
+      title = "Final revisions approved.";
+      text = "Upload your IMRaD file. Your instructor will verify it and endorse the project for archiving.";
+    }
   } else if (project.stage === "final_revisions") {
-    title = "Passed with revisions.";
-    text = "Apply the panel's comments, then upload the final manuscript for your instructor's approval.";
-    extra = <FinalUpload project={project} />;
+    if ((project.evaluationForms?.length ?? 0) < 3) {
+      title = "Passed with revisions.";
+      text = "Your instructor will upload the 3 panel evaluation forms. You'll see them here before you start revising.";
+    } else {
+      title = "Revise your chapters.";
+      text = "Read the panel evaluation forms, then resubmit every chapter. Your instructor will check each one.";
+    }
   } else if (project.stage === "defense_scheduled") {
     title = "Your defense is scheduled.";
     text = "Prepare your presentation and bring a copy of the manuscript for every panel member.";
@@ -233,16 +189,13 @@ export function DefenseStatusCard({ project, progress }: { project: Project; pro
         </div>
       )}
 
-      {/* Result */}
+      {/* Result (status only, no grade) */}
       {showResult && project.defenseResult && (
         <div className="rounded-xl border p-4">
           <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <CheckCircle2 className="h-4 w-4 text-green-600" /> Defense result
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {RESULT_LABEL[project.defenseResult]}
-            {project.finalGrade ? ` • Grade ${project.finalGrade}` : ""}
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{RESULT_LABEL[project.defenseResult]}</p>
         </div>
       )}
     </div>

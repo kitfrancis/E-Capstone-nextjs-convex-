@@ -28,7 +28,9 @@ const BLUE = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
 const GREEN = "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
 const AMBER = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
 
-function statusOf(p: Project, progress: number) {
+function statusOf(p: Project | null | undefined, progress: number) {
+  if (!p) return { label: "Not Started", cls: "bg-muted text-muted-foreground" };
+  
   switch (p.stage) {
     case "endorsed":
       return p.defenseResult === "failed"
@@ -43,7 +45,6 @@ function statusOf(p: Project, progress: number) {
     case "archived":
       return { label: "Archived", cls: "bg-muted text-muted-foreground" };
   }
-  // 100% but the stage hasn't synced yet: already show it as ready
   if (progress >= 100) return { label: "Ready for defense", cls: BLUE };
   if (progress > 0) return { label: "In Progress", cls: BLUE };
   return { label: "Not Started", cls: "bg-muted text-muted-foreground" };
@@ -53,23 +54,24 @@ function statusOf(p: Project, progress: number) {
 
 function ScheduleDialog({ project, open, onOpenChange }: DialogProps) {
   const schedule = useMutation(api.defense.scheduleDefense);
-  const [date, setDate] = useState(project.defenseDate?.slice(0, 10) ?? "");
-  const [time, setTime] = useState(project.defenseDate?.slice(11, 16) ?? "");
-  const [venue, setVenue] = useState(project.defenseVenue ?? "");
-  const [panel, setPanel] = useState(project.defensePanel ?? "");
+  const [date, setDate] = useState(project?.defenseDate ? project.defenseDate.slice(0, 10) : "");
+  const [time, setTime] = useState(project?.defenseDate && project.defenseDate.length >= 16 ? project.defenseDate.slice(11, 16) : "");
+  const [venue, setVenue] = useState(project?.defenseVenue ?? "");
+  const [panel, setPanel] = useState(project?.defensePanel ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const valid = date && time && venue.trim() && panel.trim();
+  const valid = Boolean(date && time && venue.trim() && panel.trim());
 
   const save = async () => {
+    if (!project?._id) return;
     setBusy(true);
     setError("");
     try {
       await schedule({ projectId: project._id, date: `${date}T${time}`, venue, panel });
       onOpenChange(false);
-    } catch {
-      setError("Couldn't save the schedule. Please try again.");
+    } catch (err: any) {
+      setError(err?.message || "Couldn't save the schedule. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -80,7 +82,7 @@ function ScheduleDialog({ project, open, onOpenChange }: DialogProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Schedule defense</DialogTitle>
-          <DialogDescription>{project.teamName} will see the date, venue and panel.</DialogDescription>
+          <DialogDescription>{project?.teamName ?? "Team"} will see the date, venue and panel.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -130,13 +132,14 @@ function ResultDialog({ project, open, onOpenChange }: DialogProps) {
   const valid = result === "failed" || grade.trim().length > 0;
 
   const save = async () => {
+    if (!project?._id) return;
     setBusy(true);
     setError("");
     try {
       await record({ projectId: project._id, result, grade: result === "failed" ? undefined : grade });
       onOpenChange(false);
-    } catch {
-      setError("Couldn't save the result. Please try again.");
+    } catch (err: any) {
+      setError(err?.message || "Couldn't save the result. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -147,7 +150,7 @@ function ResultDialog({ project, open, onOpenChange }: DialogProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Record defense result</DialogTitle>
-          <DialogDescription>Save the panel&apos;s decision for {project.teamName}.</DialogDescription>
+          <DialogDescription>Save the panel&apos;s decision for {project?.teamName ?? "Team"}.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           {RESULTS.map((r) => (
@@ -185,23 +188,24 @@ function ResultDialog({ project, open, onOpenChange }: DialogProps) {
 function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
   const generateUrl = useMutation(api.defense.generateUploadUrl);
   const archive = useMutation(api.defense.archiveProject);
-  const [grade, setGrade] = useState(project.finalGrade ?? "");
+  const [grade, setGrade] = useState("");
   const [abstract, setAbstract] = useState("");
   const [keywords, setKeywords] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const keywordList = keywords.split(",").map((k) => k.trim()).filter(Boolean);
+  const keywordList = keywords ? keywords.split(",").map((k) => k.trim()).filter(Boolean) : [];
   const checks = [
     { label: "Grade", ok: grade.trim().length > 0 },
     { label: "Abstract", ok: abstract.trim().length > 0 },
     { label: "Keywords (at least 3)", ok: keywordList.length >= 3 },
-    { label: "Final file", ok: !!file || !!project.finalFileId },
+    { label: "Final file", ok: !!file || Boolean(project?.finalFileId) },
   ];
   const valid = checks.every((c) => c.ok);
 
   const save = async () => {
+    if (!project?._id) return;
     setBusy(true);
     setError("");
     try {
@@ -214,12 +218,13 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
           body: file,
         });
         if (!res.ok) throw new Error("upload failed");
-        fileId = (await res.json()).storageId;
+        const json = await res.json();
+        fileId = json.storageId;
       }
-      await archive({ projectId: project._id, grade, abstract, keywords: keywordList, fileId });
+      await archive({ projectId: project._id, abstract, keywords: keywordList, fileId });
       onOpenChange(false);
-    } catch {
-      setError("Couldn't archive the project. Please try again.");
+    } catch (err: any) {
+      setError(err?.message || "Couldn't archive the project. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -231,13 +236,13 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
         <DialogHeader>
           <DialogTitle>Archive project</DialogTitle>
           <DialogDescription>
-            Fill in what the archive needs. {project.teamName} becomes read-only once archived.
+            Fill in what the archive needs. {project?.teamName ?? "Team"} becomes read-only once archived.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className={LABEL}>Grade</label>
-            <Input value={grade} onChange={(e) => setGrade(e.target.value)} />
+            <Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="e.g. A or 1.25" />
           </div>
           <div className="space-y-1.5">
             <label className={LABEL}>Abstract</label>
@@ -249,7 +254,7 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
           </div>
           <div className="space-y-1.5">
             <label className={LABEL}>
-              Final manuscript (PDF){project.finalFileId ? " (student already submitted one)" : ""}
+              Final manuscript (PDF){project?.finalFileId ? " (student already submitted one)" : ""}
             </label>
             <Input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
@@ -265,7 +270,7 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!valid || busy} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+          <Button onClick={save} data-testid="archive-submit-btn" disabled={!valid || busy} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />} Archive project
           </Button>
         </DialogFooter>
@@ -277,39 +282,38 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
 /* -------------------------------- Rows -------------------------------- */
 
 function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: () => void }) {
-  const deliverables = useQuery(api.dashboard.getDeliverables, { capstoneProjectId: project._id });
+  const deliverables = useQuery(api.dashboard.getDeliverables, { capstoneProjectId: project?._id });
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
-  const progress = computeProgress(deliverables ?? []).total;
+  
+  const progress = deliverables ? computeProgress(deliverables).total : 0;
   const status = statusOf(project, progress);
 
   const [dialog, setDialog] = useState<"schedule" | "result" | "archive" | null>(null);
 
-  // At 100% the project becomes "Ready for defense" on its own
   useEffect(() => {
-    if (!project.stage && progress >= 100) {
+    if (project && !project.stage && progress >= 100 && project._id) {
       syncReadiness({ projectId: project._id }).catch(() => {});
     }
-  }, [project._id, project.stage, progress, syncReadiness]);
+  }, [project, progress, syncReadiness]);
 
   const primary = "rounded-full px-4 gap-1.5 bg-blue-600 text-white hover:bg-blue-700";
 
   let action;
-  if (project.stage === "endorsed") {
+  if (project?.stage === "endorsed") {
     action = <Button size="sm" onClick={() => setDialog("schedule")} className={primary}>Schedule defense</Button>;
-  } else if (project.stage === "defense_scheduled") {
+  } else if (project?.stage === "defense_scheduled") {
     action = <Button size="sm" onClick={() => setDialog("result")} className={primary}>Record result</Button>;
-  } else if (project.stage === "ready_to_archive") {
+  } else if (project?.stage === "ready_to_archive") {
     action = (
       <Button size="sm" onClick={() => setDialog("archive")} className={primary}>
         <Archive className="h-3.5 w-3.5" /> Archive project
       </Button>
     );
-  } else if (project.stage === "final_revisions") {
+  } else if (project?.stage === "final_revisions") {
     action = <span className="text-xs text-muted-foreground">Waiting for final manuscript</span>;
-  } else if (project.stage === "archived") {
+  } else if (project?.stage === "archived") {
     action = <span className="text-xs text-muted-foreground">Read-only</span>;
   } else if (progress >= 100) {
-    // Stage is syncing; the Schedule button appears as soon as it lands
     action = (
       <Button size="sm" disabled className={primary}>
         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Getting ready...
@@ -327,8 +331,8 @@ function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: ()
     <div className="rounded-2xl border bg-card p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-5">
         <div className="min-w-0 lg:flex-2">
-          <h3 className="truncate text-sm font-semibold text-foreground lg:text-base">{project.teamName}</h3>
-          <p className="truncate text-xs text-muted-foreground">{project.projectTitle}</p>
+          <h3 className="truncate text-sm font-semibold text-foreground lg:text-base">{project?.teamName ?? "Unnamed Team"}</h3>
+          <p className="truncate text-xs text-muted-foreground">{project?.projectTitle ?? "No title"}</p>
         </div>
         <span className={`${BADGE} ${status.cls} self-start`}>{status.label}</span>
         <div className="flex items-center gap-2 lg:flex-[1.5]">
@@ -343,9 +347,9 @@ function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: ()
         <div className="flex justify-end">{action}</div>
       </div>
 
-      {dialog === "schedule" && <ScheduleDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
-      {dialog === "result" && <ResultDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
-      {dialog === "archive" && <ArchiveDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
+      {dialog === "schedule" && project && <ScheduleDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
+      {dialog === "result" && project && <ResultDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
+      {dialog === "archive" && project && <ArchiveDialog project={project} open onOpenChange={(o) => !o && setDialog(null)} />}
     </div>
   );
 }
@@ -367,9 +371,7 @@ export function DefensePipeline({ onViewTeam }: { onViewTeam: () => void }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {projects.map((p) => (
-            <PipelineRow key={p._id} project={p} onViewTeam={onViewTeam} />
-          ))}
+          {projects.map((p) => p && <PipelineRow key={p._id} project={p} onViewTeam={onViewTeam} />)}
         </div>
       )}
     </div>

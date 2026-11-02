@@ -33,11 +33,8 @@ import {
 import { useSearchParams } from "next/navigation";
 
 const studentLinks = [
-  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard, children: [
-    { label: "Deliverables", href: "/dashboard/student?tab=deliverables", icon: FileText },
-    { label: "Upload", href: "/dashboard/student?tab=uploads", icon: Upload },
-    { label: "Tasks", href: "/dashboard/student?tab=tasks", icon: ClipboardList },
-  ]},
+  { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
+  { label: "Manuscript & Tasks", href: "/dashboard/student?tab=deliverables", icon: Users },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/student", icon: User },
 ];
@@ -86,6 +83,19 @@ function AppSidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "deliverables";
+
+  // Must live inside the component so it can use pathname and searchParams
+  const isLinkActive = (href: string) => {
+    const [path, query] = href.split("?");
+    if (pathname !== path) return false;
+    const tab = searchParams.get("tab");
+    if (!query) return !tab || tab === "dashboard";
+    const want = new URLSearchParams(query).get("tab");
+    return (
+      tab === want ||
+      (want === "deliverables" && (tab === "tasks" || tab === "uploads"))
+    );
+  };
 
   const links: LinkItem[] =
     me === undefined
@@ -187,7 +197,7 @@ function AppSidebarContent() {
                       <SidebarMenuButton
                         className={`h-11 rounded-xl text-[15px] ${ACTIVE}`}
                         asChild
-                        isActive={pathname === link.href}
+                        isActive={isLinkActive(link.href!)}
                       >
                         <button onClick={() => router.push(link.href!)}>
                           <link.icon className="h-5 w-5" />
@@ -226,11 +236,11 @@ function AppSidebarContent() {
                     {me?.email ?? "—"}
                   </span>
                 </DropdownMenuItem>
-                
+
                 <DropdownMenuItem
-                   onClick={() => {
-                        signOut({ redirectUrl: "/" });
-                    }}
+                  onClick={() => {
+                    signOut({ redirectUrl: "/" });
+                  }}
                   className="text-red-500 cursor-pointer text-sm font-medium"
                 >
                   <span>Sign out</span>

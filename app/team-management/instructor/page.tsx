@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -16,6 +16,7 @@ import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
   Check,
+  Clock,
   Copy,
   Key,
   MoreVertical,
@@ -67,6 +68,9 @@ const OnlyOfficeEditor = dynamic(
 );
 
 const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
+
+// Phase name the student's final IMRaD upload is saved under
+const IMRAD_PHASE = "IMRaD Final";
 
 type SubmissionFilter = "all" | "under_review" | "needs_revision" | "approved";
 type TaskFilter = "all" | "overdue" | "under_review";
@@ -314,6 +318,22 @@ export default function InstructorTeamManagementPage() {
     }
   };
 
+  // Approve final revisions: moves the project to "ready_to_archive"
+  const approveFinalRevisions = useMutation(api.dashboard.approveFinalRevisions);
+  const handleApproveFinal = async (team: Doc<"capstoneProjects">) => {
+    const ok = window.confirm(
+      `Approve the final revisions of ${team.teamName}? The team will be asked to upload their IMRaD manuscript for archiving or binding.`
+    );
+    if (!ok) return;
+    try {
+      await approveFinalRevisions({ projectId: team._id });
+      toast.success(`${team.teamName} is now ready for archiving.`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Couldn't approve the final revisions.");
+    }
+  };
+
   const allDeliverables = useQuery(
     api.dashboard.getInstructorDeliverables,
     myId ? { instructorId: myId } : "skip"
@@ -333,6 +353,38 @@ export default function InstructorTeamManagementPage() {
     }
     return map;
   }, [allTeams, allDeliverables]);
+
+  // ---------- Auto-sync defense readiness ----------
+  // The adviser approves chapters, but the stage only updates when
+  // syncDefenseReadiness runs. Run it here so the instructor sees the
+  // "Schedule proposal" button as soon as Chapters 1-3 are approved.
+  const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
+  const syncedRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!allTeams || !allDeliverables) return;
+    for (const team of allTeams) {
+      if (team.stage) continue; // already in the defense pipeline
+
+      const p = computeProgress(
+        allDeliverables.filter((d) => d.capstoneProjectId === team._id)
+      );
+      const ch13Done = p.chapters.slice(0, 3).every((c) => c.status === "approved");
+      const proposalDone =
+        team.proposalResult === "passed" || team.proposalResult === "passed_with_revisions";
+      // Same rule the server uses
+      const needsSync = proposalDone ? p.total >= 100 : ch13Done;
+
+      // The key includes the phase so the final-defense sync can run later
+      const key = `${team._id}:${proposalDone ? "final" : "proposal"}`;
+      if (needsSync && !syncedRef.current.has(key)) {
+        syncedRef.current.add(key);
+        syncReadiness({ projectId: team._id }).catch(() => {
+          syncedRef.current.delete(key);
+        });
+      }
+    }
+  }, [allTeams, allDeliverables, syncReadiness]);
 
   // If the selected team no longer exists (e.g. it was deleted), fall back to all teams
   const activeTeam =
@@ -524,6 +576,14 @@ export default function InstructorTeamManagementPage() {
                 const badgeCls = defense?.cls ?? "bg-blue-600 text-white";
                 const defenseAction = defenseActionKind(team, teamProgress);
 
+                // Final revisions / archive flow
+                const stageStr = String(team.stage ?? "");
+                const awaitingFinalApproval = stageStr === "final_revisions";
+                const imradSubmitted = teamDeliverables.some((d) => d.phase === IMRAD_PHASE);
+                // Ready to archive, but the team hasn't uploaded the IMRaD yet:
+                // the Archive button stays disabled until they do
+                const awaitingImrad = stageStr === "ready_to_archive" && !imradSubmitted;
+
                 return (
                   <div key={team._id} className={rowClass}>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-4">
@@ -545,6 +605,19 @@ export default function InstructorTeamManagementPage() {
                           <p className="truncate text-xs text-muted-foreground" title={team.projectTitle}>
                             {team.projectTitle}
                           </p>
+                          {stageStr === "ready_to_archive" && (
+                            <p
+                              className={`mt-0.5 text-xs font-medium ${
+                                imradSubmitted
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-amber-600 dark:text-amber-400"
+                              }`}
+                            >
+                              {imradSubmitted
+                                ? "IMRaD submitted. Ready for binding."
+                                : "Waiting for the team's IMRaD upload."}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -592,9 +665,24 @@ export default function InstructorTeamManagementPage() {
 
                       {/* Actions: every row has a primary action */}
                       <div className="order-3 flex w-full items-center gap-1 sm:order-2 sm:ml-auto sm:w-auto">
-                        {defenseAction !== null ? (
-                          // NOTE: this now also renders for the "archive" step. If
-                          // DefenseActionButton doesn't handle "archive", handle it here.
+                        {awaitingFinalApproval ? (
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveFinal(team)}
+                            className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Approve Final Revisions
+                          </Button>
+                        ) : awaitingImrad ? (
+                          <Button
+                            size="sm"
+                            disabled
+                            title="The team hasn't uploaded their IMRaD manuscript yet"
+                            className="flex-1 rounded-full px-4 sm:flex-none"
+                          >
+                            <Clock className="h-3.5 w-3.5" /> Waiting for IMRaD
+                          </Button>
+                        ) : defenseAction !== null ? (
                           <div className="min-w-0 flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
                             <DefenseActionButton project={team} progress={teamProgress} />
                           </div>
@@ -1018,4 +1106,4 @@ export default function InstructorTeamManagementPage() {
       )}
     </div>
   );
-}
+} 

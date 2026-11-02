@@ -1,4 +1,5 @@
 "use client";
+
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useState, useRef, useEffect, useMemo } from "react";
@@ -6,13 +7,12 @@ import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { SelectDemo } from "@/app/components/select";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
-import { chapterOf, computeProgress, CHAPTER_MAX } from "@/lib/progress";
+import { chapterOf, computeProgress } from "@/lib/progress";
 import {
   MoreVertical,
   FileText,
@@ -28,6 +28,12 @@ import {
   Check,
   Undo2,
   RotateCcw,
+  CheckCircle2,
+  Clock,
+  Info,
+  Pencil,
+  Plus,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -71,23 +77,10 @@ const fileStyle = (fileName: string) => {
 };
 
 const BADGE_BASE =
-  "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
-
-const TAB_COPY: Record<string, { title: string; description: string }> = {
-  deliverables: { title: "Deliverables", description: "Your submitted files and their review status." },
-  uploads: { title: "Upload new", description: "Upload a new version of your project deliverable." },
-  tasks: { title: "Tasks", description: "Tasks your instructor assigned to your team." },
-};
-
-const rowClass =
-  "rounded-2xl border bg-card p-4 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
+  "inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
+const CARD = "rounded-2xl border bg-card shadow-xs";
+const TH = "px-4 py-3 text-left text-sm font-semibold text-foreground whitespace-nowrap";
 const EDITOR_SESSION_KEY = "student-editor-session";
-
-const progressBarColor = (status: string | null) => {
-  if (status === "approved") return "bg-green-600";
-  if (status === "needs_revision") return "bg-amber-500";
-  return "bg-blue-600";
-};
 
 // Each row gets its own URL, so "Download File" always points to the right file.
 function DownloadItem({ storageId }: { storageId?: string }) {
@@ -104,7 +97,7 @@ function DownloadItem({ storageId }: { storageId?: string }) {
   );
 }
 
-// Student-side task button. "Mark as done" sends the task to the instructor for review.
+// Student-side task button. "Mark as Done" sends the task to the instructor for review.
 function TaskActions({
   status,
   onChange,
@@ -114,83 +107,86 @@ function TaskActions({
 }) {
   if (status === "completed")
     return (
-      <Button size="sm" disabled className="rounded-full px-4 gap-1.5 bg-muted text-muted-foreground">
+      <Button size="sm" disabled variant="outline" className="rounded-lg gap-1.5 text-muted-foreground">
         <Check className="h-3.5 w-3.5" /> Completed
       </Button>
     );
 
   if (status === "under_review")
     return (
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">Waiting for your instructor</span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="rounded-full px-4 gap-1.5"
-          onClick={() => onChange("in_progress")}
-        >
-          <Undo2 className="h-3.5 w-3.5" /> Undo
-        </Button>
-      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="rounded-lg gap-1.5 text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-800"
+        onClick={() => onChange("in_progress")}
+      >
+        <Undo2 className="h-3.5 w-3.5" /> Undo
+      </Button>
     );
 
   if (status === "needs_revision")
     return (
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-orange-600 dark:text-orange-400">
-          Your instructor sent this back
-        </span>
-        <Button
-          size="sm"
-          className="rounded-full px-4 gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
-          onClick={() => onChange("under_review")}
-        >
-          <RotateCcw className="h-3.5 w-3.5" /> Resubmit
-        </Button>
-      </div>
+      <Button
+        size="sm"
+        className="rounded-lg gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
+        onClick={() => onChange("under_review")}
+      >
+        <RotateCcw className="h-3.5 w-3.5" /> Resubmit
+      </Button>
     );
 
   if (status === "in_progress")
     return (
       <Button
         size="sm"
-        className="rounded-full px-4 gap-1.5 bg-green-600 text-white hover:bg-green-700"
+        className="rounded-lg gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
         onClick={() => onChange("under_review")}
       >
-        <Check className="h-3.5 w-3.5" /> Mark as done
+        Mark as Done
       </Button>
     );
 
   return (
     <Button
       size="sm"
-      className="rounded-full px-4 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+      className="rounded-lg gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
       onClick={() => onChange("in_progress")}
     >
-      <Play className="h-3.5 w-3.5" /> Start task
+      <Play className="h-3.5 w-3.5" /> Start Task
     </Button>
   );
 }
 
 export function TabsDemo({
   capstoneProjectId,
+  proposalResult,
   highlightDeliverableId,
   highlightPage,
+  showBanner = true,
 }: {
   capstoneProjectId?: Id<"capstoneProjects">;
+  proposalResult?: "passed" | "passed_with_revisions" | "failed";
   highlightDeliverableId?: Id<"deliverables"> | null;
   highlightPage?: number | null;
+  /** Set to false if your page already renders its own "Manuscript & Task Management" banner. */
+  showBanner?: boolean;
 }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [phase, setPhase] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { user } = useUser();
   const convex = useConvex();
   // Assumes Clerk publicMetadata.role === "admin". Change this line if your admin check differs.
   const isAdmin = (user?.publicMetadata as { role?: string } | undefined)?.role === "admin";
+
+  // Upload section
+  const [showUpload, setShowUpload] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [phase, setPhase] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tasks filter
+  const [taskFilter, setTaskFilter] = useState("all");
 
   // PDF viewer
   const [selectedDeliverable, setSelectedDeliverable] = useState<{
@@ -253,12 +249,18 @@ export function TabsDemo({
   const studentUpdateTask = useMutation(api.dashboard.studentUpdateTask);
   const startDraft = useMutation(api.drafts.startDraft);
 
-  const [activeTab, setActiveTab] = useState("deliverables");
   const deliverables = useQuery(
     api.dashboard.getDeliverables,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
+  const tasks = useQuery(
+    api.dashboard.getTasks,
+    capstoneProjectId ? { capstoneProjectId } : "skip"
+  );
 
+  type Deliverable = NonNullable<typeof deliverables>[number];
+
+  // Restore editor session if the page was refreshed during an edit
   useEffect(() => {
     if (!deliverables || officeDoc || isRestoringEditor) return;
     const saved = sessionStorage.getItem(EDITOR_SESSION_KEY);
@@ -308,9 +310,19 @@ export function TabsDemo({
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
   const alreadyApproved = chosen?.status === "approved";
 
+  // Chapters 4-5 stay locked until the proposal defense is passed
+  const proposalDone =
+    proposalResult === "passed" || proposalResult === "passed_with_revisions";
+  const proposalLocked = !!chosenChapter && chosenChapter >= 4 && !proposalDone;
+
   let uploadHint = "";
   if (chosenChapter && chosen) {
-    if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
+    if (proposalLocked)
+      uploadHint =
+        proposalResult === "failed"
+          ? `Your proposal defense was not passed. Chapter ${chosenChapter} stays locked until a re-defense is passed.`
+          : `Chapter ${chosenChapter} unlocks after you pass the proposal defense.`;
+    else if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
     else if (chosen.status === "needs_revision")
       uploadHint = `Resubmitting sends Chapter ${chosenChapter} back to your adviser for review.`;
     else if (chosen.status === "under_review")
@@ -318,6 +330,7 @@ export function TabsDemo({
     else uploadHint = `Uploading sends Chapter ${chosenChapter} to your adviser for review.`;
   }
 
+  // Deep-link from a notification: open the PDF at the right page
   useEffect(() => {
     if (!highlightDeliverableId || !deliverables) return;
     const match = deliverables.find((d) => d._id === highlightDeliverableId);
@@ -332,12 +345,7 @@ export function TabsDemo({
         router.replace(window.location.pathname, { scroll: false });
       }, 500);
     }
-  }, [highlightDeliverableId, deliverables]);
-
-  const tasks = useQuery(
-    api.dashboard.getTasks,
-    capstoneProjectId ? { capstoneProjectId } : "skip"
-  );
+  }, [highlightDeliverableId, highlightPage, deliverables, router]);
 
   const changeTaskStatus = async (taskId: Id<"tasks">, status: "in_progress" | "under_review") => {
     try {
@@ -350,7 +358,7 @@ export function TabsDemo({
   };
 
   // Open (or create) the draft and open the editor on it.
-  const startEdit = async (d: NonNullable<typeof deliverables>[number]) => {
+  const startEdit = async (d: Deliverable) => {
     try {
       const draft = await startDraft({ deliverableId: d._id });
       setOfficeDoc({
@@ -373,6 +381,25 @@ export function TabsDemo({
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
+    }
+  };
+
+  const viewDocument = (d: Deliverable) => {
+    if (isPdf(d.fileName)) {
+      setSelectedDeliverable({
+        fileName: d.fileName,
+        storageId: d.storageId!,
+        deliverableId: d._id,
+        initialPage: 1,
+      });
+    } else if (isOffice(d.fileName)) {
+      setOfficeDoc({
+        fileName: d.fileName,
+        storageId: d.storageId!,
+        deliverableId: d._id,
+        phase: d.phase,
+        mode: "view",
+      });
     }
   };
 
@@ -431,6 +458,12 @@ export function TabsDemo({
     if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0]);
   };
 
+  const closeUpload = () => {
+    setShowUpload(false);
+    setFile(null);
+    setPhase("");
+  };
+
   const handleUpload = async () => {
     if (!file || !phase || !capstoneProjectId) {
       toast.error("Please select a file and chapter first.");
@@ -438,6 +471,10 @@ export function TabsDemo({
     }
     if (alreadyApproved) {
       toast.error("This chapter is already approved.");
+      return;
+    }
+    if (proposalLocked) {
+      toast.error("Pass the proposal defense before uploading Chapter 4 or 5.");
       return;
     }
     setUploading(true);
@@ -467,12 +504,10 @@ export function TabsDemo({
       });
 
       toast.success("Uploaded successfully!");
-      setFile(null);
-      setPhase("");
-      setActiveTab("deliverables");
+      closeUpload();
     } catch (err) {
       console.error(err);
-      toast.error(`Upload failed: ${err}`);
+      toast.error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setUploading(false);
     }
@@ -490,20 +525,44 @@ export function TabsDemo({
     return "Needs Revision";
   };
 
+  const getStatusIcon = (status: string) => {
+    if (status === "approved") return CheckCircle2;
+    if (status === "under_review") return Clock;
+    return RotateCcw;
+  };
+
   const getTaskBadge = (status: string) => {
     if (status === "completed") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
-    if (status === "in_progress") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
-    if (status === "under_review") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
+    if (status === "in_progress") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+    if (status === "under_review") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
     if (status === "needs_revision") return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
-    return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+    return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+  };
+
+  const getTaskDot = (status: string) => {
+    if (status === "completed") return "bg-green-600";
+    if (status === "in_progress") return "bg-blue-600";
+    if (status === "under_review") return "bg-amber-500";
+    if (status === "needs_revision") return "bg-orange-500";
+    return "bg-slate-400";
   };
 
   const getTaskLabel = (status: string) => {
     if (status === "completed") return "Completed";
     if (status === "in_progress") return "In Progress";
-    if (status === "under_review") return "Under Review";
+    if (status === "under_review") return "Waiting to be checked by instructor";
     if (status === "needs_revision") return "Needs Revision";
     return "Pending";
+  };
+
+  // Priority is optional: the column only shows if your tasks have a `priority` field.
+  const getPriority = (task: unknown) =>
+    (task as { priority?: string }).priority?.toLowerCase();
+  const hasPriority = !!tasks?.some((t) => getPriority(t));
+  const priorityBadge = (p?: string) => {
+    if (p === "high") return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+    if (p === "medium") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+    return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
   };
 
   const formatDate = (dateStr: string) => {
@@ -514,200 +573,101 @@ export function TabsDemo({
     });
   };
 
+  const formatDateTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    return `${formatDate(dateStr)} at ${time}`;
+  };
+
+  const filteredTasks = (tasks ?? []).filter((t) => {
+    if (taskFilter === "all") return true;
+    return t.status === taskFilter;
+  });
+
+  const taskCounts = {
+    all: tasks?.length ?? 0,
+    pending: tasks?.filter((t) => t.status === "pending").length ?? 0,
+    in_progress: tasks?.filter((t) => t.status === "in_progress").length ?? 0,
+    under_review: tasks?.filter((t) => t.status === "under_review").length ?? 0,
+    needs_revision: tasks?.filter((t) => t.status === "needs_revision").length ?? 0,
+    completed: tasks?.filter((t) => t.status === "completed").length ?? 0,
+  };
+
+  const taskFilterOptions = [
+    { key: "all", label: "All", count: taskCounts.all },
+    { key: "pending", label: "To Do", count: taskCounts.pending },
+    { key: "in_progress", label: "In Progress", count: taskCounts.in_progress },
+    { key: "under_review", label: "Under Review", count: taskCounts.under_review },
+    { key: "needs_revision", label: "Needs Revision", count: taskCounts.needs_revision },
+    { key: "completed", label: "Completed", count: taskCounts.completed },
+  ];
+
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      {/* Section heading + pill tabs */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end  sm:justify-between mb-4">
-        <div >
-          <h2 className="text-xl font-semibold text-foreground">{TAB_COPY[activeTab].title}</h2>
-          <p className="text-sm text-muted-foreground">{TAB_COPY[activeTab].description}</p>
-        </div>
-        <TabsList className="h-auto gap-1 rounded-full bg-muted p-1 self-start sm:self-auto">
-          {[
-            { v: "deliverables", label: "Deliverables" },
-            { v: "uploads", label: "Upload New" },
-            { v: "tasks", label: "Tasks" },
-          ].map((t) => (
-            <TabsTrigger
-              key={t.v}
-              value={t.v}
-              className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow"
-            >
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </div>
-
-      {/* DELIVERABLES */}
-      <TabsContent value="deliverables">
-        {deliverables === undefined ? (
-          <p className="text-center py-4 text-muted-foreground">Loading...</p>
-        ) : deliverables.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center rounded-2xl border border-dashed bg-card">
-            <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
-            <p className="font-medium text-foreground">No deliverables yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Upload your first deliverable in the Upload New tab.</p>
-            <Button
-              onClick={() => setActiveTab("uploads")}
-              className="mt-4 rounded-full bg-blue-600 px-5 text-white hover:bg-blue-700"
-              size="sm"
-            >
-              Upload now
-            </Button>
+    <div className="w-full space-y-6">
+      {/* Banner */}
+      {showBanner && (
+        <div className="relative isolate overflow-hidden rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8">
+          <div className="relative z-10">
+            <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
+              Manuscript &amp; Task Management
+            </h1>
+            <p className="text-sm lg:text-base text-muted-foreground mt-2">
+              Manage your manuscript and keep track of your assigned tasks.
+            </p>
           </div>
-        ) : (
-          deliverables.map((d) => {
-            const fs = fileStyle(d.fileName);
-            const FileTypeIcon = fs.icon;
-            const chNum = chapterOf(d.phase);
-            const cp = chNum ? progress.chapters[chNum - 1] : null;
-            const isLatest = !!cp && cp.latestId === d._id;
-            // Locked once the chapter (or this file) is approved. Only admins can delete.
-            const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
-            return (
-              <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
-                      <FileTypeIcon className="h-6 w-6" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
-                      <p className="text-muted-foreground text-xs">
-                        {d.phase} • Version {d.version}
-                      </p>
-                      <p className="text-muted-foreground text-xs mt-0.5">
-                        {formatDate(d.uploadedAt)} • {d.fileSize}
-                      </p>
-                    </div>
-                  </div>
+          <UploadCloud
+            aria-hidden
+            strokeWidth={1.4}
+            className="pointer-events-none absolute right-8 top-1/2 hidden h-28 w-28 -translate-y-1/2 text-blue-300/70 dark:text-blue-800/60 sm:block"
+          />
+        </div>
+      )}
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="File options">
-                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                        {isPdf(d.fileName) ? (
-                          <>
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setSelectedDeliverable({
-                                  fileName: d.fileName,
-                                  storageId: d.storageId!,
-                                  deliverableId: d._id,
-                                  initialPage: 1,
-                                })
-                              }
-                            >
-                              View File
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setOfficeDoc({
-                                  fileName: d.fileName,
-                                  storageId: d.storageId!,
-                                  deliverableId: d._id,
-                                  phase: d.phase,
-                                  mode: "view",
-                                })
-                              }
-                            >
-                              Open in OnlyOffice
-                            </DropdownMenuItem>
-                          </>
-                        ) : isOffice(d.fileName) ? (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              isLatest
-                                ? startEdit(d)
-                                : setOfficeDoc({
-                                    fileName: d.fileName,
-                                    storageId: d.storageId!,
-                                    deliverableId: d._id,
-                                    phase: d.phase,
-                                    mode: "view",
-                                  })
-                            }
-                          >
-                            {isLatest ? "Open for editing" : "View in Editor"}
-                          </DropdownMenuItem>
-                        ) : null}
+      {/* Upload section */}
+      {showUpload && (
+        <div className={`${CARD} p-5 lg:p-6 space-y-5`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">Upload New Document</h2>
+              <p className="text-sm text-muted-foreground">
+                Upload a new version or chapter manuscript for adviser review.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeUpload}
+              aria-label="Close upload"
+              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+            >
+              <X className="h-5 w-5 text-muted-foreground" />
+            </button>
+          </div>
 
-                        {/* Download is available for every file type */}
-                        {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
-
-                        {deleteLocked ? (
-                          <DropdownMenuItem disabled className="text-muted-foreground">
-                            Delete (locked)
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onSelect={(e) => e.preventDefault()}
-                          >
-                            <DeleteDeliverable
-                              deliverableId={d._id}
-                              fileName={d.fileName}
-                              trigger={<span className="w-full text-sm">Delete</span>}
-                            />
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {/* Chapter progress (latest version only) */}
-                {cp && isLatest && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${progressBarColor(cp.status)}`}
-                        style={{ width: `${(cp.points / CHAPTER_MAX) * 100}%` }}
-                      />
-                    </div>
-                    <span className="min-w-18 text-right text-xs text-muted-foreground">
-                      {cp.points}% of {CHAPTER_MAX}%
-                    </span>
-                  </div>
-                )}
-                {!chNum && (
-                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                    Saved under an older phase, so it is not counted in progress.
-                  </p>
-                )}
-              </div>
-            );
-          })
-        )}
-      </TabsContent>
-
-      {/* UPLOAD */}
-      <TabsContent value="uploads">
-        <div className="rounded-2xl border bg-card p-5 lg:p-6 space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-foreground text-sm font-medium">Chapter </label>
+          <div className="space-y-2">
+            <label className="text-foreground text-sm font-medium">Select Chapter</label>
             <SelectDemo value={phase} onValueChange={setPhase} />
             {uploadHint && (
-              <p
-                className={`rounded-lg px-3 py-2 text-xs ${
-                  alreadyApproved
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+              <div
+                className={`flex items-start gap-2 rounded-xl p-3 text-xs leading-relaxed ${
+                  proposalLocked
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                    : alreadyApproved
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                 }`}
               >
-                {uploadHint}
-              </p>
+                {alreadyApproved && !proposalLocked ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                ) : (
+                  <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                )}
+                <span>{uploadHint}</span>
+              </div>
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-foreground text-sm font-medium">Select file</label>
+          <div className="space-y-2">
+            <label className="text-foreground text-sm font-medium">Select File</label>
             <div
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => {
@@ -725,21 +685,25 @@ export function TabsDemo({
               <div className="flex flex-col items-center justify-center text-center">
                 {file ? (
                   <>
-                    <div className={`flex h-14 w-14 items-center justify-center rounded-full ${fileStyle(file.name).wrap}`}>
-                      <FileText className="h-7 w-7" />
+                    <div className={`flex h-16 w-16 items-center justify-center rounded-full ${fileStyle(file.name).wrap}`}>
+                      <FileText className="h-8 w-8" />
                     </div>
-                    <p className="mt-3 text-sm font-medium text-foreground break-all">{file.name}</p>
+                    <p className="mt-3 text-sm font-semibold text-foreground break-all">{file.name}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {(file.size / (1024 * 1024)).toFixed(2)}MB • Click to choose a different file
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB • Click to select a different file
                     </p>
                   </>
                 ) : (
                   <>
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                      <UploadCloud className="h-7 w-7" />
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                      <UploadCloud className="h-8 w-8" />
                     </div>
-                    <p className="mt-3 text-sm font-medium text-foreground">Click to select a file, or drag it here</p>
-                    <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)</p>
+                    <p className="mt-3 text-sm font-semibold text-foreground">
+                      Click to select a file, or drag and drop here
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Accepts PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)
+                    </p>
                   </>
                 )}
               </div>
@@ -753,57 +717,330 @@ export function TabsDemo({
             </div>
           </div>
 
+          <div className="flex items-center justify-between pt-1">
+            {file ? (
+              <button
+                type="button"
+                onClick={() => setFile(null)}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Clear selected file
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="rounded-lg" onClick={closeUpload} disabled={uploading}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpload}
+                disabled={!file || !phase || uploading || alreadyApproved || proposalLocked}
+                className="rounded-lg gap-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                {uploading ? "Uploading..." : "Upload Deliverable"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MY MANUSCRIPT */}
+      <div className={`${CARD} p-5 lg:p-6`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <FileText className="h-7 w-7 text-blue-600" />
+            <h2 className="text-xl font-semibold text-foreground">My Manuscript</h2>
+          </div>
           <Button
-            onClick={handleUpload}
-            disabled={!file || !phase || uploading || alreadyApproved}
-            className="h-11 w-full rounded-xl gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            className="rounded-lg gap-2 bg-blue-600 text-white hover:bg-blue-700 self-start sm:self-auto"
+            onClick={() => setShowUpload(true)}
+            disabled={showUpload}
           >
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-            {uploading ? "Uploading..." : "Upload deliverable"}
+            <Plus className="h-4 w-4" />
+            Upload New Document
           </Button>
         </div>
-      </TabsContent>
 
-      {/* TASKS */}
-      <TabsContent value="tasks">
-        {tasks === undefined ? (
-          <p className="text-center py-4 text-muted-foreground">Loading...</p>
-        ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center rounded-2xl border border-dashed bg-card">
-            <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
-            <p className="font-medium text-foreground">No tasks yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Tasks will be created by your instructor.</p>
-          </div>
-        ) : (
-          tasks.map((task) => (
-            <div key={task._id} className={rowClass}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                    <CheckSquare className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
-                    <p className="text-muted-foreground text-xs mt-0.5 wrap-break-word">{task.description}</p>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                      <span>Team: {task.assignedTo}</span>
-                      <span>Role: {task.targetRole ?? "All Roles"}</span>
-                      <span className="inline-flex items-center gap-1">
-                        <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>{getTaskLabel(task.status)}</span>
-              </div>
-
-              <div className="flex justify-end mt-3">
-                <TaskActions status={task.status} onChange={(s) => changeTaskStatus(task._id, s)} />
-              </div>
+        <div className="mt-5">
+          {deliverables === undefined ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             </div>
-          ))
-        )}
-      </TabsContent>
+          ) : deliverables.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
+              <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
+              <p className="font-medium text-foreground">No documents submitted yet</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload your first chapter to start the review.
+              </p>
+              <Button
+                size="sm"
+                className="mt-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => setShowUpload(true)}
+                disabled={showUpload}
+              >
+                Upload Now
+              </Button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full min-w-205 text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className={TH}>Document Name</th>
+                    <th className={TH}>Version</th>
+                    <th className={TH}>Last Updated</th>
+                    <th className={TH}>Status</th>
+                    <th className={`${TH} text-right`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliverables.map((d) => {
+                    const fs = fileStyle(d.fileName);
+                    const FileTypeIcon = fs.icon;
+                    const chNum = chapterOf(d.phase);
+                    const cp = chNum ? progress.chapters[chNum - 1] : null;
+                    const isLatest = !!cp && cp.latestId === d._id;
+                    // Locked once the chapter (or this file) is approved. Only admins can delete.
+                    const deleteLocked =
+                      (cp?.status === "approved" || d.status === "approved") && !isAdmin;
+                    const canView = isPdf(d.fileName) || isOffice(d.fileName);
+                    const canEdit = isOffice(d.fileName) && isLatest;
+                    const StatusIcon = getStatusIcon(d.status);
+                    return (
+                      <tr key={d._id} className={`border-t ${chNum && !isLatest ? "opacity-60" : ""}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${fs.wrap}`}>
+                              <FileTypeIcon className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate max-w-64">{d.fileName}</p>
+                              <p className="text-xs text-muted-foreground">{d.phase}</p>
+                              {!chNum && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                  Saved under an older phase, so it is not counted in progress.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            v{d.version}
+                            {d.versionLabel && ` (${d.versionLabel})`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-foreground whitespace-nowrap">
+                          <span className="inline-flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                            {formatDateTime(d.uploadedAt)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>
+                            <StatusIcon className="h-3.5 w-3.5" />
+                            {getStatusLabel(d.status)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              className="rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                              disabled={!canView}
+                              onClick={() => viewDocument(d)}
+                            >
+                              View Document
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="rounded-lg gap-1.5"
+                              disabled={!canEdit}
+                              title={
+                                canEdit
+                                  ? "Edit this document"
+                                  : "Only the latest Word, Excel or PowerPoint version can be edited"
+                              }
+                              onClick={() => startEdit(d)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                                  aria-label="File options"
+                                >
+                                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="flex flex-col justify-center">
+                                {isPdf(d.fileName) && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      setOfficeDoc({
+                                        fileName: d.fileName,
+                                        storageId: d.storageId!,
+                                        deliverableId: d._id,
+                                        phase: d.phase,
+                                        mode: "view",
+                                      })
+                                    }
+                                  >
+                                    Open in OnlyOffice
+                                  </DropdownMenuItem>
+                                )}
+
+                                {/* Download is available for every non-PDF file type */}
+                                {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
+
+                                {deleteLocked ? (
+                                  <DropdownMenuItem disabled className="text-muted-foreground">
+                                    Delete (locked)
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onSelect={(e) => e.preventDefault()}
+                                  >
+                                    <DeleteDeliverable
+                                      deliverableId={d._id}
+                                      fileName={d.fileName}
+                                      trigger={<span className="w-full text-sm">Delete</span>}
+                                    />
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* MY TASKS */}
+      <div id="my-tasks" className={`${CARD} p-5 lg:p-6 scroll-mt-4`}>
+        <div className="flex items-center gap-3">
+          <CheckSquare className="h-7 w-7 text-blue-600" />
+          <h2 className="text-xl font-semibold text-foreground">My Tasks</h2>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {taskFilterOptions.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setTaskFilter(opt.key)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                taskFilter === opt.key
+                  ? "bg-blue-100 text-blue-700 shadow-[inset_0_-2px_0_0_var(--color-blue-600)] dark:bg-blue-950 dark:text-blue-300"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {opt.label} ({opt.count})
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4">
+          {tasks === undefined ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            </div>
+          ) : filteredTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
+              <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
+              <p className="font-medium text-foreground">
+                {taskFilter === "all" ? "No tasks assigned yet" : "No tasks in this category"}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {taskFilter === "all"
+                  ? "Tasks will be assigned by your instructor as the project progresses."
+                  : "Try choosing another filter option above."}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full min-w-205 text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className={TH}>Task Title</th>
+                    <th className={TH}>Description</th>
+                    <th className={TH}>Due Date</th>
+                    {hasPriority && <th className={TH}>Priority</th>}
+                    <th className={TH}>Status</th>
+                    <th className={`${TH} text-right`}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTasks.map((task) => {
+                    const priority = getPriority(task);
+                    return (
+                      <tr key={task._id} className="border-t align-middle">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            {task.status === "completed" ? (
+                              <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                            ) : (
+                              <span className="h-3 w-3 shrink-0 rounded-full bg-blue-600" />
+                            )}
+                            <span className="font-medium text-foreground">{task.title}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          <p>{task.description}</p>
+                          <p className="mt-0.5 text-xs">
+                            {task.assignedTo} · {task.targetRole ?? "All Roles"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-foreground whitespace-nowrap">
+                          <span className="inline-flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                            {formatDate(task.dueDate)}
+                          </span>
+                        </td>
+                        {hasPriority && (
+                          <td className="px-4 py-3">
+                            {priority ? (
+                              <span className={`${BADGE_BASE} capitalize ${priorityBadge(priority)}`}>
+                                {priority}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>
+                            <span className={`h-2 w-2 rounded-full ${getTaskDot(task.status)}`} />
+                            {getTaskLabel(task.status)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end">
+                            <TaskActions
+                              status={task.status}
+                              onChange={(s) => changeTaskStatus(task._id, s)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* PDF viewer */}
       <PDFViewer
@@ -833,13 +1070,13 @@ export function TabsDemo({
         />
       )}
       {isRestoringEditor && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 text-white">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/80 text-white">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin" />
             <p className="mt-3 text-sm">Restoring your document editor…</p>
           </div>
         </div>
       )}
-    </Tabs>
+    </div>
   );
 }

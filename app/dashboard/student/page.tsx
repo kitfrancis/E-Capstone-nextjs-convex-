@@ -4,9 +4,10 @@ import { useQuery, useMutation, useConvex } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status-card";
+import { ProposalScheduleCard } from "@/app/components/proposal-schedule-card";
 import { Id } from "@/convex/_generated/dataModel";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
-import { useState, useMemo, useEffect, useRef, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -20,14 +21,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SelectDemo } from "@/app/components/select";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
 import { toast } from "sonner";
-import { chapterOf, computeProgress, CHAPTER_MAX, TOTAL_CHAPTERS } from "@/lib/progress";
+import { chapterOf, computeProgress, TOTAL_CHAPTERS } from "@/lib/progress";
 import {
   CheckCircle2,
   Clock,
   RotateCcw,
+  RefreshCw,
   Users,
   UserCheck,
   Mail,
@@ -46,7 +54,17 @@ import {
   Check,
   Undo2,
   Info,
+  BarChart3,
+  Code2,
+  ShieldCheck,
+  Archive as ArchiveIcon,
+  ChevronRight,
+  Pencil,
+  Plus,
+  FolderOpen,
+  GraduationCap,
 } from "lucide-react";
+import { FinalRevisionsCard } from "@/app/components/final-revisions-card";
 
 const TEAM_ROLES = [
   "Project Manager",
@@ -56,12 +74,9 @@ const TEAM_ROLES = [
   "System Architect",
 ] as const;
 type TeamRole = (typeof TEAM_ROLES)[number];
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
+// Phase name used for the final IMRaD manuscript (not counted in chapter progress)
+const IMRAD_PHASE = "IMRaD Final";
 
 const PDFViewer = dynamic(
   () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
@@ -96,10 +111,42 @@ const fileStyle = (fileName: string) => {
 };
 
 const BADGE_BASE =
-  "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
-const rowClass =
-  "rounded-2xl border bg-card p-4 lg:p-5 mb-3 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
+  "inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
+const CARD = "rounded-2xl border bg-card shadow-xs";
+const TH = "px-4 py-3 text-left text-sm font-semibold text-foreground whitespace-nowrap";
 const EDITOR_SESSION_KEY = "student-editor-session";
+
+/**
+ * Maps project.stage to the index of the CURRENT step in the journey below.
+ * When there is no stage, the step is worked out from the proposal result and chapter progress.
+ * Archived = 6, so every step shows as Completed.
+ */
+const STAGE_STEP: Record<string, number> = {
+  proposal_endorsed: 1,
+  proposal_scheduled: 1,
+  endorsed: 3,
+  defense_scheduled: 3,
+  final_revisions: 4,
+  ready_to_archive: 5,
+  archived: 6,
+};
+
+const JOURNEY = [
+  { label: "Chapter 1–3", icon: FileText },
+  { label: "Pre-Oral Defense", icon: ShieldCheck },
+  { label: "Chapter 4–5", icon: Code2 },
+  { label: "Final Defense", icon: Users },
+  { label: "Final Revisions", icon: RefreshCw },
+  { label: "Archive", icon: ArchiveIcon },
+];
+
+const AVATAR_COLORS = [
+  "bg-blue-600",
+  "bg-violet-600",
+  "bg-emerald-600",
+  "bg-amber-600",
+  "bg-rose-600",
+];
 
 const initials = (name?: string) =>
   (name ?? "")
@@ -109,12 +156,6 @@ const initials = (name?: string) =>
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
-const progressBarColor = (status: string | null) => {
-  if (status === "approved") return "bg-green-600";
-  if (status === "needs_revision") return "bg-amber-500";
-  return "bg-blue-600";
-};
 
 function DownloadItem({ storageId }: { storageId?: string }) {
   const url = useQuery(
@@ -139,60 +180,52 @@ function TaskActions({
 }) {
   if (status === "completed")
     return (
-      <Button size="sm" disabled className="rounded-full px-4 gap-1.5 bg-muted text-muted-foreground">
+      <Button size="sm" disabled variant="outline" className="rounded-lg gap-1.5 text-muted-foreground">
         <Check className="h-3.5 w-3.5" /> Completed
       </Button>
     );
 
   if (status === "under_review")
     return (
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground">Waiting for your instructor</span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="rounded-full px-4 gap-1.5"
-          onClick={() => onChange("in_progress")}
-        >
-          <Undo2 className="h-3.5 w-3.5" /> Undo
-        </Button>
-      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="rounded-lg gap-1.5 text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-800"
+        onClick={() => onChange("in_progress")}
+      >
+        <Undo2 className="h-3.5 w-3.5" /> Undo
+      </Button>
     );
 
   if (status === "needs_revision")
     return (
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-orange-600 dark:text-orange-400">
-          Your instructor sent this back
-        </span>
-        <Button
-          size="sm"
-          className="rounded-full px-4 gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
-          onClick={() => onChange("under_review")}
-        >
-          <RotateCcw className="h-3.5 w-3.5" /> Resubmit
-        </Button>
-      </div>
+      <Button
+        size="sm"
+        className="rounded-lg gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
+        onClick={() => onChange("under_review")}
+      >
+        <RotateCcw className="h-3.5 w-3.5" /> Resubmit
+      </Button>
     );
 
   if (status === "in_progress")
     return (
       <Button
         size="sm"
-        className="rounded-full px-4 gap-1.5 bg-green-600 text-white hover:bg-green-700"
+        className="rounded-lg gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
         onClick={() => onChange("under_review")}
       >
-        <Check className="h-3.5 w-3.5" /> Mark as done
+        Mark as Done
       </Button>
     );
 
   return (
     <Button
       size="sm"
-      className="rounded-full px-4 gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+      className="rounded-lg gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
       onClick={() => onChange("in_progress")}
     >
-      <Play className="h-3.5 w-3.5" /> Start task
+      <Play className="h-3.5 w-3.5" /> Start Task
     </Button>
   );
 }
@@ -200,7 +233,8 @@ function TaskActions({
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentTab = searchParams.get("tab") || "deliverables";
+  const currentTab = searchParams.get("tab") || "dashboard";
+  const isImradUpload = searchParams.get("type") === "imrad";
   const deliverableIdFromUrl = searchParams.get("deliverableId") as Id<"deliverables"> | null;
   const pageFromUrl = searchParams.get("page") || "1";
   const highlightPageFromUrl = pageFromUrl ? parseInt(pageFromUrl) : null;
@@ -223,6 +257,7 @@ function DashboardContent() {
   const me = mounted ? meQuery : undefined;
   const joinTeam = useMutation(api.dashboard.joinTeam);
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
+    const syncFinalRevisions = useMutation(api.defense.syncFinalRevisions);
   const setMyTeamRole = useMutation(api.dashboard.setMyTeamRole);
   const [selectedTeamRole, setSelectedTeamRole] = useState<TeamRole | "">("");
   const [savingTeamRole, setSavingTeamRole] = useState(false);
@@ -255,6 +290,8 @@ function DashboardContent() {
     api.dashboard.getTasks,
     project ? { capstoneProjectId: project._id as Id<"capstoneProjects"> } : "skip"
   );
+
+  type Deliverable = NonNullable<typeof deliverables>[number];
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
@@ -384,19 +421,54 @@ function DashboardContent() {
         initialPage: highlightPageFromUrl || 1,
       });
       setTimeout(() => {
-        router.replace(window.location.pathname, { scroll: false });
+        router.replace(`${window.location.pathname}?tab=deliverables`, { scroll: false });
       }, 500);
     }
   }, [deliverableIdFromUrl, deliverables, highlightPageFromUrl, router]);
 
+  // Sidebar "tasks" link: jump to the tasks card on the combined page
+  useEffect(() => {
+    if (currentTab === "tasks" && project) {
+      document.getElementById("my-tasks")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [currentTab, project?._id]);
+
+  // Lock the phase to IMRaD when opened from the dashboard button
+  useEffect(() => {
+    if (isImradUpload) {
+      setPhase(IMRAD_PHASE);
+    } else {
+      setPhase((prev) => (prev === IMRAD_PHASE ? "" : prev));
+    }
+  }, [isImradUpload]);
+
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
 
-  // At 100% the project becomes "Ready for defense" on its own
+  // IMRaD: available once the instructor approves the final revisions
+const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
+const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
+  
+
+  // Chapter checks + proposal state (used by the readiness sync and the stepper)
+  const ch13Done = progress.chapters.slice(0, 3).every((c) => c.status === "approved");
+  const ch45Done = progress.chapters.slice(3, 5).every((c) => c.status === "approved");
+  const proposalDone =
+    project?.proposalResult === "passed" || project?.proposalResult === "passed_with_revisions";
+
+  // Same rule the server uses: Chapters 1-3 -> proposal defense, then 100% -> final defense
+  const needsSync = proposalDone ? progress.total >= 100 : ch13Done;
   useEffect(() => {
-    if (project && !project.stage && progress.total >= 100) {
+    if (project && !project.stage && needsSync) {
       syncReadiness({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
     }
-  }, [project?._id, project?.stage, progress.total, syncReadiness]);
+  }, [project?._id, project?.stage, needsSync, syncReadiness]);
+
+    // Final revisions: unlock IMRaD once every chapter was resubmitted and approved
+  useEffect(() => {
+    if (project?.stage === "final_revisions" && progress.total >= 100) {
+      syncFinalRevisions({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
+    }
+  }, [project?._id, project?.stage, progress.total, syncFinalRevisions]);
 
   const handleJoin = async () => {
     const trimmed = code.trim().toUpperCase();
@@ -419,7 +491,7 @@ function DashboardContent() {
     }
   };
 
-  const startEdit = async (d: NonNullable<typeof deliverables>[number]) => {
+  const startEdit = async (d: Deliverable) => {
     try {
       const draft = await startDraft({ deliverableId: d._id });
       setOfficeDoc({
@@ -442,6 +514,25 @@ function DashboardContent() {
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
+    }
+  };
+
+  const viewDocument = (d: Deliverable) => {
+    if (isPdf(d.fileName)) {
+      setSelectedDeliverable({
+        fileName: d.fileName,
+        storageId: d.storageId!,
+        deliverableId: d._id,
+        initialPage: 1,
+      });
+    } else if (isOffice(d.fileName)) {
+      setOfficeDoc({
+        fileName: d.fileName,
+        storageId: d.storageId!,
+        deliverableId: d._id,
+        phase: d.phase,
+        mode: "view",
+      });
     }
   };
 
@@ -491,11 +582,31 @@ function DashboardContent() {
   // Upload handler
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
-  const alreadyApproved = chosen?.status === "approved";
+    // Approved chapters can be resubmitted during final revisions (after the forms are up)
+  const revisionsOpen =
+    project?.stage === "final_revisions" && (project.evaluationForms?.length ?? 0) >= 3;
+  const alreadyApproved = chosen?.status === "approved" && !revisionsOpen;
+
+  // Chapters 4-5 stay locked until the proposal defense is passed
+  const proposalLocked = !!chosenChapter && chosenChapter >= 4 && !proposalDone;
+
+  // IMRaD upload is blocked until final revisions are approved, or once already submitted
+ const imradNeedsRevision = imradDoc?.status === "needs_revision";
+const imradBlocked =
+  isImradUpload && (!readyToArchive || (!!imradDoc && !imradNeedsRevision));
 
   let uploadHint = "";
-  if (chosenChapter && chosen) {
-    if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
+ if (isImradUpload) {
+  if (imradDoc && !imradNeedsRevision) uploadHint = "Your IMRaD manuscript is already submitted.";
+  else if (imradNeedsRevision)
+    uploadHint = "Your instructor asked for changes. Upload a corrected version.";
+  else if (!readyToArchive)
+    uploadHint = "IMRaD upload unlocks after your final revisions are approved.";
+  else uploadHint = "Upload your final formatted IMRaD manuscript (PDF) for archiving or binding.";
+} else if (chosenChapter && chosen) {
+    if (proposalLocked)
+      uploadHint = `Chapter ${chosenChapter} unlocks after you pass the proposal defense.`;
+    else if (alreadyApproved) uploadHint = `Chapter ${chosenChapter} is already approved.`;
     else if (chosen.status === "needs_revision")
       uploadHint = `Resubmitting sends Chapter ${chosenChapter} back to your adviser for review.`;
     else if (chosen.status === "under_review")
@@ -518,8 +629,26 @@ function DashboardContent() {
       toast.error("Please select a chapter and choose a file first.");
       return;
     }
+    if (imradDoc && !imradNeedsRevision) {
+  toast.error("Your IMRaD manuscript is already submitted.");
+  return;
+}
+    if (isImradUpload) {
+      if (!readyToArchive) {
+        toast.error("IMRaD upload is only available after your final revisions are approved.");
+        return;
+      }
+      if (!isPdf(file.name)) {
+        toast.error("The IMRaD manuscript must be a PDF.");
+        return;
+      }
+    }
     if (alreadyApproved) {
       toast.error("This chapter is already approved.");
+      return;
+    }
+    if (proposalLocked) {
+      toast.error("Pass the proposal defense before uploading Chapter 4 or 5.");
       return;
     }
 
@@ -549,10 +678,15 @@ function DashboardContent() {
         capstoneProjectId: project._id as Id<"capstoneProjects">,
       });
 
-      toast.success("Uploaded successfully!");
+      toast.success(
+        isImradUpload ? "IMRaD manuscript submitted for archiving!" : "Uploaded successfully!"
+      );
       setFile(null);
       setPhase("");
-      router.push("/dashboard/student?tab=deliverables", { scroll: false });
+      router.push(
+        isImradUpload ? "/dashboard/student" : "/dashboard/student?tab=deliverables",
+        { scroll: false }
+      );
     } catch (err) {
       console.error(err);
       toast.error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -602,18 +736,24 @@ function DashboardContent() {
     return "Needs Revision";
   };
 
+  const getStatusIcon = (status: string) => {
+    if (status === "approved") return CheckCircle2;
+    if (status === "under_review") return Clock;
+    return RotateCcw;
+  };
+
   const getTaskBadge = (status: string) => {
     if (status === "completed") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
-    if (status === "in_progress") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
-    if (status === "under_review") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
+    if (status === "in_progress") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+    if (status === "under_review") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
     if (status === "needs_revision") return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
-    return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+    return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
   };
 
   const getTaskLabel = (status: string) => {
     if (status === "completed") return "Completed";
     if (status === "in_progress") return "In Progress";
-    if (status === "under_review") return "Under Review";
+    if (status === "under_review") return "Waiting to be checked by instructor";
     if (status === "needs_revision") return "Needs Revision";
     return "Pending";
   };
@@ -626,31 +766,13 @@ function DashboardContent() {
     });
   };
 
-  const firstName = me?.name?.split(" ")[0];
+  const formatDateTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    return `${formatDate(dateStr)} at ${time}`;
+  };
 
-  const stats = [
-    {
-      label: "Approved",
-      value: progress.approved,
-      icon: CheckCircle2,
-      card: "bg-green-50 dark:bg-green-950/30",
-      iconWrap: "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400",
-    },
-    {
-      label: "Under review",
-      value: progress.underReview,
-      icon: Clock,
-      card: "bg-blue-50 dark:bg-blue-950/30",
-      iconWrap: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
-    },
-    {
-      label: "Needs revision",
-      value: progress.needsRevision,
-      icon: RotateCcw,
-      card: "bg-amber-50 dark:bg-amber-950/30",
-      iconWrap: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
-    },
-  ];
+  const firstName = me?.name?.split(" ")[0];
 
   const filteredTasks = (tasks ?? []).filter((t) => {
     if (taskFilter === "all") return true;
@@ -667,35 +789,72 @@ function DashboardContent() {
   };
 
   const taskFilterOptions = [
-    { key: "all", label: "All Tasks", count: taskCounts.all },
-    { key: "pending", label: "Pending", count: taskCounts.pending },
+    { key: "all", label: "All", count: taskCounts.all },
+    { key: "pending", label: "To Do", count: taskCounts.pending },
     { key: "in_progress", label: "In Progress", count: taskCounts.in_progress },
     { key: "under_review", label: "Under Review", count: taskCounts.under_review },
     { key: "needs_revision", label: "Needs Revision", count: taskCounts.needs_revision },
     { key: "completed", label: "Completed", count: taskCounts.completed },
   ];
 
+  // Project journey (Dashboard stepper)
+  const stage = project?.stage ? String(project.stage) : undefined;
+  const currentStep =
+    stage && stage in STAGE_STEP
+      ? STAGE_STEP[stage]
+      : proposalDone
+        ? ch45Done
+          ? 3
+          : 2
+        : ch13Done
+          ? 1
+          : 0;
+
+  // Banner: welcome on the dashboard, manuscript banner on the other pages
+  const onManuscriptPages = !!project && currentTab !== "dashboard";
+  const BannerIcon = onManuscriptPages ? UploadCloud : GraduationCap;
+
   return (
     <div className="scroll-smooth bg-background min-h-screen">
       <div className="lg:px-5 pb-8 space-y-6">
-        {/* Welcome Banner */}
-        <div className="rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8">
-          <h1 className="text-2xl lg:text-3xl font-semibold text-foreground">
-            Welcome back,{" "}
-            {me === undefined ? (
-              <span className="text-muted-foreground">...</span>
+        {/* Banner */}
+        <div className="relative isolate overflow-hidden rounded-2xl bg-linear-to-r from-blue-100 via-blue-50 to-sky-100 dark:from-blue-950/60 dark:via-blue-950/30 dark:to-slate-900 p-6 lg:p-8">
+          <div className="relative z-10">
+            {onManuscriptPages ? (
+              <>
+                <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
+                  Manuscript &amp; Task Management
+                </h1>
+                <p className="text-sm lg:text-base text-muted-foreground mt-2">
+                  Manage your manuscript and keep track of your assigned tasks.
+                </p>
+              </>
             ) : (
-              firstName ?? "—"
+              <>
+                <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
+                  Welcome back,{" "}
+                  {me === undefined ? (
+                    <span className="text-muted-foreground">...</span>
+                  ) : (
+                    firstName ?? "—"
+                  )}
+                  !
+                </h1>
+                <p className="text-sm lg:text-base text-muted-foreground mt-2">
+                  Track your capstone progress and manage your project.
+                </p>
+              </>
             )}
-            !
-          </h1>
-          <p className="text-sm lg:text-base text-muted-foreground mt-2">
-            Track your project progress and capstone deliverables.
-          </p>
+          </div>
+          <BannerIcon
+            aria-hidden
+            strokeWidth={1.4}
+            className="pointer-events-none absolute right-8 top-1/2 hidden h-28 w-28 -translate-y-1/2 text-blue-300/70 dark:text-blue-800/60 sm:block"
+          />
         </div>
 
         {project === null ? (
-          <div className="rounded-2xl border bg-card p-8 lg:p-10 flex flex-col items-center justify-center text-center">
+          <div className={`${CARD} p-8 lg:p-10 flex flex-col items-center justify-center text-center`}>
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 mb-4">
               <Users className="h-8 w-8" />
             </div>
@@ -732,568 +891,762 @@ function DashboardContent() {
             <p className="text-xs text-muted-foreground mt-4">Don&apos;t have a code? Contact your instructor.</p>
           </div>
         ) : project === undefined ? (
-          <div className="rounded-2xl border bg-card p-10 flex items-center justify-center">
+          <div className={`${CARD} p-10 flex items-center justify-center`}>
             <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
           </div>
         ) : (
           <>
-            {/* Project Overview */}
-            <div className="rounded-2xl border bg-card p-5 lg:p-6 shadow-xs">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold text-foreground leading-tight">{project.teamName}</h2>
-                    <DefenseBadge project={project} progress={progress.total} />
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">{project.projectTitle}</p>
-                </div>
-                <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Enrolled
-                </span>
-              </div>
-
-              <div className="mt-5 flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-1">
-                  <label htmlFor="student-team-role" className="text-sm font-medium">
-                    Your role in this team
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Instructors use team roles to assign role-specific tasks.
-                  </p>
-                  <Select
-                    value={selectedTeamRole}
-                    onValueChange={(value) => setSelectedTeamRole(value as TeamRole)}
-                  >
-                    <SelectTrigger id="student-team-role" className="w-full sm:w-64">
-                      <SelectValue placeholder="Choose your team role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {TEAM_ROLES.map((role) => (
-                          <SelectItem key={role} value={role}>{role}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={saveTeamRole}
-                  disabled={
-                    savingTeamRole ||
-                    !selectedTeamRole ||
-                    selectedTeamRole === currentTeamRole
-                  }
-                >
-                  {savingTeamRole ? "Saving..." : "Save Role"}
-                </Button>
-              </div>
-
-              <div className="mt-5">
-                <div className="flex items-end justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    {progress.approved} of {TOTAL_CHAPTERS} chapters approved
-                  </p>
-                  <span className="text-3xl font-semibold text-foreground tabular-nums leading-none">
-                    {progress.total}%
-                  </span>
-                </div>
-                <div className="mt-4 grid grid-cols-5 gap-1.5">
-                  {progress.chapters.map((c) => (
-                    <div key={c.chapter}>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${progressBarColor(c.status)}`}
-                          style={{ width: `${(c.points / CHAPTER_MAX) * 100}%` }}
-                        />
-                      </div>
-                      <p className="mt-1 text-center text-[11px] text-muted-foreground">
-                        Ch {c.chapter} · {c.points}%
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Defense Status */}
-              <DefenseStatusCard project={project} progress={progress.total} />
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-3 mt-5">
-                {stats.map((s) => {
-                  const Icon = s.icon;
-                  return (
-                    <div key={s.label} className={`${s.card} rounded-2xl p-3 lg:p-4 flex flex-col items-center text-center gap-2`}>
-                      <div className={`${s.iconWrap} flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full`}>
-                        <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
-                      </div>
-                      <p className="text-2xl font-semibold text-foreground leading-none">{s.value}</p>
-                      <p className="text-xs text-muted-foreground">{s.label}</p>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Counts use the latest version of each chapter.
-                {progress.superseded > 0 &&
-                  ` ${progress.superseded} older ${progress.superseded === 1 ? "version is" : "versions are"} superseded.`}
-              </p>
-            </div>
-
-            {/* Adviser & Team Members (Stacked) */}
-            <div className="space-y-5">
-              {/* Adviser */}
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
-                  <UserCheck className="h-4 w-4 text-blue-600" /> Adviser
-                </h2>
-                <div className="rounded-2xl border bg-card p-4 lg:p-5 shadow-xs">
-                  {projectAdviser === undefined ? (
-                    <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
-                  ) : projectAdviser === null ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                        -
-                      </div>
-                      <p className="text-sm text-muted-foreground">No adviser assigned</p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">
-                        {initials(projectAdviser.name)}
+            {/* ───────────── DASHBOARD PAGE ───────────── */}
+            {currentTab === "dashboard" && (
+              <>
+                {/* Project Progress */}
+                <div className={`${CARD} p-5 lg:p-6`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                        <BarChart3 className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm lg:text-base font-medium text-foreground">{projectAdviser.name}</p>
-                        <p className="text-xs lg:text-sm text-muted-foreground capitalize">{projectAdviser.role}</p>
-                        <p className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground truncate">
-                          <Mail className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{projectAdviser.email}</span>
+                        <h2 className="text-lg font-semibold text-foreground leading-tight">
+                          Project Progress
+                        </h2>
+                        <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                          {project.projectTitle || "Your current progress in the capstone journey."}
                         </p>
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <DefenseBadge project={project} progress={progress.total} />
+                  </div>
 
-              {/* Team Members */}
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
-                  <Users className="h-4 w-4 text-blue-600" /> Team members
-                </h2>
-                <div className="rounded-2xl border bg-card p-4 lg:p-5 shadow-xs">
-                  {teamMembers === undefined ? (
-                    <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
-                  ) : teamMembers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No team members found</p>
-                  ) : (
-                    <div className="flex flex-col divide-y">
-                      {teamMembers.map((member) => (
-                        <div key={member._id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                            {initials(member.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm lg:text-base font-medium text-foreground truncate">{member.name}</p>
-                              {me?._id === member._id && (
-                                <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">
-                                  You
-                                </span>
-                              )}
+                  {/* Journey stepper */}
+                  <div className="mt-6 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:flex lg:items-start lg:gap-0">
+                    {JOURNEY.map((step, i) => {
+                      const state =
+                        i < currentStep ? "completed" : i === currentStep ? "in_progress" : "pending";
+                      const Icon = step.icon;
+                      return (
+                        <Fragment key={step.label}>
+                          {i > 0 && (
+                            <div className="mt-7 hidden flex-1 items-center text-muted-foreground/60 lg:flex">
+                              <div className="h-px flex-1 bg-border" />
+                              <ChevronRight className="h-4 w-4 shrink-0" />
+                              <div className="h-px flex-1 bg-border" />
                             </div>
-                            <p className="text-xs lg:text-sm text-muted-foreground capitalize">{member.role}</p>
-                            <p className="text-xs lg:text-sm text-muted-foreground">
-                              Team role: {project.teamRoles?.find((assignment) => assignment.memberId === member._id)?.role ?? "Not selected"}
+                          )}
+                          <div className="flex flex-col items-center text-center lg:w-32 lg:shrink-0">
+                            <div
+                              className={`flex h-14 w-14 items-center justify-center rounded-full ${
+                                state === "pending"
+                                  ? "bg-muted text-muted-foreground"
+                                  : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                              } ${state === "in_progress" ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-card" : ""}`}
+                            >
+                              <Icon className="h-6 w-6" />
+                            </div>
+                            <p className="mt-2 text-sm font-semibold text-foreground">{step.label}</p>
+                            <p
+                              className={`mt-1 inline-flex items-center gap-1 text-sm ${
+                                state === "completed"
+                                  ? "text-green-600 dark:text-green-400"
+                                  : state === "in_progress"
+                                    ? "text-blue-600 dark:text-blue-400"
+                                    : "text-muted-foreground"
+                              }`}
+                            >
+                              {state === "completed" ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : (
+                                <Clock className="h-4 w-4" />
+                              )}
+                              {state === "completed"
+                                ? "Completed"
+                                : state === "in_progress"
+                                  ? "In Progress"
+                                  : "Pending"}
                             </p>
-                            <p className="text-xs lg:text-sm text-muted-foreground truncate">{member.email}</p>
                           </div>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Final revisions approved: ready for archiving / binding */}
+                  {readyToArchive && (() => {
+  const endorsed = !!project.archiveEndorsedAt;
+  const s = imradDoc?.status;
+  const needsUpload = !imradDoc || s === "needs_revision";
+  const [title, text] = !imradDoc
+    ? ["Final Revisions Completed!", "Upload your final formatted IMRaD manuscript for archival and final approval."]
+    : s === "needs_revision"
+      ? ["IMRaD Needs Revision", "Your instructor asked for changes. Fix them and upload a new version."]
+      : s === "under_review"
+        ? ["IMRaD Submitted", `${imradDoc.fileName} is waiting for your instructor to verify it.`]
+        : endorsed
+          ? ["Endorsed for Archiving", "Your instructor endorsed the project. The admin is doing the final verification."]
+          : ["IMRaD Verified", "Waiting for your instructor to endorse the project for archiving."];
+  return (
+    <div className="mt-6 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-900 dark:bg-emerald-950/30">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+          <FileText className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{text}</p>
+        </div>
+      </div>
+      {needsUpload && (
+        <Button
+          asChild
+          className="rounded-lg gap-2 bg-emerald-600 text-white hover:bg-emerald-700 self-start sm:self-auto"
+        >
+          <Link href="/dashboard/student?tab=uploads&type=imrad" scroll={false}>
+            <UploadCloud className="h-4 w-4" />
+            {imradDoc ? "Re-upload IMRaD File" : "Upload IMRaD File"}
+          </Link>
+        </Button>
+      )}
+    </div>
+  );
+})()}
+
+                  {/* Chapter detail */}
+                  <div className="mt-6 border-t pt-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <p className="text-sm text-muted-foreground">
+                        {progress.approved} of {TOTAL_CHAPTERS} chapters approved
+                      </p>
+                      <span className="text-2xl font-semibold text-foreground tabular-nums leading-none">
+                        {progress.total}%
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-5 gap-1.5">
+                      {progress.chapters.map((c) => (
+                        <div key={c.chapter}>
+                          <div className="h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                c.status === "approved"
+                                  ? "bg-green-600"
+                                  : c.status === "needs_revision"
+                                    ? "bg-amber-500"
+                                    : "bg-blue-600"
+                              }`}
+                              style={{ width: `${(c.points / (100 / TOTAL_CHAPTERS)) * 100}%` }}
+                            />
+                          </div>
+                          <p className="mt-1 text-center text-[11px] text-muted-foreground">
+                            Ch {c.chapter} · {c.points}%
+                          </p>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* DETAILS / SCREEN MODAL SECTION BELOW MEMBERS (Controlled by Sidebar) */}
-            <div id="student-section" className="space-y-4 pt-3">
-              {/* DELIVERABLES VIEW */}
-              {currentTab === "deliverables" && (
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-foreground">Deliverables</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Your submitted chapter files and their review status.
-                      </p>
-                    </div>
-                    <Button asChild size="sm" className="rounded-xl gap-2 bg-blue-600 text-white hover:bg-blue-700 self-start sm:self-auto">
-                      <Link href="/dashboard/student?tab=uploads" scroll={false}>
-                        <UploadCloud className="h-4 w-4" />
-                        Upload New
-                      </Link>
-                    </Button>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Counts use the latest version of each chapter.
+                      {progress.superseded > 0 &&
+                        ` ${progress.superseded} older ${progress.superseded === 1 ? "version is" : "versions are"} superseded.`}
+                    </p>
                   </div>
 
-                  {deliverables === undefined ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                    </div>
-                  ) : deliverables.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-dashed bg-card">
-                      <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                      <p className="font-medium text-foreground">No deliverables submitted yet</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Click &ldquo;Upload New&rdquo; in the sidebar or above to submit your first chapter.
-                      </p>
-                      <Button asChild size="sm" className="mt-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
-                        <Link href="/dashboard/student?tab=uploads" scroll={false}>Upload Now</Link>
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {deliverables.map((d) => {
-                        const fs = fileStyle(d.fileName);
-                        const FileTypeIcon = fs.icon;
-                        const chNum = chapterOf(d.phase);
-                        const cp = chNum ? progress.chapters[chNum - 1] : null;
-                        const isLatest = !!cp && cp.latestId === d._id;
-                        const deleteLocked = (cp?.status === "approved" || d.status === "approved") && !isAdmin;
-                        return (
-                          <div key={d._id} className={`${rowClass} ${chNum && !isLatest ? "opacity-60" : ""}`}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${fs.wrap}`}>
-                                  <FileTypeIcon className="h-6 w-6" />
-                                </div>
-                                <div className="min-w-0">
-                                  <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
-                                  <p className="text-muted-foreground text-xs">
-                                    {d.phase} • Version {d.version}
-                                    {d.versionLabel && ` (${d.versionLabel})`}
-                                  </p>
-                                  <p className="text-muted-foreground text-xs mt-0.5">
-                                    {formatDate(d.uploadedAt)} • {d.fileSize}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1 shrink-0">
-                                <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>
-                                  {getStatusLabel(d.status)}
-                                </span>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                                      aria-label="File options"
-                                    >
-                                      <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="flex flex-col justify-center">
-                                    {isPdf(d.fileName) ? (
-                                      <>
-                                        <DropdownMenuItem
-                                          onClick={() =>
-                                            setSelectedDeliverable({
-                                              fileName: d.fileName,
-                                              storageId: d.storageId!,
-                                              deliverableId: d._id,
-                                              initialPage: 1,
-                                            })
-                                          }
-                                        >
-                                          View PDF
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          onClick={() =>
-                                            setOfficeDoc({
-                                              fileName: d.fileName,
-                                              storageId: d.storageId!,
-                                              deliverableId: d._id,
-                                              phase: d.phase,
-                                              mode: "view",
-                                            })
-                                          }
-                                        >
-                                          Open in OnlyOffice
-                                        </DropdownMenuItem>
-                                      </>
-                                    ) : isOffice(d.fileName) ? (
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          isLatest
-                                            ? startEdit(d)
-                                            : setOfficeDoc({
-                                                fileName: d.fileName,
-                                                storageId: d.storageId!,
-                                                deliverableId: d._id,
-                                                phase: d.phase,
-                                                mode: "view",
-                                              })
-                                        }
-                                      >
-                                        {isLatest ? "Open for editing" : "View in Editor"}
-                                      </DropdownMenuItem>
-                                    ) : null}
-
-                                    {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
-
-                                    {deleteLocked ? (
-                                      <DropdownMenuItem disabled className="text-muted-foreground">
-                                        Delete (locked)
-                                      </DropdownMenuItem>
-                                    ) : (
-                                      <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onSelect={(e) => e.preventDefault()}
-                                      >
-                                        <DeleteDeliverable
-                                          deliverableId={d._id}
-                                          fileName={d.fileName}
-                                          trigger={<span className="w-full text-sm">Delete</span>}
-                                        />
-                                      </DropdownMenuItem>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-
-                            {/* Chapter progress */}
-                            {cp && isLatest && (
-                              <div className="mt-3 flex items-center gap-3">
-                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${progressBarColor(cp.status)}`}
-                                    style={{ width: `${(cp.points / CHAPTER_MAX) * 100}%` }}
-                                  />
-                                </div>
-                                <span className="min-w-18 text-right text-xs text-muted-foreground">
-                                  {cp.points}% of {CHAPTER_MAX}%
-                                </span>
-                              </div>
-                            )}
-                            {!chNum && (
-                              <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                                Saved under an older phase, so it is not counted in progress.
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <DefenseStatusCard project={project} progress={progress.total} />
+                  <ProposalScheduleCard project={project} />
+                  <FinalRevisionsCard projectId={project._id as Id<"capstoneProjects">} />
                 </div>
-              )}
 
-              {/* UPLOAD VIEW */}
-              {currentTab === "uploads" && (
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-foreground">Upload Deliverable</h2>
-                      <p className="text-sm text-muted-foreground">
-                        Upload a new version or chapter manuscript for adviser review.
-                      </p>
+                {/* Members / Adviser / Quick info */}
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-[1.5fr_1fr_0.9fr]">
+                  {/* Group Members */}
+                  <div className={`${CARD} flex flex-col md:col-span-2 xl:col-span-1`}>
+                    <div className="flex items-start gap-3 p-5 pb-3">
+                      <Users className="mt-0.5 h-6 w-6 text-blue-600" />
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground leading-tight">Group Members</h2>
+                        <p className="text-sm text-muted-foreground">Your project team.</p>
+                      </div>
                     </div>
-                    <Button asChild variant="outline" size="sm" className="rounded-xl self-start sm:self-auto">
-                      <Link href="/dashboard/student?tab=deliverables" scroll={false}>View All Deliverables</Link>
-                    </Button>
-                  </div>
 
-                  <div className="rounded-2xl border bg-card p-6 lg:p-8 space-y-6 shadow-xs">
-                    {/* Chapter selector */}
-                    <div className="space-y-2">
-                      <label className="text-foreground text-sm font-medium">Select Chapter</label>
-                      <SelectDemo value={phase} onValueChange={setPhase} />
-                      {uploadHint && (
-                        <div
-                          className={`flex items-start gap-2 rounded-xl p-3 text-xs leading-relaxed ${
-                            alreadyApproved
-                              ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                          }`}
-                        >
-                          {alreadyApproved ? (
-                            <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                          ) : (
-                            <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                          )}
-                          <span>{uploadHint}</span>
+                    <div className="border-t px-5 py-5">
+                      {teamMembers === undefined ? (
+                        <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
+                      ) : teamMembers.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No team members found</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-y-6 sm:grid-cols-3 sm:divide-x">
+                          {teamMembers.map((member, i) => {
+                            const memberRole = project.teamRoles?.find(
+                              (assignment) => assignment.memberId === member._id
+                            )?.role;
+                            return (
+                              <div key={member._id} className="flex flex-col items-center px-2 text-center">
+                                <div
+                                  className={`flex h-14 w-14 items-center justify-center rounded-full text-base font-semibold text-white ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}
+                                >
+                                  {initials(member.name)}
+                                </div>
+                                <p className="mt-2 text-sm font-medium text-foreground">
+                                  {member.name}
+                                  {me?._id === member._id && (
+                                    <span className="ml-1.5 rounded-full bg-blue-600 px-1.5 py-0.5 align-middle text-[10px] font-medium text-white">
+                                      You
+                                    </span>
+                                  )}
+                                </p>
+                                <span className="mt-2 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                                  {memberRole ?? "No role yet"}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
 
-                    {/* File Dropzone */}
-                    <div className="space-y-2">
-                      <label className="text-foreground text-sm font-medium">Select File</label>
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          setDragging(true);
-                        }}
-                        onDragLeave={() => setDragging(false)}
-                        onDrop={handleDrop}
-                        className={`cursor-pointer rounded-2xl border-2 border-dashed flex items-center justify-center p-8 transition-colors ${
-                          dragging
-                            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-                            : "border-border hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
-                        }`}
-                      >
-                        <div className="flex flex-col items-center justify-center text-center">
-                          {file ? (
-                            <>
-                              <div className={`flex h-16 w-16 items-center justify-center rounded-full ${fileStyle(file.name).wrap}`}>
-                                <FileText className="h-8 w-8" />
-                              </div>
-                              <p className="mt-3 text-sm font-semibold text-foreground break-all">{file.name}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {(file.size / (1024 * 1024)).toFixed(2)} MB • Click to select a different file
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                                <UploadCloud className="h-8 w-8" />
-                              </div>
-                              <p className="mt-3 text-sm font-semibold text-foreground">
-                                Click to select a file, or drag and drop here
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Accepts PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)
-                              </p>
-                            </>
-                          )}
-                        </div>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".pdf,.doc,.docx,.xlsx,.pptx,.zip"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                      {file ? (
-                        <button
-                          type="button"
-                          onClick={() => setFile(null)}
-                          className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    {/* Your team role */}
+                    <div className="mt-auto flex flex-col gap-3 border-t bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div className="space-y-1">
+                        <label htmlFor="student-team-role" className="text-sm font-medium">
+                          Your role in this team
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          Instructors use team roles to assign role-specific tasks.
+                        </p>
+                        <Select
+                          value={selectedTeamRole}
+                          onValueChange={(value) => setSelectedTeamRole(value as TeamRole)}
                         >
-                          Clear selected file
-                        </button>
-                      ) : <div />}
-
+                          <SelectTrigger id="student-team-role" className="w-full sm:w-60">
+                            <SelectValue placeholder="Choose your team role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {TEAM_ROLES.map((role) => (
+                                <SelectItem key={role} value={role}>{role}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <Button
-                        onClick={handleUpload}
-                        disabled={!file || !phase || uploading || alreadyApproved}
-                        className="h-11 px-6 rounded-xl gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                        type="button"
+                        size="sm"
+                        onClick={saveTeamRole}
+                        disabled={
+                          savingTeamRole ||
+                          !selectedTeamRole ||
+                          selectedTeamRole === currentTeamRole
+                        }
                       >
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                        {uploading ? "Uploading Deliverable..." : "Upload Deliverable"}
+                        {savingTeamRole ? "Saving..." : "Save Role"}
                       </Button>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* TASKS VIEW */}
-              {currentTab === "tasks" && (
-                <div className="space-y-4">
-                  <div>
-                    <h2 className="text-xl font-semibold text-foreground">Tasks</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Tasks and project milestones assigned to your team by your instructor.
-                    </p>
+                  {/* Adviser */}
+                  <div className={`${CARD} flex flex-col`}>
+                    <div className="flex items-start gap-3 p-5 pb-3">
+                      <UserCheck className="mt-0.5 h-6 w-6 text-blue-600" />
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground leading-tight">Adviser</h2>
+                        <p className="text-sm text-muted-foreground">Your project adviser.</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-1 flex-col border-t p-5">
+                      {projectAdviser === undefined ? (
+                        <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
+                      ) : projectAdviser === null ? (
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                            -
+                          </div>
+                          <p className="text-sm text-muted-foreground">No adviser assigned</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-100 text-lg font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                              {initials(projectAdviser.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-base font-semibold text-foreground">{projectAdviser.name}</p>
+                              <p className="text-sm text-muted-foreground capitalize">{projectAdviser.role}</p>
+                            </div>
+                          </div>
+                          <p className="mt-auto flex items-center gap-2 border-t pt-4 text-sm text-muted-foreground">
+                            <Mail className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{projectAdviser.email}</span>
+                          </p>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Filter Tabs */}
-                  <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-muted/60 p-1.5 w-fit">
+                  {/* Quick Info */}
+                  <div className={`${CARD} flex flex-col`}>
+                    <div className="flex items-center gap-3 p-5 pb-3">
+                      <BarChart3 className="h-6 w-6 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-foreground leading-tight">Quick Info</h2>
+                    </div>
+                    <ul className="divide-y border-t">
+                      {[
+                        {
+                          label: "Chapters Approved",
+                          value: `${progress.approved}/${TOTAL_CHAPTERS}`,
+                          Icon: FolderOpen,
+                          tone: "text-violet-600 dark:text-violet-400",
+                        },
+                        {
+                          label: "Completed Tasks",
+                          value: tasks === undefined ? "—" : String(taskCounts.completed),
+                          Icon: CheckCircle2,
+                          tone: "text-green-600 dark:text-green-400",
+                        },
+                        {
+                          label: "Open Tasks",
+                          value:
+                            tasks === undefined ? "—" : String(taskCounts.all - taskCounts.completed),
+                          Icon: Clock,
+                          tone: "text-blue-600 dark:text-blue-400",
+                        },
+                      ].map(({ label, value, Icon, tone }) => (
+                        <li key={label} className="flex items-center gap-3 px-5 py-4">
+                          <Icon className={`h-6 w-6 shrink-0 ${tone}`} />
+                          <span className="flex-1 text-sm text-foreground">{label}</span>
+                          <span className="text-base font-semibold text-foreground tabular-nums">{value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ───────────── MANUSCRIPT & TASKS PAGE ───────────── */}
+            {(currentTab === "deliverables" || currentTab === "tasks") && (
+              <>
+                {/* My Manuscript */}
+                <div className={`${CARD} p-5 lg:p-6`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-7 w-7 text-blue-600" />
+                      <h2 className="text-xl font-semibold text-foreground">My Manuscript</h2>
+                    </div>
+                    <Button asChild className="rounded-lg gap-2 bg-blue-600 text-white hover:bg-blue-700 self-start sm:self-auto">
+                      <Link href="/dashboard/student?tab=uploads" scroll={false}>
+                        <Plus className="h-4 w-4" />
+                        Upload New Document
+                      </Link>
+                    </Button>
+                  </div>
+
+                  <div className="mt-5">
+                    {deliverables === undefined ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                      </div>
+                    ) : deliverables.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
+                        <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                        <p className="font-medium text-foreground">No documents submitted yet</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Upload your first chapter to start the review.
+                        </p>
+                        <Button asChild size="sm" className="mt-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+                          <Link href="/dashboard/student?tab=uploads" scroll={false}>Upload Now</Link>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border">
+                        <table className="w-full min-w-205 text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className={TH}>Document Name</th>
+                              <th className={TH}>Version</th>
+                              <th className={TH}>Last Updated</th>
+                              <th className={TH}>Status</th>
+                              <th className={`${TH} text-right`}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {deliverables.map((d) => {
+                              const fs = fileStyle(d.fileName);
+                              const FileTypeIcon = fs.icon;
+                              const chNum = chapterOf(d.phase);
+                              const cp = chNum ? progress.chapters[chNum - 1] : null;
+                              const isLatest = !!cp && cp.latestId === d._id;
+                              const deleteLocked =
+                                (cp?.status === "approved" || d.status === "approved") && !isAdmin;
+                              const canView = isPdf(d.fileName) || isOffice(d.fileName);
+                              const canEdit = isOffice(d.fileName) && isLatest;
+                              const StatusIcon = getStatusIcon(d.status);
+                              return (
+                                <tr key={d._id} className={`border-t ${chNum && !isLatest ? "opacity-60" : ""}`}>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${fs.wrap}`}>
+                                        <FileTypeIcon className="h-5 w-5" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-foreground truncate max-w-64">{d.fileName}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {d.phase === IMRAD_PHASE ? "Final IMRaD Manuscript" : d.phase}
+                                        </p>
+                                        {!chNum && d.phase !== IMRAD_PHASE && (
+                                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                                            Saved under an older phase, so it is not counted in progress.
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                                      v{d.version}
+                                      {d.versionLabel && ` (${d.versionLabel})`}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-foreground whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-2">
+                                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                                      {formatDateTime(d.uploadedAt)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>
+                                      <StatusIcon className="h-3.5 w-3.5" />
+                                      {getStatusLabel(d.status)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button
+                                        size="sm"
+                                        className="rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                                        disabled={!canView}
+                                        onClick={() => viewDocument(d)}
+                                      >
+                                        View Document
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="rounded-lg gap-1.5"
+                                        disabled={!canEdit}
+                                        title={
+                                          canEdit
+                                            ? "Edit this document"
+                                            : "Only the latest Word, Excel or PowerPoint version can be edited"
+                                        }
+                                        onClick={() => startEdit(d)}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" /> Edit
+                                      </Button>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button
+                                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                                            aria-label="File options"
+                                          >
+                                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="flex flex-col justify-center">
+                                          {isPdf(d.fileName) && (
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                setOfficeDoc({
+                                                  fileName: d.fileName,
+                                                  storageId: d.storageId!,
+                                                  deliverableId: d._id,
+                                                  phase: d.phase,
+                                                  mode: "view",
+                                                })
+                                              }
+                                            >
+                                              Open in OnlyOffice
+                                            </DropdownMenuItem>
+                                          )}
+
+                                          {!isPdf(d.fileName) && <DownloadItem storageId={d.storageId} />}
+
+                                          {deleteLocked ? (
+                                            <DropdownMenuItem disabled className="text-muted-foreground">
+                                              Delete (locked)
+                                            </DropdownMenuItem>
+                                          ) : (
+                                            <DropdownMenuItem
+                                              className="text-destructive focus:text-destructive"
+                                              onSelect={(e) => e.preventDefault()}
+                                            >
+                                              <DeleteDeliverable
+                                                deliverableId={d._id}
+                                                fileName={d.fileName}
+                                                trigger={<span className="w-full text-sm">Delete</span>}
+                                              />
+                                            </DropdownMenuItem>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* My Tasks */}
+                <div id="my-tasks" className={`${CARD} p-5 lg:p-6 scroll-mt-4`}>
+                  <div className="flex items-center gap-3">
+                    <CheckSquare className="h-7 w-7 text-blue-600" />
+                    <h2 className="text-xl font-semibold text-foreground">My Tasks</h2>
+                  </div>
+
+                  {/* Filter pills */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {taskFilterOptions.map((opt) => (
                       <button
                         key={opt.key}
                         onClick={() => setTaskFilter(opt.key)}
-                        className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
+                        className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                           taskFilter === opt.key
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                            ? "bg-blue-100 text-blue-700 shadow-[inset_0_-2px_0_0_var(--color-blue-600)] dark:bg-blue-950 dark:text-blue-300"
+                            : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                       >
-                        <span>{opt.label}</span>
-                        <span
-                          className={`rounded-full px-1.5 py-0.2 text-[10px] ${
-                            taskFilter === opt.key
-                              ? "bg-blue-500 text-white"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {opt.count}
-                        </span>
+                        {opt.label} ({opt.count})
                       </button>
                     ))}
                   </div>
 
-                  {tasks === undefined ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                    </div>
-                  ) : filteredTasks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-dashed bg-card">
-                      <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                      <p className="font-medium text-foreground">
-                        {taskFilter === "all" ? "No tasks assigned yet" : "No tasks in this category"}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {taskFilter === "all"
-                          ? "Tasks will be assigned by your instructor as the project progresses."
-                          : "Try choosing another filter option above."}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {filteredTasks.map((task) => (
-                        <div key={task._id} className={rowClass}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-3 min-w-0">
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                                <CheckSquare className="h-6 w-6" />
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="font-semibold text-foreground text-sm lg:text-base">{task.title}</h3>
-                                <p className="text-muted-foreground text-xs mt-0.5 wrap-break-words">{task.description}</p>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                                  <span>Team: {task.assignedTo}</span>
-                                  <span>Role: {task.targetRole ?? "All Roles"}</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
+                  <div className="mt-4">
+                    {tasks === undefined ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                      </div>
+                    ) : filteredTasks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
+                        <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                        <p className="font-medium text-foreground">
+                          {taskFilter === "all" ? "No tasks assigned yet" : "No tasks in this category"}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {taskFilter === "all"
+                            ? "Tasks will be assigned by your instructor as the project progresses."
+                            : "Try choosing another filter option above."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border">
+                        <table className="w-full min-w-215 text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className={TH}>Task Title</th>
+                              <th className={TH}>Description</th>
+                              <th className={TH}>Due Date</th>
+                              <th className={TH}>Status</th>
+                              <th className={`${TH} text-right`}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTasks.map((task) => (
+                              <tr key={task._id} className="border-t align-middle">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    {task.status === "completed" ? (
+                                      <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                                    ) : (
+                                      <span className="h-3 w-3 shrink-0 rounded-full bg-blue-600" />
+                                    )}
+                                    <span className="font-medium text-foreground">{task.title}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                  <p>{task.description}</p>
+                                  <p className="mt-0.5 text-xs">
+                                    {task.assignedTo} · {task.targetRole ?? "All Roles"}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-3 text-foreground whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-2">
+                                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                                    {formatDate(task.dueDate)}
                                   </span>
-                                </div>
-                              </div>
-                            </div>
-                            <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>
-                              {getTaskLabel(task.status)}
-                            </span>
-                          </div>
-
-                          <div className="flex justify-end mt-4 pt-3 border-t">
-                            <TaskActions
-                              status={task.status}
-                              onChange={(s) => changeTaskStatus(task._id, s)}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>
+                                    {getTaskLabel(task.status)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex justify-end">
+                                    <TaskActions
+                                      status={task.status}
+                                      onChange={(s) => changeTaskStatus(task._id, s)}
+                                    />
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </>
+            )}
+
+            {/* ───────────── UPLOAD PAGE ───────────── */}
+            {currentTab === "uploads" && (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">
+                      {isImradUpload ? "Upload IMRaD Manuscript" : "Upload Deliverable"}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {isImradUpload
+                        ? "Upload your final formatted IMRaD manuscript (PDF) for archiving or binding."
+                        : "Upload a new version or chapter manuscript for adviser review."}
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm" className="rounded-lg self-start sm:self-auto">
+                    <Link
+                      href={isImradUpload ? "/dashboard/student" : "/dashboard/student?tab=deliverables"}
+                      scroll={false}
+                    >
+                      {isImradUpload ? "Back to Dashboard" : "View My Manuscript"}
+                    </Link>
+                  </Button>
+                </div>
+
+                <div className={`${CARD} p-6 lg:p-8 space-y-6`}>
+                  {/* Chapter selector */}
+                  <div className="space-y-2">
+                    <label className="text-foreground text-sm font-medium">
+                      {isImradUpload ? "Document Type" : "Select Chapter"}
+                    </label>
+                    {isImradUpload ? (
+                      <div className="rounded-xl border bg-muted/40 px-3 py-2 text-sm text-foreground">
+                        Final IMRaD Manuscript (PDF)
+                      </div>
+                    ) : (
+                      <SelectDemo value={phase} onValueChange={setPhase} />
+                    )}
+                    {uploadHint && (
+                      <div
+                        className={`flex items-start gap-2 rounded-xl p-3 text-xs leading-relaxed ${
+                          proposalLocked || (imradBlocked && !imradDoc)
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                            : alreadyApproved || imradDoc || (isImradUpload && readyToArchive)
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                        }`}
+                      >
+                        {proposalLocked || (imradBlocked && !imradDoc) ? (
+                          <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
+                        ) : alreadyApproved || imradDoc ? (
+                          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                        ) : (
+                          <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                        )}
+                        <span>{uploadHint}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* File Dropzone */}
+                  <div className="space-y-2">
+                    <label className="text-foreground text-sm font-medium">Select File</label>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragging(true);
+                      }}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={handleDrop}
+                      className={`cursor-pointer rounded-2xl border-2 border-dashed flex items-center justify-center p-8 transition-colors ${
+                        dragging
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                          : "border-border hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
+                      }`}
+                    >
+                      <div className="flex flex-col items-center justify-center text-center">
+                        {file ? (
+                          <>
+                            <div className={`flex h-16 w-16 items-center justify-center rounded-full ${fileStyle(file.name).wrap}`}>
+                              <FileText className="h-8 w-8" />
+                            </div>
+                            <p className="mt-3 text-sm font-semibold text-foreground break-all">{file.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {(file.size / (1024 * 1024)).toFixed(2)} MB • Click to select a different file
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                              <UploadCloud className="h-8 w-8" />
+                            </div>
+                            <p className="mt-3 text-sm font-semibold text-foreground">
+                              Click to select a file, or drag and drop here
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {isImradUpload
+                                ? "PDF only (max 50MB)"
+                                : "Accepts PDF, DOC, DOCX, XLSX, PPTX, or ZIP (max 50MB)"}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={isImradUpload ? ".pdf" : ".pdf,.doc,.docx,.xlsx,.pptx,.zip"}
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    {file ? (
+                      <button
+                        type="button"
+                        onClick={() => setFile(null)}
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        Clear selected file
+                      </button>
+                    ) : <div />}
+
+                    <Button
+                      onClick={handleUpload}
+                      disabled={
+                        !file ||
+                        !phase ||
+                        uploading ||
+                        alreadyApproved ||
+                        proposalLocked ||
+                        imradBlocked
+                      }
+                      className="h-11 px-6 rounded-lg gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                      {uploading
+                        ? "Uploading..."
+                        : isImradUpload
+                          ? "Upload IMRaD File"
+                          : "Upload Deliverable"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* PDF Viewer Dialog */}
             <PDFViewer
