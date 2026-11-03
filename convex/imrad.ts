@@ -696,8 +696,8 @@ export const cancelProcessing = mutation({
       }
     }
 
+    // The team may already be deleted; cancel anyway so orphaned records can be cleared
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
 
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
@@ -716,7 +716,7 @@ export const cancelProcessing = mutation({
       ctx,
       user,
       "Canceled IMRAD processing and deleted submission files",
-      project.teamName
+      project?.teamName ?? "Deleted team"
     );
     return null;
   },

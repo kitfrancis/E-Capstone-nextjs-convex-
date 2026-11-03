@@ -864,12 +864,11 @@ export const adviserDeliverableStatus = mutation({
         });
       }
     }
-        // Last revised chapter approved -> unlock the IMRaD upload right away
+    // Last revised chapter approved -> unlock the IMRaD upload right away
     if (changed && args.status === "approved" && project.stage === "final_revisions") {
       await ctx.runMutation(api.defense.syncFinalRevisions, { projectId: project._id });
     }
   },
-  
 });
 
 // ---------------------------------------------------------------------------
@@ -1045,6 +1044,31 @@ export const deleteTeam = mutation({
       .filter((q) => q.eq(q.field("capstoneProjectId"), args.teamId))
       .collect();
     for (const d of deliverables) await deleteDeliverableCascade(ctx, d);
+
+    // IMRaD processing records: submissions, working documents and their files
+    const imradSubs = await ctx.db
+      .query("imradSubmissions")
+      .withIndex("by_project", (q) => q.eq("capstoneProjectId", args.teamId))
+      .collect();
+    for (const s of imradSubs) {
+      const wd = await ctx.db
+        .query("imradWorkingDocuments")
+        .withIndex("by_submission", (q) => q.eq("submissionId", s._id))
+        .unique();
+      const files = new Set<Id<"_storage">>([
+        ...s.evaluationFiles.map((f) => f.storageId),
+        ...(wd ? [wd.storageId] : []),
+      ]);
+      for (const id of files) {
+        try {
+          await ctx.storage.delete(id);
+        } catch {
+          // already deleted
+        }
+      }
+      if (wd) await ctx.db.delete(wd._id);
+      await ctx.db.delete(s._id);
+    }
 
     await ctx.db.delete(args.teamId);
     await logAction(ctx, caller, "Deleted team", team.teamName);

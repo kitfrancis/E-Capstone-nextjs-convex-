@@ -334,6 +334,22 @@ export default function InstructorTeamManagementPage() {
     }
   };
 
+  // Endorse for archiving: only works once the IMRaD file is verified (approved)
+  const endorseForArchiving = useMutation(api.defense.endorseForArchiving);
+  const handleEndorse = async (team: Doc<"capstoneProjects">) => {
+    const ok = window.confirm(
+      `Endorse ${team.teamName} for archiving? The admin will do the final verification.`
+    );
+    if (!ok) return;
+    try {
+      await endorseForArchiving({ projectId: team._id });
+      toast.success(`${team.teamName} was endorsed for archiving.`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Couldn't endorse the project.");
+    }
+  };
+
   const allDeliverables = useQuery(
     api.dashboard.getInstructorDeliverables,
     myId ? { instructorId: myId } : "skip"
@@ -579,10 +595,22 @@ export default function InstructorTeamManagementPage() {
                 // Final revisions / archive flow
                 const stageStr = String(team.stage ?? "");
                 const awaitingFinalApproval = stageStr === "final_revisions";
-                const imradSubmitted = teamDeliverables.some((d) => d.phase === IMRAD_PHASE);
-                // Ready to archive, but the team hasn't uploaded the IMRaD yet:
-                // the Archive button stays disabled until they do
-                const awaitingImrad = stageStr === "ready_to_archive" && !imradSubmitted;
+                const readyToArchive = stageStr === "ready_to_archive";
+                // Latest IMRaD version the team uploaded (if any)
+                const imradDoc = teamDeliverables
+                  .filter((d) => d.phase === IMRAD_PHASE)
+                  .sort((a, b) => Number(b.version) - Number(a.version))[0];
+                const imradStatus = imradDoc?.status;
+                const imradSubmitted = !!imradDoc;
+                // No IMRaD yet, or it was sent back and the team must upload a new one
+                const awaitingImrad =
+                  readyToArchive && (!imradSubmitted || imradStatus === "needs_revision");
+                // Uploaded and waiting for the instructor to verify it
+                const verifyImrad = readyToArchive && imradStatus === "under_review";
+                // Verified (approved) but not yet endorsed for archiving
+                const canEndorse =
+                  readyToArchive && imradStatus === "approved" && !team.archiveEndorsedAt;
+                const endorsed = readyToArchive && !!team.archiveEndorsedAt;
 
                 return (
                   <div key={team._id} className={rowClass}>
@@ -605,17 +633,23 @@ export default function InstructorTeamManagementPage() {
                           <p className="truncate text-xs text-muted-foreground" title={team.projectTitle}>
                             {team.projectTitle}
                           </p>
-                          {stageStr === "ready_to_archive" && (
+                          {readyToArchive && (
                             <p
                               className={`mt-0.5 text-xs font-medium ${
-                                imradSubmitted
+                                imradStatus === "approved"
                                   ? "text-emerald-600 dark:text-emerald-400"
                                   : "text-amber-600 dark:text-amber-400"
                               }`}
                             >
-                              {imradSubmitted
-                                ? "IMRaD submitted. Ready for binding."
-                                : "Waiting for the team's IMRaD upload."}
+                              {!imradSubmitted
+                                ? "Waiting for the team's IMRaD upload."
+                                : imradStatus === "needs_revision"
+                                  ? "IMRaD sent back. Waiting for a new upload."
+                                  : imradStatus === "under_review"
+                                    ? "IMRaD submitted. Waiting for your verification."
+                                    : endorsed
+                                      ? "Endorsed. Waiting for admin verification."
+                                      : "IMRaD verified. Ready to endorse for archiving."}
                             </p>
                           )}
                         </div>
@@ -677,10 +711,46 @@ export default function InstructorTeamManagementPage() {
                           <Button
                             size="sm"
                             disabled
-                            title="The team hasn't uploaded their IMRaD manuscript yet"
+                            title="The team hasn't uploaded a valid IMRaD manuscript yet"
                             className="flex-1 rounded-full px-4 sm:flex-none"
                           >
                             <Clock className="h-3.5 w-3.5" /> Waiting for IMRaD
+                          </Button>
+                        ) : verifyImrad ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="rounded-full px-3 text-xs"
+                              onClick={() =>
+                                imradDoc && handleStatus(imradDoc._id, "needs_revision")
+                              }
+                            >
+                              Request revision
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => imradDoc && handleStatus(imradDoc._id, "approved")}
+                              className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
+                            >
+                              <Check className="h-3.5 w-3.5" /> Verify IMRaD
+                            </Button>
+                          </>
+                        ) : canEndorse ? (
+                          <Button
+                            size="sm"
+                            onClick={() => handleEndorse(team)}
+                            className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Endorse for Archiving
+                          </Button>
+                        ) : endorsed ? (
+                          <Button
+                            size="sm"
+                            disabled
+                            className="flex-1 rounded-full px-4 sm:flex-none"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Endorsed
                           </Button>
                         ) : defenseAction !== null ? (
                           <div className="min-w-0 flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
@@ -1106,4 +1176,4 @@ export default function InstructorTeamManagementPage() {
       )}
     </div>
   );
-} 
+}
