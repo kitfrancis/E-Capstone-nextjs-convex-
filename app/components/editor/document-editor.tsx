@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Keyboard, Save } from "lucide-react";
 
 type OnlyOfficeEditorProps = {
   fileId: string;
@@ -113,6 +114,7 @@ export default function OnlyOfficeEditor({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [closing, setClosing] = useState(false); // NEW
+  const [showSubmitReminder, setShowSubmitReminder] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
@@ -219,6 +221,7 @@ export default function OnlyOfficeEditor({
   // NEW: Submit button handler
   async function handleSubmit() {
     if (!onSubmit) return;
+    setShowSubmitReminder(false);
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -265,7 +268,7 @@ export default function OnlyOfficeEditor({
           {canSubmit && (
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={() => setShowSubmitReminder(true)}
               disabled={submitting || closing || loading || !!loadError}
               className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
             >
@@ -294,6 +297,54 @@ export default function OnlyOfficeEditor({
             </div>
           )}
           <div id={elementId} className="h-full w-full" />
+        </div>
+      )}
+      {showSubmitReminder && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-reminder-title"
+            className="w-full max-w-md rounded-xl bg-white p-6 text-slate-900 shadow-xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <Save className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 id="submit-reminder-title" className="text-lg font-semibold">
+                  Save before submitting
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Make sure your latest edits are saved first.
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Press{" "}
+              <span className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-100 px-2 py-1 font-semibold text-slate-800">
+                <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
+                Ctrl+S
+              </span>{" "}
+              in OnlyOffice, then click Continue to submit this manuscript as a new version.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSubmitReminder(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+              >
+                Continue to submit
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
