@@ -80,7 +80,9 @@ export const saveDraftFile = mutation({
 // After the new version is saved, remove the draft row (the blob now belongs to the new version).
 export const finish = mutation({
   args: { draftId: v.id("deliverableDrafts") },
+  returns: v.null(),
   handler: async (ctx, { draftId }) => {
     await ctx.db.delete(draftId);
+    return null;
   },
 });
