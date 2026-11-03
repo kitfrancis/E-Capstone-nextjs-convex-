@@ -35,6 +35,36 @@ const IMRAD_PARTS = [
   "Discussion",
 ] as const;
 
+const BADGE_BASE =
+  "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
+
+const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  submitted: {
+    label: "Submitted",
+    cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  },
+  processing: {
+    label: "Processing",
+    cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  },
+  verification: {
+    label: "Waiting for instructor",
+    cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  },
+  changes_requested: {
+    label: "Changes requested",
+    cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  },
+  approved: {
+    label: "Approved",
+    cls: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  },
+  completed: {
+    label: "Completed",
+    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  },
+};
+
 export default function AdminImradProcessingPage() {
   const liveSubmissions = useQuery(api.imrad.adminSubmissions);
   const processLiveSubmission = useMutation(api.imrad.processSubmission);
@@ -44,13 +74,16 @@ export default function AdminImradProcessingPage() {
   const submitFinalVerification = useMutation(api.imrad.submitFinalVerification);
   const completeImradConversion = useMutation(api.imrad.completeConversion);
   const archiveImradConversion = useMutation(api.imrad.archiveCompletedConversion);
+  const saveWorkingDocument = useMutation(api.imrad.saveWorkingDocument);
+  // Any signed-in user can get an upload URL here (admin included)
+  const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
+
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [backendActionError, setBackendActionError] = useState("");
   const [rejectingSubmissionId, setRejectingSubmissionId] =
     useState<Id<"imradSubmissions"> | null>(null);
   const [rejectionMessage, setRejectionMessage] = useState("");
-  const [uploadedImradFiles, setUploadedImradFiles] = useState<Record<string, string[]>>({});
   const [activeEditor, setActiveEditor] = useState<{
     teamName: string;
     projectTitle: string;
@@ -60,13 +93,14 @@ export default function AdminImradProcessingPage() {
     fileUrl: string | null;
   } | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [selectedUploadProjectId, setSelectedUploadProjectId] = useState("");
+  const [selectedUploadSubmissionId, setSelectedUploadSubmissionId] = useState("");
   const [imradFile, setImradFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState("");
+  const [uploading, setUploading] = useState(false);
 
-  const startEditor = (
-    submission: NonNullable<typeof liveSubmissions>[number]
-  ) => {
+  type Submission = NonNullable<typeof liveSubmissions>[number];
+
+  const startEditor = (submission: Submission) => {
     setActiveEditor({
       teamName: submission.teamName,
       projectTitle: submission.projectTitle,
@@ -118,6 +152,10 @@ export default function AdminImradProcessingPage() {
         year: submission.year,
       })
   );
+  // saveWorkingDocument only works for a "processing" project that has no guide PDF yet
+  const uploadableSubmissions = (liveSubmissions ?? []).filter(
+    (submission) => submission.status === "processing" && !submission.workingDocument
+  );
 
   const processLive = async (submissionId: Id<"imradSubmissions">) => {
     setBackendActionError("");
@@ -131,9 +169,7 @@ export default function AdminImradProcessingPage() {
     }
   };
 
-  const deleteInvalidLive = async (
-    submission: NonNullable<typeof liveSubmissions>[number]
-  ) => {
+  const deleteInvalidLive = async (submission: Submission) => {
     const fileCount = submission.evaluationFiles.length;
     if (fileCount === 3) return;
     if (
@@ -219,9 +255,15 @@ export default function AdminImradProcessingPage() {
     }
   };
 
-  const submitImradUpload = (event: React.FormEvent<HTMLFormElement>) => {
+  const resetUploadDialog = () => {
+    setImradFile(null);
+    setSelectedUploadSubmissionId("");
+    setUploadError("");
+  };
+
+  const submitImradUpload = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedUploadProjectId || !imradFile) {
+    if (!selectedUploadSubmissionId || !imradFile) {
       setUploadError("Select a project and choose an IMRAD PDF.");
       return;
     }
@@ -230,26 +272,343 @@ export default function AdminImradProcessingPage() {
       return;
     }
 
-    setUploadedImradFiles((current) => ({
-      ...current,
-      [selectedUploadProjectId]: [
-        ...(current[selectedUploadProjectId] ?? []),
-        imradFile.name,
-      ],
-    }));
-    setUploadDialogOpen(false);
-    setImradFile(null);
-    setSelectedUploadProjectId("");
+    setUploading(true);
     setUploadError("");
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        // The server checks the stored content type, so send it as a PDF
+        headers: { "Content-Type": "application/pdf" },
+        body: imradFile,
+      });
+      if (!result.ok) throw new Error(`Upload failed with status ${result.status}`);
+      const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
+
+      await saveWorkingDocument({
+        submissionId: selectedUploadSubmissionId as Id<"imradSubmissions">,
+        storageId,
+      });
+      setUploadDialogOpen(false);
+      resetUploadDialog();
+    } catch (error) {
+      console.error("Failed to attach IMRAD PDF:", error);
+      setUploadError(
+        error instanceof Error ? error.message : "Couldn't attach the IMRAD PDF."
+      );
+    } finally {
+      setUploading(false);
+    }
   };
 
   const closeUploadDialog = (open: boolean) => {
     setUploadDialogOpen(open);
-    if (!open) {
-      setImradFile(null);
-      setSelectedUploadProjectId("");
-      setUploadError("");
-    }
+    if (!open) resetUploadDialog();
+  };
+
+  const formatDate = (ms: number) =>
+    new Date(ms).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+  // The PDF can go to the instructor only when all 4 parts are done and the latest edit is saved
+  const readyForVerification = (submission: Submission) => {
+    const doc = submission.workingDocument;
+    return (
+      !!doc &&
+      doc.completedParts.length === 4 &&
+      doc.savedAt !== null &&
+      doc.revision >= submission.requiredSaveRevision
+    );
+  };
+
+  const renderSubmittedCard = (submission: Submission) => {
+    const badge = STATUS_BADGE[submission.status];
+    const fileCount = submission.evaluationFiles.length;
+    const invalid = fileCount !== 3;
+    const rejecting = rejectingSubmissionId === submission.submissionId;
+
+    return (
+      <article
+        key={submission.submissionId}
+        className="min-w-0 rounded-2xl border border-border bg-card p-4 md:p-5"
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold text-foreground">
+                {submission.teamName}
+              </h3>
+              <span className={`${BADGE_BASE} ${badge.cls}`}>{badge.label}</span>
+              {invalid && (
+                <span
+                  className={`${BADGE_BASE} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`}
+                >
+                  {fileCount} of 3 evaluation files
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{submission.projectTitle}</p>
+            <p className="text-xs text-muted-foreground">
+              Instructor: {submission.instructorName} • Submitted {formatDate(submission.submittedAt)}
+            </p>
+            <p className="text-sm text-foreground">{submission.description}</p>
+            <ul className="flex flex-wrap gap-2 pt-1">
+              {submission.evaluationFiles.map((file, i) => (
+                <li key={`${file.fileName}-${i}`}>
+                  {file.url ? (
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs text-foreground hover:bg-muted"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      <span className="max-w-48 truncate">{file.fileName}</span>
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground">
+                      <FileText className="h-3.5 w-3.5" /> {file.fileName} (unavailable)
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {invalid ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-1.5 text-destructive"
+                onClick={() => deleteInvalidLive(submission)}
+              >
+                <Trash2 className="h-4 w-4" /> Delete files
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => {
+                    setBackendActionError("");
+                    setRejectionMessage("");
+                    setRejectingSubmissionId(rejecting ? null : submission.submissionId);
+                  }}
+                >
+                  <X className="h-4 w-4" /> Reject
+                </Button>
+                <Button
+                  type="button"
+                  className="gap-1.5"
+                  onClick={() => processLive(submission.submissionId)}
+                >
+                  <Play className="h-4 w-4" /> Start processing
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {rejecting && (
+          <div className="mt-4 space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+            <label
+              htmlFor={`reject-${submission.submissionId}`}
+              className="text-sm font-medium text-foreground"
+            >
+              What does the instructor need to correct?
+            </label>
+            <Textarea
+              id={`reject-${submission.submissionId}`}
+              value={rejectionMessage}
+              onChange={(event) => setRejectionMessage(event.target.value)}
+              placeholder="e.g. Evaluation PDF for the second panelist is unsigned."
+              rows={3}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setRejectingSubmissionId(null);
+                  setRejectionMessage("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="button" onClick={() => rejectLive(submission.submissionId)}>
+                Send rejection
+              </Button>
+            </div>
+          </div>
+        )}
+      </article>
+    );
+  };
+
+  const renderProcessingCard = (submission: Submission) => {
+    const badge = STATUS_BADGE[submission.status];
+    const doc = submission.workingDocument;
+    const completed = doc?.completedParts ?? [];
+    const editable =
+      submission.status === "processing" || submission.status === "changes_requested";
+    const ready = readyForVerification(submission);
+
+    return (
+      <article
+        key={submission.submissionId}
+        className="min-w-0 rounded-2xl border border-border bg-card p-4 md:p-5"
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold text-foreground">
+                {submission.teamName}
+              </h3>
+              <span className={`${BADGE_BASE} ${badge.cls}`}>{badge.label}</span>
+            </div>
+            <p className="text-sm text-muted-foreground">{submission.projectTitle}</p>
+            <p className="text-xs text-muted-foreground">
+              Instructor: {submission.instructorName} • Submitted {formatDate(submission.submittedAt)}
+            </p>
+
+            {submission.status === "changes_requested" && submission.verificationComment && (
+              <p className="rounded-lg bg-orange-50 p-3 text-sm text-orange-800 dark:bg-orange-950/30 dark:text-orange-300">
+                Instructor comment: {submission.verificationComment}
+              </p>
+            )}
+
+            {editable && (
+              <div className="pt-1">
+                {doc ? (
+                  <>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {IMRAD_PARTS.map((part, i) => {
+                        const done = completed.includes(i + 1);
+                        return (
+                          <div key={part}>
+                            <div
+                              className={`h-2 rounded-full ${done ? "bg-green-600" : "bg-muted"}`}
+                            />
+                            <p className="mt-1 truncate text-center text-[11px] text-muted-foreground">
+                              {part}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {completed.length}/4 parts complete •{" "}
+                      {doc.savedAt
+                        ? `Last saved ${formatDate(doc.savedAt)} (revision ${doc.revision})`
+                        : "Not saved yet"}
+                    </p>
+                    {completed.length === 4 && !ready && (
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        Open the editor and save the PDF before submitting for verification.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {submission.status === "processing"
+                      ? "No guide PDF attached yet. Use Upload Imrad to attach one."
+                      : "The guide PDF is missing."}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {submission.status === "verification" && (
+              <p className="text-xs text-muted-foreground">
+                The instructor is verifying the final PDF.
+              </p>
+            )}
+            {submission.status === "approved" && (
+              <p className="text-xs text-muted-foreground">
+                The instructor approved the PDF. Mark the conversion as complete.
+              </p>
+            )}
+            {submission.status === "completed" && (
+              <p className="text-xs text-muted-foreground">
+                Add the completed PDF to the project archive.
+              </p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {doc?.url && (
+              <Button asChild variant="outline" className="gap-1.5">
+                <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                  <FileText className="h-4 w-4" /> View PDF
+                </a>
+              </Button>
+            )}
+
+            {editable && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!doc}
+                  onClick={() => startEditor(submission)}
+                >
+                  Open editor
+                </Button>
+                <Button
+                  type="button"
+                  className="gap-1.5"
+                  disabled={!ready}
+                  title={
+                    ready
+                      ? "Send the PDF to the instructor"
+                      : "Complete all 4 parts and save the PDF first"
+                  }
+                  onClick={() => runAdminFinalAction(submission.submissionId, "verification")}
+                >
+                  <ClipboardCheck className="h-4 w-4" /> Submit for verification
+                </Button>
+              </>
+            )}
+
+            {submission.status === "approved" && (
+              <Button
+                type="button"
+                className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={() => runAdminFinalAction(submission.submissionId, "complete")}
+              >
+                <Check className="h-4 w-4" /> Complete conversion
+              </Button>
+            )}
+
+            {submission.status === "completed" && (
+              <Button
+                type="button"
+                className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={() => runAdminFinalAction(submission.submissionId, "archive")}
+              >
+                <Check className="h-4 w-4" /> Add to archive
+              </Button>
+            )}
+
+            {["processing", "changes_requested", "verification"].includes(submission.status) && (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-1.5 text-destructive"
+                onClick={() => cancelLive(submission.submissionId)}
+              >
+                <Trash2 className="h-4 w-4" /> Cancel
+              </Button>
+            )}
+          </div>
+        </div>
+      </article>
+    );
   };
 
   return activeEditor ? (
@@ -278,7 +637,12 @@ export default function AdminImradProcessingPage() {
             type="button"
             className="h-10 w-fit px-5"
             onClick={() => setUploadDialogOpen(true)}
-            disabled={liveProcessingSubmissions.length === 0}
+            disabled={uploadableSubmissions.length === 0}
+            title={
+              uploadableSubmissions.length === 0
+                ? "No project in processing is waiting for a guide PDF"
+                : undefined
+            }
           >
             <Upload className="mr-2 h-4 w-4" />
             Upload Imrad
@@ -367,411 +731,50 @@ export default function AdminImradProcessingPage() {
         )}
       </section>
 
-      <div className="flex flex-col-reverse gap-6">
+      {/* Evaluation submissions waiting for the admin */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Projects in Processing</h2>
+          <h2 className="text-xl font-semibold text-foreground">Evaluation submissions</h2>
           <p className="text-sm text-muted-foreground">
-            Projects that have been accepted for IMRAD processing and their documents.
+            Panel evaluations sent by instructors. Start processing, or reject with a reason.
           </p>
         </div>
-
         {liveSubmissions === undefined ? (
-          <div className="rounded-2xl border border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
-            Loading IMRAD projects...
-          </div>
-        ) : filteredLiveProcessing.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
-            No projects are in processing.
-          </div>
-        ) : (
-          <>
-          {filteredLiveProcessing.map((submission) => {
-            const workingDocumentName =
-              submission.workingDocument?.fileName ??
-              `${submission.teamName} - IMRAD Conversion Guide.pdf`;
-            const completedParts =
-              submission.workingDocument?.completedParts ?? [];
-            const completedPartCount = completedParts.length;
-            const statusLabel =
-              submission.status === "verification"
-                ? "Final verification"
-                : submission.status === "changes_requested"
-                ? "Changes requested"
-                : submission.status === "approved"
-                  ? "Instructor approved"
-                  : submission.status === "completed"
-                    ? "Ready to archive"
-                    : "Processing";
-            const canSubmitVerification =
-              completedPartCount === IMRAD_PARTS.length &&
-              Boolean(submission.workingDocument?.savedAt) &&
-              (submission.workingDocument?.revision ?? 0) >=
-                submission.requiredSaveRevision;
-            const isEditableStatus =
-              submission.status === "processing" ||
-              submission.status === "changes_requested";
-            return (
-            <article
-              key={submission.submissionId}
-              className="space-y-6 rounded-2xl border border-border bg-card p-5"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-foreground">{submission.teamName}</h3>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-                      submission.status === "changes_requested"
-                        ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                        : submission.status === "approved" || submission.status === "completed"
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                          : "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                    }`}>
-                      <ClipboardCheck className="h-3.5 w-3.5" />
-                      {statusLabel}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {submission.projectTitle} · {submission.year}
-                  </p>
-                  <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                    <FileText className="h-4 w-4 shrink-0" />
-                    <span className="truncate" title={workingDocumentName}>
-                      {workingDocumentName}
-                    </span>
-                    {!submission.workingDocument && (
-                      <span className="shrink-0 text-xs">Created on Start</span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isEditableStatus && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => startEditor(submission)}
-                      >
-                        <Play className="mr-2 h-4 w-4" />
-                        Open editor
-                      </Button>
-                      {submission.status === "processing" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => cancelLive(submission.submissionId)}
-                        >
-                          Cancel Process
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {submission.status === "verification" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => cancelLive(submission.submissionId)}
-                    >
-                      Cancel Process
-                    </Button>
-                  )}
-                  {(submission.status === "processing" ||
-                    submission.status === "changes_requested") && (
-                    <Button
-                      type="button"
-                      disabled={!canSubmitVerification}
-                      onClick={() =>
-                        runAdminFinalAction(submission.submissionId, "verification")
-                      }
-                    >
-                      {submission.status === "changes_requested"
-                        ? "Resubmit for Final Verification"
-                        : "Submit Final Verification"}
-                    </Button>
-                  )}
-                  {submission.status === "approved" && (
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        runAdminFinalAction(submission.submissionId, "complete")
-                      }
-                    >
-                      Complete Conversion
-                    </Button>
-                  )}
-                  {submission.status === "completed" && (
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        runAdminFinalAction(submission.submissionId, "archive")
-                      }
-                    >
-                      Archive Project
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {submission.status === "changes_requested" &&
-                submission.verificationComment && (
-                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-foreground">
-                    <span className="font-semibold">Instructor feedback:</span>{" "}
-                    {submission.verificationComment}
-                  </p>
-                )}
-              {(submission.status === "processing" ||
-                submission.status === "changes_requested") && (
-              <div
-                className="space-y-1.5"
-                role="group"
-                aria-label={`IMRAD progress for ${submission.teamName}: Part ${completedPartCount} of ${IMRAD_PARTS.length}`}
-              >
-                <div className="flex items-end justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    {completedPartCount} of {IMRAD_PARTS.length} parts completed
-                  </p>
-                  <p
-                    role="progressbar"
-                    aria-label="IMRAD parts completed"
-                    aria-valuemin={0}
-                    aria-valuemax={IMRAD_PARTS.length}
-                    aria-valuenow={completedPartCount}
-                    aria-valuetext={`Part ${completedPartCount} of ${IMRAD_PARTS.length}`}
-                    className="text-2xl font-bold leading-none text-foreground"
-                  >
-                    Part {completedPartCount}/{IMRAD_PARTS.length}
-                  </p>
-                </div>
-                <div
-                  className="mt-4 gap-1.5"
-                  style={{ display: "grid", gridTemplateColumns: `repeat(${IMRAD_PARTS.length}, minmax(0, 1fr))` }}
-                  aria-hidden="true"
-                >
-                  {IMRAD_PARTS.map((part, index) => (
-                    <div
-                      key={part}
-                      className="h-2.5 min-w-0 rounded-full bg-muted transition-colors"
-                      style={{
-                        backgroundColor: completedParts.includes(index + 1)
-                          ? "#10b981"
-                          : undefined,
-                      }}
-                    />
-                  ))}
-                </div>
-                <ol
-                  className="mt-4 list-none p-0"
-                  style={{ display: "grid", gridTemplateColumns: `repeat(${IMRAD_PARTS.length}, minmax(0, 1fr))` }}
-                >
-                  {IMRAD_PARTS.map((part, index) => (
-                    <li key={part} className="flex min-w-0 flex-col items-center gap-1.5 text-center">
-                      <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                          completedParts.includes(index + 1)
-                            ? "text-white"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                        style={{
-                          backgroundColor: completedParts.includes(index + 1)
-                            ? "#059669"
-                            : undefined,
-                        }}
-                      >
-                        {completedParts.includes(index + 1) && (
-                          <Check className="h-5 w-5" aria-hidden="true" />
-                        )}
-                      </span>
-                      <span
-                        className="text-base font-medium leading-tight text-muted-foreground"
-                        style={{
-                          color: completedParts.includes(index + 1)
-                            ? "#10b981"
-                            : undefined,
-                        }}
-                      >
-                        {part}
-                      </span>
-                      <span className="text-sm text-muted-foreground">Part {index + 1}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-              )}
-              {uploadedImradFiles[submission.submissionId]?.length ? (
-                <ul className="grid gap-2 border-t border-border pt-4 sm:grid-cols-2">
-                  {uploadedImradFiles[submission.submissionId].map((fileName, index) => (
-                    <li
-                      key={`${submission.submissionId}-${index}`}
-                      className="flex items-center gap-2 rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-sm text-foreground"
-                    >
-                      <FileText className="h-4 w-4 shrink-0 text-purple-500" />
-                      <span className="min-w-0 truncate">{fileName}</span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">Uploaded IMRAD</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </article>
-            );
-          })}
-          </>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-xl font-semibold text-foreground">Instructor Evaluation Submissions</h2>
-          <p className="text-sm text-muted-foreground">
-            Review the submitted panel evaluations and details, then process a project into the list above.
-          </p>
-        </div>
-
-        {liveSubmissions === undefined ? (
-          <div className="rounded-2xl border border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
-            Loading instructor submissions...
-          </div>
+          <p className="py-4 text-center text-muted-foreground">Loading...</p>
         ) : filteredLiveSubmissions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
-            No instructor evaluation submissions match your search.
+          <div className="rounded-2xl border border-dashed border-border bg-card py-8 text-center text-muted-foreground">
+            No evaluation submissions
           </div>
         ) : (
-          <>
-          {filteredLiveSubmissions.map((submission) => (
-            <article
-              key={submission.submissionId}
-              className="space-y-4 rounded-2xl border border-border bg-card p-5"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
-                    <ClipboardCheck className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground">{submission.projectTitle}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {submission.teamName} • {submission.year} • Submitted by {submission.instructorName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => {
-                      setRejectingSubmissionId(submission.submissionId);
-                      setRejectionMessage("");
-                      setBackendActionError("");
-                    }}
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Reject
-                  </Button>
-                  {submission.evaluationFiles.length !== 3 && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => deleteInvalidLive(submission)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete invalid submission
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    onClick={() => processLive(submission.submissionId)}
-                    disabled={submission.evaluationFiles.length !== 3}
-                  >
-                    <Check className="mr-2 h-4 w-4" />
-                    Process
-                  </Button>
-                </div>
-              </div>
-              <p className="text-sm leading-relaxed text-muted-foreground">{submission.description}</p>
-              {rejectingSubmissionId === submission.submissionId && (
-                <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                  <label
-                    htmlFor={`rejection-message-${submission.submissionId}`}
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Message to instructor
-                  </label>
-                  <Textarea
-                    id={`rejection-message-${submission.submissionId}`}
-                    value={rejectionMessage}
-                    onChange={(event) => setRejectionMessage(event.target.value)}
-                    placeholder="Explain what needs to be corrected before resubmitting..."
-                    rows={3}
-                  />
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setRejectingSubmissionId(null);
-                        setRejectionMessage("");
-                        setBackendActionError("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => rejectLive(submission.submissionId)}
-                    >
-                      Send rejection
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {submission.evaluationFiles.length !== 3 && (
-                <p role="alert" className="text-sm text-destructive">
-                  This submission has {submission.evaluationFiles.length} panel evaluation files; exactly 3 are required.
-                </p>
-              )}
-              <div className="border-t border-border pt-4">
-                <h4 className="mb-3 text-sm font-medium text-foreground">Submitted panel evaluations</h4>
-                <ul className="grid gap-2 sm:grid-cols-3">
-                  {submission.evaluationFiles.map((file, index) => (
-                    <li key={`${submission.submissionId}-${index}`} className="min-w-0">
-                      {file.url ? (
-                        <a
-                          href={file.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground hover:underline"
-                        >
-                          <FileText className="h-4 w-4 shrink-0 text-blue-500" />
-                          <span className="min-w-0 truncate">
-                            <span className="block font-medium">Panel {index + 1}</span>
-                            <span className="block text-xs text-muted-foreground">{file.fileName}</span>
-                          </span>
-                        </a>
-                      ) : (
-                        <span className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                          <FileText className="h-4 w-4 shrink-0" />
-                          <span className="min-w-0 truncate">
-                            <span className="block font-medium">Panel {index + 1}</span>
-                            <span className="block text-xs">{file.fileName} (unavailable)</span>
-                          </span>
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </article>
-          ))}
-          </>
+          <div className="space-y-3">{filteredLiveSubmissions.map(renderSubmittedCard)}</div>
         )}
       </section>
-      </div>
+
+      {/* Projects being converted */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">In processing</h2>
+          <p className="text-sm text-muted-foreground">
+            Projects being converted, verified by the instructor, and archived.
+          </p>
+        </div>
+        {liveSubmissions === undefined ? (
+          <p className="py-4 text-center text-muted-foreground">Loading...</p>
+        ) : filteredLiveProcessing.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card py-8 text-center text-muted-foreground">
+            No projects in processing
+          </div>
+        ) : (
+          <div className="space-y-3">{filteredLiveProcessing.map(renderProcessingCard)}</div>
+        )}
+      </section>
 
       <Dialog open={uploadDialogOpen} onOpenChange={closeUploadDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="pr-8">
             <DialogTitle className="text-lg font-semibold">Upload Imrad</DialogTitle>
             <DialogDescription>
-              Choose a project in processing and attach its IMRAD PDF to that team.
+              Choose a project in processing and attach its IMRAD PDF to that team. You can do this once per project.
             </DialogDescription>
           </DialogHeader>
 
@@ -782,9 +785,9 @@ export default function AdminImradProcessingPage() {
               </label>
               <select
                 id="imrad-project"
-                value={selectedUploadProjectId}
+                value={selectedUploadSubmissionId}
                 onChange={(event) => {
-                  setSelectedUploadProjectId(event.target.value);
+                  setSelectedUploadSubmissionId(event.target.value);
                   setUploadError("");
                 }}
                 required
@@ -793,7 +796,7 @@ export default function AdminImradProcessingPage() {
                 <option value="" disabled>
                   Select a project
                 </option>
-                {liveProcessingSubmissions.map((submission) => (
+                {uploadableSubmissions.map((submission) => (
                   <option key={submission.submissionId} value={submission.submissionId}>
                     {submission.teamName} — {submission.projectTitle}
                   </option>
@@ -831,10 +834,17 @@ export default function AdminImradProcessingPage() {
             )}
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => closeUploadDialog(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={uploading}
+                onClick={() => closeUploadDialog(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit">Attach IMRAD PDF</Button>
+              <Button type="submit" disabled={uploading}>
+                {uploading ? "Attaching..." : "Attach IMRAD PDF"}
+              </Button>
             </div>
           </form>
         </DialogContent>

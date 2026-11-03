@@ -35,6 +35,8 @@ import {
   EditArchiveDialog,
   type EditableProject,
 } from "@/app/components/EditArchiveDialog";
+// NOTE: put endorsed-for-archiving.tsx in app/components/ (adjust the path if you keep it elsewhere)
+import EndorsedForArchiving from "@/app/components/endorse-for-archiving";
 
 const PDFViewer = dynamic(
   () =>
@@ -226,6 +228,9 @@ export default function AdminArchivePage() {
           Upload to Archive
         </Button>
       </div>
+
+      {/* Teams endorsed by their instructors: verify the IMRaD and archive */}
+      <EndorsedForArchiving />
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
