@@ -293,7 +293,7 @@ export function TabsDemo({
           draft: {
             id: draft.draftId,
             baseVersion: draft.baseVersion,
-            docKey: draft.draftId,
+            docKey: `${draft.draftId}-${draft.storageId}`,
             phase: deliverable.phase,
             fileSize: deliverable.fileSize,
           },
@@ -370,7 +370,7 @@ export function TabsDemo({
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: draft.draftId,
+          docKey: `${draft.draftId}-${draft.storageId}`,
           phase: d.phase,
           fileSize: d.fileSize,
         },
@@ -403,22 +403,16 @@ export function TabsDemo({
     }
   };
 
-  // Close: save the latest edits to the draft first, then close the editor.
+  // Close saves edits to the draft; only Submit persists a new version.
   const closeEditor = async (hasChanges: boolean) => {
     const doc = officeDoc;
     if (doc?.draft && hasChanges) {
-      try {
-        const deliverableId = doc.deliverableId as Id<"deliverables">;
-        await forceSaveDraft(
-          doc.draft.docKey,
-          () => convex.query(api.drafts.getByDeliverable, { deliverableId }),
-          doc.storageId,
-        );
-      } catch (err) {
-        console.error(err);
-        toast.error(err instanceof Error ? err.message : "Couldn't save your latest edits before closing.");
-        throw err;
-      }
+      const deliverableId = doc.deliverableId as Id<"deliverables">;
+      await forceSaveDraft(
+        doc.draft.docKey,
+        () => convex.query(api.drafts.getByDeliverable, { deliverableId }),
+        doc.storageId,
+      );
     }
     setOfficeDoc(null);
     sessionStorage.removeItem(EDITOR_SESSION_KEY);

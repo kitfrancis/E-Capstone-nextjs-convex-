@@ -151,9 +151,7 @@ export default function OnlyOfficeEditor({
         `fileId=${encodeURIComponent(deliverableId)}` +
         (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
         (mode === "comment" ? "&notify=1" : "");
-      // Every browser editing the same draft must use the same key so
-      // OnlyOffice places them in the same collaborative editing session.
-      const documentKey = draftId ?? docKey ?? fileId;
+      const documentKey = docKey ?? fileId;
         
       document.getElementById(elementId)?.replaceChildren();
       editorRef.current = new window.DocsAPI.DocEditor(elementId, {
@@ -224,7 +222,6 @@ export default function OnlyOfficeEditor({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await waitForDocumentSync();
       await onSubmit(hasChangesRef.current);
       editorRef.current?.destroyEditor();
       editorRef.current = null;
@@ -237,12 +234,11 @@ export default function OnlyOfficeEditor({
     }
   }
 
-  // NEW: Close waits for the parent to save the draft before closing
+  // Close after OnlyOffice has finished its normal autosave synchronization.
   async function handleClose() {
     setClosing(true);
     setSubmitError(null);
     try {
-      if (mode === "edit" && draftId) await waitForDocumentSync();
       await onClose(hasChangesRef.current);
     } catch (error) {
       setSubmitError(
@@ -251,22 +247,6 @@ export default function OnlyOfficeEditor({
     } finally {
       setClosing(false);
     }
-  }
-
-  async function waitForDocumentSync() {
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-      if (!hasPendingChangesRef.current) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        if (!hasPendingChangesRef.current) return;
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-    }
-
-    throw new Error(
-      "OnlyOffice is still syncing your edits. Wait a moment and try again.",
-    );
   }
 
   return (
