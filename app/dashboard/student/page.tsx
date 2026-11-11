@@ -397,7 +397,7 @@ function DashboardContent() {
           draft: {
             id: draft.draftId,
             baseVersion: draft.baseVersion,
-            docKey: draft.draftId,
+            docKey: `${draft.draftId}-${draft.storageId}`,
             phase: deliverable.phase,
             fileSize: deliverable.fileSize,
           },
@@ -503,7 +503,7 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: draft.draftId,
+          docKey: `${draft.draftId}-${draft.storageId}`,
           phase: d.phase,
           fileSize: d.fileSize,
         },
@@ -539,18 +539,12 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
   const closeEditor = async (hasChanges: boolean) => {
     const doc = officeDoc;
     if (doc?.draft && hasChanges) {
-      try {
-        const deliverableId = doc.deliverableId as Id<"deliverables">;
-        await forceSaveDraft(
-          doc.draft.docKey,
-          () => convex.query(api.drafts.getByDeliverable, { deliverableId }),
-          doc.storageId,
-        );
-      } catch (err) {
-        console.error(err);
-        toast.error(err instanceof Error ? err.message : "Couldn't save your latest edits before closing.");
-        throw err;
-      }
+      const deliverableId = doc.deliverableId as Id<"deliverables">;
+      await forceSaveDraft(
+        doc.draft.docKey,
+        () => convex.query(api.drafts.getByDeliverable, { deliverableId }),
+        doc.storageId,
+      );
     }
     setOfficeDoc(null);
     sessionStorage.removeItem(EDITOR_SESSION_KEY);
@@ -1665,6 +1659,9 @@ const imradBlocked =
                 deliverableId={officeDoc.deliverableId}
                 fileName={officeDoc.fileName}
                 fileUrl={resolvedOfficeUrl}
+                phase={officeDoc.phase}
+                deliverables={deliverables ?? []}
+                workspaceSidebar
                 mode={officeDoc.mode}
                 userId={user?.id}
                 userName={user?.fullName ?? undefined}

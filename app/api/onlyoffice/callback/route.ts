@@ -96,6 +96,7 @@ export async function POST(req: Request) {
 
   // Draft edits: save into the draft only, never touch the original deliverable.
   if (draftId) {
+    // Draft content is persisted in the draft until Submit creates a version.
     if (body.status === 2 || body.status === 6) {
       if (typeof body.url !== "string" || !isAllowedOnlyOfficeFileUrl(body.url)) {
         console.error("Draft callback is missing a valid OnlyOffice file URL.");
