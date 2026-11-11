@@ -16,8 +16,8 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "E-Research",
-  description: "Thesis Management System for Students, Instructors, and Advisers",
+  title: "E-Research Portal",
+  description: "An Integrated Research Management System For Theses and Capstone Projects",
 };
 
 export default function RootLayout({
