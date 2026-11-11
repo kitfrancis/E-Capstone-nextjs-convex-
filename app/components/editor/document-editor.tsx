@@ -435,10 +435,6 @@ export default function OnlyOfficeEditor({
     setSubmitError(null);
     try {
       await onSubmit(hasChangesRef.current);
-      activeEditorRef.current?.editor.destroyEditor();
-      stagedEditorRef.current?.editor.destroyEditor();
-      activeEditorRef.current = null;
-      stagedEditorRef.current = null;
     } catch (error) {
       const saveConfirmationFailed = notifyCallbackTargetError(error);
       setSubmitError(saveConfirmationFailed
