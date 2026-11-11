@@ -62,16 +62,18 @@ const SAVE_WITH_SHORTCUT_MESSAGE =
   "OnlyOffice couldn't confirm your latest edits. Press Ctrl+S in the document, wait for it to save, then try again.";
 
 function notifyCallbackTargetError(error: unknown) {
-  if (
+  const isSaveConfirmationError =
     error instanceof Error &&
     (error.message.includes(CALLBACK_TARGET_ERROR) ||
       error.message.startsWith("Couldn't save your latest edits") ||
       error.message.includes("has not confirmed your latest edits") ||
       (error.message.toLowerCase().includes("onlyoffice") &&
-        error.message.toLowerCase().includes("save")))
-  ) {
-    toast.error(SAVE_WITH_SHORTCUT_MESSAGE);
+        error.message.toLowerCase().includes("save")));
+
+  if (isSaveConfirmationError) {
+    toast.error(SAVE_WITH_SHORTCUT_MESSAGE, { position: "top-center" });
   }
+  return isSaveConfirmationError;
 }
 
 declare global {
@@ -248,11 +250,13 @@ export default function OnlyOfficeEditor({
     try {
       await onSelectChapter(chapterPhase, hasChangesRef.current);
     } catch (error) {
-      notifyCallbackTargetError(error);
+      const saveConfirmationFailed = notifyCallbackTargetError(error);
       setSwitchingChapter(null);
-      setSubmitError(
-        error instanceof Error ? error.message : "Couldn't open that chapter.",
-      );
+      setSubmitError(saveConfirmationFailed
+        ? null
+        : error instanceof Error
+          ? error.message
+          : "Couldn't open that chapter.");
     }
   }
 
@@ -436,10 +440,12 @@ export default function OnlyOfficeEditor({
       activeEditorRef.current = null;
       stagedEditorRef.current = null;
     } catch (error) {
-      notifyCallbackTargetError(error);
-      setSubmitError(
-        error instanceof Error ? error.message : "Submit failed. Your draft is still saved.",
-      );
+      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      setSubmitError(saveConfirmationFailed
+        ? null
+        : error instanceof Error
+          ? error.message
+          : "Submit failed. Your draft is still saved.");
     } finally {
       setSubmitting(false);
     }
@@ -452,10 +458,12 @@ export default function OnlyOfficeEditor({
     try {
       await onClose(hasChangesRef.current);
     } catch (error) {
-      notifyCallbackTargetError(error);
-      setSubmitError(
-        error instanceof Error ? error.message : "Couldn't save your latest edits before closing.",
-      );
+      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      setSubmitError(saveConfirmationFailed
+        ? null
+        : error instanceof Error
+          ? error.message
+          : "Couldn't save your latest edits before closing.");
     } finally {
       setClosing(false);
     }
