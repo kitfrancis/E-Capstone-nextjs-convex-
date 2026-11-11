@@ -58,16 +58,19 @@ type OnlyOfficeInstance = {
 type EditorSlot = 0 | 1;
 const elementIds = ["onlyoffice-editor-0", "onlyoffice-editor-1"] as const;
 const CALLBACK_TARGET_ERROR = "The OnlyOffice save callback points to a different site";
+const SAVE_WITH_SHORTCUT_MESSAGE =
+  "OnlyOffice couldn't confirm your latest edits. Press Ctrl+S in the document, wait for it to save, then try again.";
 
 function notifyCallbackTargetError(error: unknown) {
   if (
     error instanceof Error &&
     (error.message.includes(CALLBACK_TARGET_ERROR) ||
       error.message.startsWith("Couldn't save your latest edits") ||
+      error.message.includes("has not confirmed your latest edits") ||
       (error.message.toLowerCase().includes("onlyoffice") &&
         error.message.toLowerCase().includes("save")))
   ) {
-    toast.error("Internal server error. Please refresh the page.");
+    toast.error(SAVE_WITH_SHORTCUT_MESSAGE);
   }
 }
 
@@ -243,7 +246,7 @@ export default function OnlyOfficeEditor({
     setSwitchingChapter(chapterPhase);
     setSubmitError(null);
     try {
-      await onSelectChapter(chapterPhase, hasPendingChangesRef.current);
+      await onSelectChapter(chapterPhase, hasChangesRef.current);
     } catch (error) {
       notifyCallbackTargetError(error);
       setSwitchingChapter(null);
@@ -351,7 +354,7 @@ export default function OnlyOfficeEditor({
             onDocumentStateChange: (event: { data?: boolean }) => {
               if (typeof event.data !== "boolean") return;
               hasPendingChangesRef.current = event.data;
-              hasChangesRef.current = event.data;
+              if (event.data) hasChangesRef.current = true;
             },
             onError: (event: { data?: { errorDescription?: string } }) => {
               queueMicrotask(() => {
