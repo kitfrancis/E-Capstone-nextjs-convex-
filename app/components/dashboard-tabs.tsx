@@ -59,6 +59,8 @@ const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
 const OFFICE_EXTENSIONS = ["doc", "docx", "odt", "xls", "xlsx", "ods", "ppt", "pptx", "odp"];
 const isOffice = (fileName: string) =>
   OFFICE_EXTENSIONS.includes(fileName.split(".").pop()?.toLowerCase() ?? "");
+const isWordDocument = (fileName: string) =>
+  ["doc", "docx", "odt"].includes(fileName.split(".").pop()?.toLowerCase() ?? "");
 
 // Icon + color per file type
 const fileStyle = (fileName: string) => {
@@ -476,6 +478,133 @@ export function TabsDemo({
       EDITOR_SESSION_KEY,
       JSON.stringify({ deliverableId: target._id }),
     );
+  };
+
+  const getDraftStorageIdForCompare = async () => {
+    if (!officeDoc?.draft) return null;
+    const draft = await convex.query(api.drafts.getByDeliverable, {
+      deliverableId: officeDoc.deliverableId as Id<"deliverables">,
+    });
+    return draft?.storageId ?? null;
+  };
+
+  const compareVersion = async (
+    targetDeliverableId: string,
+    hasChanges: boolean,
+    draftStorageIdAtSelection: string | null,
+  ) => {
+    const current = officeDoc;
+    if (!current || !deliverables) throw new Error("The current manuscript is unavailable.");
+    const selected = deliverables.find((item) => item._id === targetDeliverableId);
+    if (!selected?.storageId || selected.phase !== current.phase) {
+      throw new Error("The selected version is unavailable for comparison.");
+    }
+
+    let comparisonStorageId = selected.storageId;
+    let comparisonFileName = selected.fileName;
+    let comparisonVersion = selected.version;
+    let comparisonIsDraft = false;
+    let savedDraft: {
+      _id: Id<"deliverableDrafts">;
+      storageId: Id<"_storage">;
+      baseVersion: number;
+    } | null = null;
+    const baseDeliverable = deliverables.find((item) => item._id === current.deliverableId);
+
+    if (current.draft) {
+      const getDraft = () =>
+        convex.query(api.drafts.getByDeliverable, {
+          deliverableId: current.deliverableId as Id<"deliverables">,
+        });
+      const beforeSave = await getDraft();
+      if (!beforeSave) throw new Error("The current draft could not be loaded.");
+      if (
+        hasChanges &&
+        beforeSave.storageId === draftStorageIdAtSelection
+      ) {
+        await forceSaveDraft(current.draft.docKey, getDraft, beforeSave.storageId);
+      }
+      savedDraft = await getDraft();
+      if (!savedDraft) throw new Error("The current draft could not be loaded.");
+
+      const draftHasChanges = savedDraft.storageId !== baseDeliverable?.storageId;
+      if (draftHasChanges) {
+        comparisonStorageId = savedDraft.storageId;
+        comparisonFileName = current.fileName;
+        comparisonVersion = savedDraft.baseVersion;
+        comparisonIsDraft = true;
+      } else {
+        const latestSaved = deliverables
+          .filter((item) => item.phase === current.phase)
+          .reduce<Deliverable | null>(
+            (latest, item) => (!latest || item.version > latest.version ? item : latest),
+            null,
+          );
+        if (!latestSaved?.storageId) {
+          throw new Error("The latest submitted version is unavailable.");
+        }
+        comparisonStorageId = latestSaved.storageId;
+        comparisonFileName = latestSaved.fileName;
+        comparisonVersion = latestSaved.version;
+      }
+    } else {
+      const latestSaved = deliverables
+        .filter((item) => item.phase === current.phase)
+        .reduce<Deliverable | null>(
+          (latest, item) => (!latest || item.version > latest.version ? item : latest),
+          null,
+        );
+      if (!latestSaved?.storageId) {
+        throw new Error("The latest submitted version is unavailable.");
+      }
+      comparisonStorageId = latestSaved.storageId;
+      comparisonFileName = latestSaved.fileName;
+      comparisonVersion = latestSaved.version;
+    }
+
+    if (!isWordDocument(selected.fileName) || !isWordDocument(comparisonFileName)) {
+      throw new Error("ONLYOFFICE comparison is available for Word documents only.");
+    }
+
+    const [selectedFileUrl, comparisonFileUrl] = await Promise.all([
+      convex.query(api.dashboard.getFileUrl, {
+        storageId: selected.storageId as Id<"_storage">,
+      }),
+      convex.query(api.dashboard.getFileUrl, {
+        storageId: comparisonStorageId as Id<"_storage">,
+      }),
+    ]);
+    if (!selectedFileUrl || !comparisonFileUrl) {
+      throw new Error("One of the selected manuscript files is unavailable.");
+    }
+
+    if (savedDraft && comparisonIsDraft && current.draft) {
+      const currentDraft = savedDraft;
+      setOfficeDoc((active) => {
+        if (!active?.draft || active.draft.id !== current.draft?.id) return active;
+        return {
+          ...active,
+          storageId: currentDraft.storageId,
+          fileUrl: comparisonFileUrl,
+          draft: {
+            ...active.draft,
+            docKey: `${currentDraft._id}-${currentDraft.storageId}`,
+          },
+        };
+      });
+    }
+
+    return {
+      selectedDeliverableId: selected._id,
+      selectedVersion: selected.version,
+      selectedFileName: selected.fileName,
+      selectedFileUrl,
+      comparisonFileUrl,
+      comparisonStorageId,
+      comparisonFileType: comparisonFileName.split(".").pop()?.toLowerCase() ?? "docx",
+      comparisonVersion,
+      comparisonIsDraft,
+    };
   };
 
   const viewDocument = (d: Deliverable) => {
@@ -1205,6 +1334,8 @@ export function TabsDemo({
           workspaceSidebar
           workspaceReadOnly={isArchived}
           onSelectChapter={selectChapter}
+          onCompareVersion={compareVersion}
+          onGetDraftStorageId={getDraftStorageIdForCompare}
           mode={officeDoc.mode}
           userId={user?.id}
           userName={user?.fullName ?? undefined}

@@ -24,6 +24,18 @@ type WorkspaceDeliverable = {
   message?: string;
 };
 
+type VersionComparison = {
+  selectedDeliverableId: string;
+  selectedVersion: number;
+  selectedFileName: string;
+  selectedFileUrl: string;
+  comparisonFileUrl: string;
+  comparisonStorageId: string;
+  comparisonFileType: string;
+  comparisonVersion: number;
+  comparisonIsDraft: boolean;
+};
+
 type OnlyOfficeEditorProps = {
   fileId: string;
   deliverableId: string;
@@ -37,6 +49,12 @@ type OnlyOfficeEditorProps = {
   userId?: string;
   userName?: string;
   onSelectChapter?: (phase: string, hasChanges: boolean) => Promise<void>;
+  onCompareVersion?: (
+    deliverableId: string,
+    hasChanges: boolean,
+    draftStorageIdAtSelection: string | null,
+  ) => Promise<VersionComparison>;
+  onGetDraftStorageId?: () => Promise<string | null>;
   onClose: (hasChanges: boolean) => void | Promise<void>;
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
@@ -55,6 +73,11 @@ type DocsApi = {
 
 type OnlyOfficeInstance = {
   destroyEditor: () => void;
+  setRequestedDocument?: (document: {
+    c: "compare";
+    fileType: string;
+    url: string;
+  }) => void;
 };
 
 type EditorSlot = 0 | 1;
@@ -103,6 +126,10 @@ function getDocumentType(fileName: string) {
   if (extension && ["xls", "xlsx", "ods"].includes(extension)) return "cell";
   if (extension && ["ppt", "pptx", "odp"].includes(extension)) return "slide";
   return "word";
+}
+
+function isWordDocument(fileName: string) {
+  return ["doc", "docx", "odt"].includes(fileName.split(".").pop()?.toLowerCase() ?? "");
 }
 
 function loadOnlyOfficeApi(serverUrl: string) {
@@ -159,6 +186,8 @@ export default function OnlyOfficeEditor({
   userId,
   userName,
   onSelectChapter,
+  onCompareVersion,
+  onGetDraftStorageId,
   onClose,
   docKey,
   draftId,
@@ -189,6 +218,15 @@ export default function OnlyOfficeEditor({
   const [submitting, setSubmitting] = useState(false);
   const [closing, setClosing] = useState(false); // NEW
   const [showSubmitReminder, setShowSubmitReminder] = useState(false);
+  const [versionAwaitingCompare, setVersionAwaitingCompare] =
+    useState<WorkspaceDeliverable | null>(null);
+  const [showCompareReminder, setShowCompareReminder] = useState(false);
+  const [capturingDraftBaseline, setCapturingDraftBaseline] = useState(false);
+  const [draftStorageIdAtSelection, setDraftStorageIdAtSelection] =
+    useState<string | null>(null);
+  const [comparison, setComparison] = useState<VersionComparison | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [switchingChapter, setSwitchingChapter] = useState<string | null>(null);
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
@@ -198,7 +236,7 @@ export default function OnlyOfficeEditor({
       ? ""
       : `${window.location.origin}/api/onlyoffice/callback`);
 
-  const editorMode = workspaceReadOnly ? "view" : mode;
+  const editorMode = comparison || workspaceReadOnly ? "view" : mode;
   const canSubmit = editorMode === "edit" && !!onSubmit;
   const chapterNames = [
     "Chapter 1: Introduction",
@@ -209,8 +247,8 @@ export default function OnlyOfficeEditor({
   ];
   const currentPhase = activeDocument?.phase ?? phase ?? "";
   const displayedFileName = activeDocument?.fileName ?? fileName;
-  const displayedDraftId = activeDocument?.draftId ?? draftId;
-  const displayedBaseVersion = activeDocument?.baseVersion ?? baseVersion;
+  const displayedDraftId = comparison ? undefined : activeDocument?.draftId ?? draftId;
+  const displayedBaseVersion = comparison ? undefined : activeDocument?.baseVersion ?? baseVersion;
   const chapterMatch = currentPhase.match(/chapter\s*(\d+)/i);
   const currentChapterNumber = chapterMatch ? Number(chapterMatch[1]) : null;
   const currentPhaseDeliverables = deliverables
@@ -218,7 +256,13 @@ export default function OnlyOfficeEditor({
     .sort((a, b) => b.version - a.version);
   const latestVersion = currentPhaseDeliverables[0]?.version ?? baseVersion ?? 1;
   const nextVersion = Math.max(latestVersion, baseVersion ?? 0) + 1;
-  const workspaceTitle = currentPhase || displayedFileName;
+  const workspaceTitle = comparison
+    ? `Comparing v${comparison.selectedVersion} with ${
+        comparison.comparisonIsDraft
+          ? `draft based on v${comparison.comparisonVersion}`
+          : `v${comparison.comparisonVersion}`
+      }`
+    : currentPhase || displayedFileName;
 
   useEffect(() => {
     hasPendingChangesRef.current = false;
@@ -281,9 +325,64 @@ export default function OnlyOfficeEditor({
     }
   }
 
+  async function openVersionComparison(
+    item: WorkspaceDeliverable,
+    hasChanges: boolean,
+    storageIdAtSelection: string | null,
+  ) {
+    if (!onCompareVersion || comparing) return;
+    setComparing(true);
+    setComparisonError(null);
+    try {
+      const nextComparison = await onCompareVersion(
+        item._id,
+        hasChanges,
+        storageIdAtSelection,
+      );
+      hasChangesRef.current = false;
+      setComparison(nextComparison);
+    } catch (error) {
+      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      setComparisonError(
+        saveConfirmationFailed
+          ? SAVE_WITH_SHORTCUT_MESSAGE
+          : error instanceof Error
+            ? error.message
+            : "Couldn't compare these versions.",
+      );
+    } finally {
+      setComparing(false);
+    }
+  }
+
+  async function handleSelectVersion(item: WorkspaceDeliverable) {
+    if (!onCompareVersion || comparing || submitting || closing || switchingChapter) return;
+    if (hasPendingChangesRef.current) {
+      setVersionAwaitingCompare(item);
+      setShowCompareReminder(true);
+      setCapturingDraftBaseline(true);
+      try {
+        const storageId = await onGetDraftStorageId?.();
+        if (!storageId) throw new Error("The current draft could not be loaded.");
+        setDraftStorageIdAtSelection(storageId);
+      } catch (error) {
+        setShowCompareReminder(false);
+        setVersionAwaitingCompare(null);
+        setComparisonError(
+          error instanceof Error ? error.message : "Couldn't check the current draft.",
+        );
+      } finally {
+        setCapturingDraftBaseline(false);
+      }
+      return;
+    }
+    void openVersionComparison(item, false, null);
+  }
+
   useEffect(() => {
     let cancelled = false;
     let activated = false;
+    let comparisonRequested = false;
     let createdEditor: OnlyOfficeInstance | null = null;
     const activeSlot = activeSlotRef.current;
     const editorSlot: EditorSlot = activeSlot === null ? 0 : activeSlot === 0 ? 1 : 0;
@@ -327,14 +426,18 @@ export default function OnlyOfficeEditor({
         `fileId=${encodeURIComponent(deliverableId)}` +
         (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
         (editorMode === "comment" ? "&notify=1" : "");
-      const documentKey = docKey ?? fileId;
+      const editorFileName = comparison?.selectedFileName ?? fileName;
+      const editorFileUrl = comparison?.selectedFileUrl ?? fileUrl;
+      const documentKey = comparison
+        ? `compare-${comparison.selectedDeliverableId}-${deliverableId}-${comparison.selectedVersion}-${comparison.comparisonStorageId}`
+        : docKey ?? fileId;
 
       clearSlot(editorSlot);
       let editor: OnlyOfficeInstance;
       try {
         editor = new window.DocsAPI.DocEditor(elementId, {
           document: {
-            fileType: fileName.split(".").pop()?.toLowerCase() || "docx",
+            fileType: editorFileName.split(".").pop()?.toLowerCase() || "docx",
             key: documentKey,
             permissions: {
               comment: editorMode !== "view",
@@ -343,10 +446,10 @@ export default function OnlyOfficeEditor({
               fillForms: editorMode === "edit",
               print: true,
             },
-            title: fileName,
-            url: fileUrl,
+            title: editorFileName,
+            url: editorFileUrl,
           },
-          documentType: getDocumentType(fileName),
+          documentType: getDocumentType(editorFileName),
           editorConfig: {
             callbackUrl: `${callbackUrl}?${query}`,
             coEditing: {
@@ -373,11 +476,42 @@ export default function OnlyOfficeEditor({
                 activeSlotRef.current = editorSlot;
                 activated = true;
                 setActiveEditorSlot(editorSlot);
-                setActiveDocument({ phase, fileName, draftId, baseVersion });
+                setActiveDocument({
+                  phase,
+                  fileName: editorFileName,
+                  draftId: comparison ? undefined : draftId,
+                  baseVersion: comparison ? undefined : baseVersion,
+                });
                 setSwitchingChapter(null);
+                if (!comparison) {
+                  setLoading(false);
+                  onEditorReadyRef.current?.();
+                }
+              });
+            },
+            onDocumentReady: () => {
+              if (!comparison || !createdEditor || comparisonRequested) return;
+              try {
+                if (!createdEditor.setRequestedDocument) {
+                  throw new Error("This OnlyOffice version does not support document comparison.");
+                }
+                comparisonRequested = true;
+                createdEditor.setRequestedDocument({
+                  c: "compare",
+                  fileType: comparison.comparisonFileType,
+                  url: comparison.comparisonFileUrl,
+                });
                 setLoading(false);
                 onEditorReadyRef.current?.();
-              });
+              } catch (error) {
+                setLoadError(
+                  error instanceof Error
+                    ? error.message
+                    : "OnlyOffice couldn't start comparing these versions.",
+                );
+                setLoading(false);
+                onEditorErrorRef.current?.();
+              }
             },
             onDocumentStateChange: (event: { data?: boolean }) => {
               if (typeof event.data !== "boolean") return;
@@ -438,6 +572,7 @@ export default function OnlyOfficeEditor({
     };
   }, [
     callbackUrl,
+    comparison,
     editorMode,
     userId,
     userName,
@@ -522,15 +657,58 @@ export default function OnlyOfficeEditor({
                 <History className="h-3.5 w-3.5" />
                 Version History
               </h2>
+              {comparison && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComparison(null);
+                    setComparisonError(null);
+                    setLoadError(null);
+                  }}
+                  className="mb-2 w-full rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-left text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                >
+                  Return to current editor
+                </button>
+              )}
+              {comparisonError && (
+                <p role="alert" className="mb-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs text-rose-700">
+                  {comparisonError}
+                </p>
+              )}
+              {comparing && (
+                <p className="mb-2 flex items-center gap-2 px-1 text-xs text-sky-700" role="status">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Preparing comparison…
+                </p>
+              )}
               <div className="space-y-1.5">
                 {currentPhaseDeliverables.length > 0 ? (
                   currentPhaseDeliverables.map((item) => (
-                    <div
+                    <button
+                      type="button"
                       key={item._id}
-                      className={`rounded-md border px-2.5 py-2 ${
-                        item.version === latestVersion
-                          ? "border-sky-200 bg-sky-50"
-                          : "border-slate-200 bg-white"
+                      onClick={() => void handleSelectVersion(item)}
+                      disabled={
+                        !onCompareVersion ||
+                        !item.storageId ||
+                        !isWordDocument(item.fileName) ||
+                        !isWordDocument(fileName) ||
+                        comparing ||
+                        submitting ||
+                        closing ||
+                        switchingChapter !== null
+                      }
+                      title={
+                        !isWordDocument(item.fileName) || !isWordDocument(fileName)
+                          ? "ONLYOFFICE comparison is available for Word documents."
+                          : "Compare this version with the current saved draft or latest version."
+                      }
+                      className={`block w-full rounded-md border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        comparison?.selectedDeliverableId === item._id
+                          ? "border-violet-300 bg-violet-50"
+                          : item.version === latestVersion
+                            ? "border-sky-200 bg-sky-50"
+                            : "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -548,7 +726,12 @@ export default function OnlyOfficeEditor({
                       <p className="mt-1 truncate text-[11px] text-slate-500">
                         {item.message || item.fileName}
                       </p>
-                    </div>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {comparison?.selectedDeliverableId === item._id
+                          ? "Currently comparing"
+                          : "Select to compare"}
+                      </p>
+                    </button>
                   ))
                 ) : (
                   <p className="rounded-md border border-dashed border-slate-200 px-2.5 py-3 text-xs text-slate-400">
@@ -571,11 +754,6 @@ export default function OnlyOfficeEditor({
                     v{nextVersion}.0
                   </span>
                 </div>
-                <textarea
-                  aria-label="Describe changes made"
-                  placeholder="Describe changes made..."
-                  className="mb-2 block min-h-16 w-full resize-none rounded-md border border-slate-200 bg-white p-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                />
                 {submitError && (
                   <p role="alert" className="mb-2 text-xs text-rose-600">
                     {submitError}
@@ -711,6 +889,27 @@ export default function OnlyOfficeEditor({
             </div>
           </div>
         )}
+        {comparison && !workspaceSidebar && (
+          <div className="flex items-center justify-between gap-3 bg-violet-950 px-4 py-2 text-xs text-white">
+            <span>
+              Comparing v{comparison.selectedVersion} with{" "}
+              {comparison.comparisonIsDraft
+                ? `the current draft (based on v${comparison.comparisonVersion})`
+                : `v${comparison.comparisonVersion}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setComparison(null);
+                setComparisonError(null);
+                setLoadError(null);
+              }}
+              className="rounded border border-white/30 px-2.5 py-1 font-medium hover:bg-white/10"
+            >
+              Return to editor
+            </button>
+          </div>
+        )}
         <div className="relative min-h-0 min-w-0 flex-1">
           <div
             id={elementIds[0]}
@@ -734,7 +933,13 @@ export default function OnlyOfficeEditor({
           {loading && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/55 px-6 text-center text-sm text-white">
               <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
-              <span>{activeEditorRef.current ? `Loading ${phase ?? "chapter"}…` : "Loading editor…"}</span>
+              <span>
+                {comparison
+                  ? `Loading comparison with v${comparison.selectedVersion}…`
+                  : activeEditorRef.current
+                    ? `Loading ${phase ?? "chapter"}…`
+                    : "Loading editor…"}
+              </span>
             </div>
           )}
           {loadError && (
@@ -798,6 +1003,66 @@ export default function OnlyOfficeEditor({
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
               >
                 Continue to submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showCompareReminder && versionAwaitingCompare && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="compare-reminder-title"
+            className="w-full max-w-md rounded-xl bg-white p-6 text-slate-900 shadow-xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                <Save className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 id="compare-reminder-title" className="text-lg font-semibold">
+                  Save your draft before comparing
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  If you have not saved recently, press Ctrl+S in OnlyOffice. Then continue and we’ll confirm the draft is saved before opening the comparison.
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-slate-600">
+              Clicking Continue will also request a save if needed. Your draft will not be submitted as a new version.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompareReminder(false);
+                  setVersionAwaitingCompare(null);
+                  setDraftStorageIdAtSelection(null);
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const selected = versionAwaitingCompare;
+                  setShowCompareReminder(false);
+                  setVersionAwaitingCompare(null);
+                  if (selected) {
+                    void openVersionComparison(
+                      selected,
+                      true,
+                      draftStorageIdAtSelection,
+                    );
+                  }
+                  setDraftStorageIdAtSelection(null);
+                }}
+                disabled={comparing || capturingDraftBaseline}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                {capturingDraftBaseline ? "Checking draft…" : "Continue to compare"}
               </button>
             </div>
           </div>
