@@ -237,7 +237,10 @@ export function TabsDemo({
   }, [officeDoc, officeUrl, loadedOfficeUrl]);
 
   const resolvedOfficeUrl =
-    officeDoc && loadedOfficeUrl?.storageId === officeDoc.storageId ? loadedOfficeUrl.url : null;
+    officeDoc?.fileUrl ??
+    (officeDoc && loadedOfficeUrl?.storageId === officeDoc.storageId
+      ? loadedOfficeUrl.url
+      : null);
 
   // Only complain if the file never loaded at all
   useEffect(() => {
@@ -508,9 +511,48 @@ export function TabsDemo({
       capstoneProjectId,
       draftId: latest._id,
     });
-    toast.success(`Submitted as version ${version}.`);
-    setOfficeDoc(null);
-    sessionStorage.removeItem(EDITOR_SESSION_KEY);
+    const savedVersion = (await convex.query(api.dashboard.getDeliverables, {
+      capstoneProjectId,
+    })).find(
+      (deliverable) =>
+        deliverable.phase === doc.draft?.phase && deliverable.version === version,
+    );
+    if (!savedVersion?.storageId) {
+      throw new Error(
+        `Submitted version ${version}, but couldn't reopen the editor from that version.`,
+      );
+    }
+
+    const nextDraft = await startDraft({ deliverableId: savedVersion._id });
+    const nextDraftUrl = await convex.query(api.dashboard.getFileUrl, {
+      storageId: nextDraft.storageId,
+    });
+    if (!nextDraftUrl) {
+      throw new Error(
+        `Submitted version ${version}, but couldn't load a new draft from it.`,
+      );
+    }
+
+    setOfficeDoc({
+      fileName: savedVersion.fileName,
+      storageId: nextDraft.storageId,
+      deliverableId: savedVersion._id,
+      phase: savedVersion.phase,
+      mode: "edit",
+      fileUrl: nextDraftUrl,
+      draft: {
+        id: nextDraft.draftId,
+        baseVersion: nextDraft.baseVersion,
+        docKey: `${nextDraft.draftId}-${nextDraft.storageId}`,
+        phase: savedVersion.phase,
+        fileSize: savedVersion.fileSize,
+      },
+    });
+    sessionStorage.setItem(
+      EDITOR_SESSION_KEY,
+      JSON.stringify({ deliverableId: savedVersion._id }),
+    );
+    toast.success(`Submitted as version ${version}. You can continue editing.`);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
