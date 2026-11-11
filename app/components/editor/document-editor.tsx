@@ -1,13 +1,33 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Keyboard, Save } from "lucide-react";
+import {
+  BookOpen,
+  FileText,
+  History,
+  Keyboard,
+  Power,
+  Save,
+} from "lucide-react";
+
+type WorkspaceDeliverable = {
+  _id: string;
+  fileName: string;
+  phase: string;
+  version: number;
+  uploadedAt: string;
+  versionLabel?: string;
+  message?: string;
+};
 
 type OnlyOfficeEditorProps = {
   fileId: string;
   deliverableId: string;
   fileName: string;
   fileUrl: string;
+  phase?: string;
+  deliverables?: WorkspaceDeliverable[];
+  workspaceSidebar?: boolean;
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
@@ -98,6 +118,9 @@ export default function OnlyOfficeEditor({
   deliverableId,
   fileName,
   fileUrl,
+  phase,
+  deliverables = [],
+  workspaceSidebar = false,
   mode = "view",
   userId,
   userName,
@@ -125,6 +148,22 @@ export default function OnlyOfficeEditor({
       : `${window.location.origin}/api/onlyoffice/callback`);
 
   const canSubmit = mode === "edit" && !!onSubmit;
+  const chapterNames = [
+    "Chapter 1: Introduction",
+    "Chapter 2: Literature Review",
+    "Chapter 3: Methodology",
+    "Chapter 4: Results & Discussion",
+    "Chapter 5: Conclusion",
+  ];
+  const currentPhase = phase ?? "";
+  const chapterMatch = currentPhase.match(/chapter\s*(\d+)/i);
+  const currentChapterNumber = chapterMatch ? Number(chapterMatch[1]) : null;
+  const currentPhaseDeliverables = deliverables
+    .filter((deliverable) => deliverable.phase === currentPhase)
+    .sort((a, b) => b.version - a.version);
+  const latestVersion = currentPhaseDeliverables[0]?.version ?? baseVersion ?? 1;
+  const nextVersion = Math.max(latestVersion, baseVersion ?? 0) + 1;
+  const workspaceTitle = currentPhase || fileName;
 
   useEffect(() => {
     let cancelled = false;
@@ -253,52 +292,219 @@ export default function OnlyOfficeEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#17232b]">
-      <div className="flex items-center justify-between gap-3 bg-[#173f4a] px-4 py-3 text-white">
-        <div className="flex min-w-0 items-center gap-3">
-          <p className="truncate text-sm font-bold">{fileName}</p>
-          {draftId && baseVersion !== undefined && (
-            <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs">
-              Draft based on v{baseVersion}
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {submitError && <span className="text-xs text-amber-300">{submitError}</span>}
-          {canSubmit && (
+    <div
+      className="fixed inset-0 z-50 grid bg-slate-200"
+      style={{
+        gridTemplateColumns: workspaceSidebar ? "276px minmax(0, 1fr)" : "minmax(0, 1fr)",
+        gridTemplateRows: "minmax(0, 1fr)",
+      }}
+    >
+      {workspaceSidebar && (
+        <aside className="flex min-h-0 min-w-0 flex-col border-r border-slate-200 bg-white text-slate-700">
+          <div className="flex min-h-14 items-center gap-3 border-b border-slate-200 px-4">
+            <FileText className="h-5 w-5 shrink-0 text-sky-600" />
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+              {workspaceTitle}
+            </p>
+            {draftId && baseVersion !== undefined && (
+              <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-1 text-[10px] font-semibold text-sky-700">
+                v{nextVersion}.0
+              </span>
+            )}
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
+            <section aria-labelledby="version-history-heading">
+              <h2
+                id="version-history-heading"
+                className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-wide text-slate-500"
+              >
+                <History className="h-3.5 w-3.5" />
+                Version History
+              </h2>
+              <div className="space-y-1.5">
+                {currentPhaseDeliverables.length > 0 ? (
+                  currentPhaseDeliverables.map((item) => (
+                    <div
+                      key={item._id}
+                      className={`rounded-md border px-2.5 py-2 ${
+                        item.version === latestVersion
+                          ? "border-sky-200 bg-sky-50"
+                          : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-sky-700">
+                          v{item.version}.0
+                          {item.versionLabel ? ` · ${item.versionLabel}` : ""}
+                        </span>
+                        <time className="shrink-0 text-[10px] text-slate-400">
+                          {new Date(item.uploadedAt).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </time>
+                      </div>
+                      <p className="mt-1 truncate text-[11px] text-slate-500">
+                        {item.message || item.fileName}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-md border border-dashed border-slate-200 px-2.5 py-3 text-xs text-slate-400">
+                    No submitted versions yet.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {canSubmit && (
+              <section
+                aria-labelledby="save-version-heading"
+                className="rounded-lg border border-slate-200 bg-slate-50 p-2.5"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 id="save-version-heading" className="text-xs font-semibold text-slate-700">
+                    Save New Snapshot
+                  </h2>
+                  <span className="rounded border border-sky-200 bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                    v{nextVersion}.0
+                  </span>
+                </div>
+                <textarea
+                  aria-label="Describe changes made"
+                  placeholder="Describe changes made..."
+                  className="mb-2 block min-h-16 w-full resize-none rounded-md border border-slate-200 bg-white p-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                />
+                {submitError && (
+                  <p role="alert" className="mb-2 text-xs text-rose-600">
+                    {submitError}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitReminder(true)}
+                  disabled={submitting || closing || loading || !!loadError}
+                  className="flex min-h-9 w-full appearance-none items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  {submitting ? "Submitting…" : "Submit Version"}
+                </button>
+              </section>
+            )}
+
+            <section aria-labelledby="manuscript-chapters-heading">
+              <h2
+                id="manuscript-chapters-heading"
+                className="mb-2 flex items-center gap-2 border-t border-slate-200 px-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-slate-500"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                Manuscript Chapters
+              </h2>
+              <div className="space-y-1">
+                {chapterNames.map((name, index) => {
+                  const chapter = index + 1;
+                  const chapterPhase = `Chapter ${chapter}`;
+                  const latest = deliverables
+                    .filter((item) => item.phase === chapterPhase)
+                    .reduce<WorkspaceDeliverable | null>(
+                      (found, item) => (!found || item.version > found.version ? item : found),
+                      null,
+                    );
+                  const isCurrent = currentChapterNumber === chapter;
+
+                  return (
+                    <div
+                      key={chapterPhase}
+                      aria-current={isCurrent ? "page" : undefined}
+                      className={`rounded-md border px-2.5 py-2 ${
+                        isCurrent
+                          ? "border-sky-200 bg-sky-50 text-sky-700"
+                          : "border-transparent text-slate-600"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-medium">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <span className="truncate">{name}</span>
+                      </div>
+                      <p className="mt-1 truncate pl-5 text-[10px] text-slate-400">
+                        {latest?.fileName ?? "No submission yet"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+
+          <div className="border-t border-slate-200 bg-white p-2">
+            {submitError && !canSubmit && (
+              <p role="alert" className="mb-2 px-1 text-xs text-rose-600">
+                {submitError}
+              </p>
+            )}
             <button
               type="button"
-              onClick={() => setShowSubmitReminder(true)}
-              disabled={submitting || closing || loading || !!loadError}
-              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              onClick={handleClose}
+              disabled={submitting || closing}
+              className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? "Submitting…" : `Submit as v${(baseVersion ?? 1) + 1}`}
+              <Power className="h-3.5 w-3.5" />
+              {closing ? "Saving…" : "Close Workspace"}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={submitting || closing}
-            className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10 disabled:opacity-50"
-          >
-            {closing ? "Saving…" : "Close"}
-          </button>
-        </div>
-      </div>
-      {loadError ? (
-        <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white">
-          {loadError}
-        </div>
-      ) : (
-        <div className="relative min-h-0 flex-1">
-          {loading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70 pointer-events-none">
-              Loading editor...
-            </div>
-          )}
-          <div id={elementId} className="h-full w-full" />
-        </div>
+          </div>
+        </aside>
       )}
+
+      <div className="flex min-h-0 min-w-0 flex-col bg-[#17232b]">
+        {!workspaceSidebar && (
+          <div className="flex items-center justify-between gap-3 bg-[#173f4a] px-4 py-3 text-white">
+            <div className="flex min-w-0 items-center gap-3">
+              <p className="truncate text-sm font-bold">{fileName}</p>
+              {draftId && baseVersion !== undefined && (
+                <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs">
+                  Draft based on v{baseVersion}
+                </span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {submitError && <span className="text-xs text-amber-300">{submitError}</span>}
+              {canSubmit && (
+                <button
+                  type="button"
+                  onClick={() => setShowSubmitReminder(true)}
+                  disabled={submitting || closing || loading || !!loadError}
+                  className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {submitting ? "Submitting…" : `Submit as v${nextVersion}`}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={submitting || closing}
+                className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10 disabled:opacity-50"
+              >
+                {closing ? "Saving…" : "Close"}
+              </button>
+            </div>
+          </div>
+        )}
+        {loadError ? (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white">
+            {loadError}
+          </div>
+        ) : (
+          <div className="relative min-h-0 min-w-0 flex-1">
+            {loading && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70">
+                Loading editor...
+              </div>
+            )}
+            <div id={elementId} className="absolute inset-0" />
+          </div>
+        )}
+      </div>
       {showSubmitReminder && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4">
           <div
