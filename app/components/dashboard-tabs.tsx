@@ -1053,6 +1053,9 @@ export function TabsDemo({
           deliverableId={officeDoc.deliverableId}
           fileName={officeDoc.fileName}
           fileUrl={resolvedOfficeUrl}
+          phase={officeDoc.phase}
+          deliverables={deliverables ?? []}
+          workspaceSidebar
           mode={officeDoc.mode}
           userId={user?.id}
           userName={user?.fullName ?? undefined}
