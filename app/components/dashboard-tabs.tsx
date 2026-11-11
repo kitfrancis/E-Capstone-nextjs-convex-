@@ -160,12 +160,14 @@ function TaskActions({
 export function TabsDemo({
   capstoneProjectId,
   proposalResult,
+  isArchived = false,
   highlightDeliverableId,
   highlightPage,
   showBanner = true,
 }: {
   capstoneProjectId?: Id<"capstoneProjects">;
   proposalResult?: "passed" | "passed_with_revisions" | "failed";
+  isArchived?: boolean;
   highlightDeliverableId?: Id<"deliverables"> | null;
   highlightPage?: number | null;
   /** Set to false if your page already renders its own "Manuscript & Task Management" banner. */
@@ -858,7 +860,7 @@ export function TabsDemo({
                     const deleteLocked =
                       (cp?.status === "approved" || d.status === "approved") && !isAdmin;
                     const canView = isPdf(d.fileName) || isOffice(d.fileName);
-                    const canEdit = isOffice(d.fileName) && isLatest;
+                    const canEdit = isOffice(d.fileName) && isLatest && !isArchived;
                     const StatusIcon = getStatusIcon(d.status);
                     return (
                       <tr key={d._id} className={`border-t ${chNum && !isLatest ? "opacity-60" : ""}`}>
@@ -1114,6 +1116,7 @@ export function TabsDemo({
           phase={officeDoc.phase}
           deliverables={deliverables ?? []}
           workspaceSidebar
+          workspaceReadOnly={isArchived}
           onSelectChapter={selectChapter}
           mode={officeDoc.mode}
           userId={user?.id}

@@ -29,6 +29,7 @@ type OnlyOfficeEditorProps = {
   phase?: string;
   deliverables?: WorkspaceDeliverable[];
   workspaceSidebar?: boolean;
+  workspaceReadOnly?: boolean;
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
@@ -123,6 +124,7 @@ export default function OnlyOfficeEditor({
   phase,
   deliverables = [],
   workspaceSidebar = false,
+  workspaceReadOnly = false,
   mode = "view",
   userId,
   userName,
@@ -151,7 +153,8 @@ export default function OnlyOfficeEditor({
       ? ""
       : `${window.location.origin}/api/onlyoffice/callback`);
 
-  const canSubmit = mode === "edit" && !!onSubmit;
+  const editorMode = workspaceReadOnly ? "view" : mode;
+  const canSubmit = editorMode === "edit" && !!onSubmit;
   const chapterNames = [
     "Chapter 1: Introduction",
     "Chapter 2: Literature Review",
@@ -227,7 +230,7 @@ export default function OnlyOfficeEditor({
       const query =
         `fileId=${encodeURIComponent(deliverableId)}` +
         (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
-        (mode === "comment" ? "&notify=1" : "");
+        (editorMode === "comment" ? "&notify=1" : "");
       const documentKey = docKey ?? fileId;
         
       document.getElementById(elementId)?.replaceChildren();
@@ -236,10 +239,10 @@ export default function OnlyOfficeEditor({
           fileType: fileName.split(".").pop()?.toLowerCase() || "docx",
           key: documentKey,
           permissions: {
-            comment: mode !== "view",
-            edit: mode === "edit",
-            review: mode === "review",
-            fillForms: mode === "edit",
+            comment: editorMode !== "view",
+            edit: editorMode === "edit",
+            review: editorMode === "review",
+            fillForms: editorMode === "edit",
             print: true,
           },
           title: fileName,
@@ -253,7 +256,7 @@ export default function OnlyOfficeEditor({
             change: true,
           },
           customization: { autosave: true, forcesave: true },
-          mode: mode === "view" ? "view" : "edit",
+          mode: editorMode === "view" ? "view" : "edit",
           user: userId ? { id: userId, name: userName ?? "User" } : undefined,
         },
         events: {
@@ -291,7 +294,7 @@ export default function OnlyOfficeEditor({
       editorRef.current = null;
       document.getElementById(elementId)?.replaceChildren();
     };
-  }, [callbackUrl, mode, userId, userName, deliverableId, fileId, fileName, fileUrl, serverUrl, docKey, draftId]);
+  }, [callbackUrl, editorMode, userId, userName, deliverableId, fileId, fileName, fileUrl, serverUrl, docKey, draftId]);
 
   // NEW: Submit button handler
   async function handleSubmit() {
@@ -449,7 +452,9 @@ export default function OnlyOfficeEditor({
                     );
                   const isCurrent = currentChapterNumber === chapter;
                   const canOpenChapter =
-                    !!latest?.storageId && isOnlyOfficeEditable(latest.fileName);
+                    !workspaceReadOnly &&
+                    !!latest?.storageId &&
+                    isOnlyOfficeEditable(latest.fileName);
 
                   return (
                     <button
@@ -459,7 +464,9 @@ export default function OnlyOfficeEditor({
                       disabled={!canOpenChapter || switchingChapter !== null || submitting || closing}
                       onClick={() => void handleSelectChapter(chapterPhase)}
                       title={
-                        canOpenChapter
+                        workspaceReadOnly
+                          ? "Archived projects are read-only."
+                          : canOpenChapter
                           ? `Open ${chapterPhase}`
                           : latest
                             ? "This file type cannot be opened in OnlyOffice."

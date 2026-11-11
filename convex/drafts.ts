@@ -9,6 +9,11 @@ export const startDraft = mutation({
     if (!identity) throw new Error("Not signed in");
     const d = await ctx.db.get(deliverableId);
     if (!d || !d.storageId) throw new Error("File not found");
+    const project = await ctx.db.get(d.capstoneProjectId);
+    if (!project) throw new Error("Project not found");
+    if (project.stage === "archived") {
+      throw new Error("Archived projects are read-only.");
+    }
 
     // NEW: fail with a clear message if the original file is gone
     const originalUrl = await ctx.storage.getUrl(d.storageId);

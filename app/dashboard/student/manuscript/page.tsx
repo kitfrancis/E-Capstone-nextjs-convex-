@@ -68,6 +68,7 @@ function ManuscriptContent() {
       <TabsDemo
         capstoneProjectId={project._id as Id<"capstoneProjects">}
         proposalResult={project.proposalResult}
+        isArchived={project.stage === "archived"}
         highlightDeliverableId={deliverableId}
         highlightPage={pageParam ? parseInt(pageParam) : null}
       />

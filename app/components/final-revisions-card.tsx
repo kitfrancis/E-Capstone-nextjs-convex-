@@ -10,10 +10,13 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
   if (!info) return null;
 
   const revising = info.stage === "final_revisions";
-  if (!revising && info.forms.length === 0) return null;
+  const reviewingChapterEdits = info.stage === "chapter_revisions";
+  if (!revising && !reviewingChapterEdits && info.forms.length === 0) return null;
 
   const allRevised = info.total > 0 && info.revised === info.total;
-  const underReview = revising && allRevised && info.approved < info.total;
+  const underReview =
+    (revising && allRevised && info.approved < info.total) ||
+    (reviewingChapterEdits && info.approved < info.total);
 
   return (
     <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
@@ -23,15 +26,24 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
             <ClipboardList className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">Final Revisions</p>
+            <p className="text-sm font-semibold text-foreground">
+              {reviewingChapterEdits ? "Chapter Review" : "Final Revisions"}
+            </p>
             <p className="text-xs text-muted-foreground">
-              {info.forms.length === 0
+              {reviewingChapterEdits
+                ? "A chapter was updated after approval. Your instructor must approve the latest versions before IMRaD is unlocked."
+                : info.forms.length === 0
                 ? "Waiting for your instructor to upload the panel evaluation forms."
                 : "Read the evaluation forms, then resubmit every chapter with your revisions."}
             </p>
           </div>
         </div>
-        {revising && info.forms.length > 0 && (
+        {reviewingChapterEdits ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            <Clock className="h-3.5 w-3.5" />
+            {info.approved}/{info.total} chapters approved
+          </span>
+        ) : revising && info.forms.length > 0 ? (
           <span
             className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
               underReview
@@ -44,7 +56,7 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
               ? "Under Review"
               : `${info.revised}/${info.total} chapters resubmitted`}
           </span>
-        )}
+        ) : null}
       </div>
 
       {info.forms.length > 0 && (

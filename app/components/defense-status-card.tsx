@@ -22,6 +22,7 @@ function currentStep(p: Project, progress: number) {
     case "defense_scheduled":
       return 3;
     case "final_revisions":
+    case "chapter_revisions":
       return 4;
     case "ready_to_archive":
       return 5;
@@ -39,6 +40,9 @@ export function DefenseBadge({ project, progress }: { project: Project; progress
     if (project.defenseResult === "failed") cls = AMBER;
   } else if (project.stage === "final_revisions") {
     label = (project.evaluationForms?.length ?? 0) < 3 ? "Awaiting evaluation forms" : "Final revisions";
+    cls = AMBER;
+  } else if (project.stage === "chapter_revisions") {
+    label = "Chapter review";
     cls = AMBER;
   } else if (project.stage === "ready_to_archive") {
     label = project.archiveEndorsedAt ? "Awaiting admin verification" : "IMRaD stage";
@@ -72,7 +76,10 @@ export function DefenseStatusCard({ project, progress }: { project: Project; pro
   const showResult =
     project.defenseResult &&
     project.defenseResult !== "failed" &&
-    (project.stage === "final_revisions" || project.stage === "ready_to_archive" || project.stage === "archived");
+    (project.stage === "final_revisions" ||
+      project.stage === "chapter_revisions" ||
+      project.stage === "ready_to_archive" ||
+      project.stage === "archived");
 
   let label = "Next step";
   let title = "Keep going";
@@ -107,6 +114,9 @@ export function DefenseStatusCard({ project, progress }: { project: Project; pro
       title = "Revise your chapters.";
       text = "Read the panel evaluation forms, then resubmit every chapter. Your instructor will check each one.";
     }
+  } else if (project.stage === "chapter_revisions") {
+    title = "Updated chapters are under review.";
+    text = "Your instructor must approve the latest version of every chapter again before IMRaD submission is unlocked.";
   } else if (project.stage === "defense_scheduled") {
     title = "Your defense is scheduled.";
     text = "Prepare your presentation and bring a copy of the manuscript for every panel member.";

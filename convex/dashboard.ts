@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
+import { computeProgress } from "../lib/progress";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
 
@@ -693,7 +694,12 @@ export const saveDeliverable = mutation({
     }
 
     // Approved chapters are locked, except once during the final revisions
-    if (!isImrad && Number.isFinite(chapterNum) && latest?.status === "approved") {
+    if (
+      !args.draftId &&
+      !isImrad &&
+      Number.isFinite(chapterNum) &&
+      latest?.status === "approved"
+    ) {
       const alreadyRevised =
         revisionsOpen && Date.parse(latest.uploadedAt) > (project.defenseRecordedAt ?? 0);
       if (!revisionsOpen || alreadyRevised) {
@@ -717,6 +723,24 @@ export const saveDeliverable = mutation({
       ...(args.versionLabel ? { versionLabel: args.versionLabel } : {}),
       ...(draft ? { submissionDraftId: draft._id } : {}),
     });
+
+    const reopensChapterReview =
+      project.stage === "ready_to_archive" &&
+      !isImrad &&
+      Number.isFinite(chapterNum) &&
+      chapterNum >= 1;
+    if (reopensChapterReview) {
+      await ctx.db.patch(project._id, {
+        stage: "chapter_revisions",
+        archiveEndorsedAt: undefined,
+      });
+      await logAction(
+        ctx,
+        caller,
+        "Reopened chapter review",
+        `Team "${project.teamName}" submitted an updated ${args.phase}`,
+      );
+    }
 
     if (draft) await ctx.db.delete(draft._id);
 
@@ -848,6 +872,41 @@ export const adviserDeliverableStatus = mutation({
       `${deliverable.fileName} → ${args.status.replace("_", " ")}`
     );
 
+    let chapterReviewComplete = false;
+    if (changed && args.status === "approved" && project.stage === "chapter_revisions") {
+      const projectDeliverables = await ctx.db
+        .query("deliverables")
+        .withIndex("by_capstone_project", (q) =>
+          q.eq("capstoneProjectId", project._id),
+        )
+        .collect();
+      const progress = computeProgress(
+        projectDeliverables.map((item) => ({
+          _id: item._id,
+          phase: item.phase,
+          version: item.version,
+          status: item._id === deliverable._id ? args.status : item.status,
+          uploadedAt: item.uploadedAt,
+        })),
+      );
+
+      chapterReviewComplete =
+        progress.chapters.length > 0 &&
+        progress.chapters.every((chapter) => chapter.status === "approved");
+      if (chapterReviewComplete) {
+        await ctx.db.patch(project._id, {
+          stage: "ready_to_archive",
+          archiveEndorsedAt: undefined,
+        });
+        await logAction(
+          ctx,
+          caller,
+          "Completed reopened chapter review",
+          `Team "${project.teamName}" is ready for IMRaD submission`,
+        );
+      }
+    }
+
     // Tell the students when the status changes to approved / needs revision
     if (changed && (args.status === "needs_revision" || args.status === "approved")) {
       const needsRevision = args.status === "needs_revision";
@@ -857,7 +916,9 @@ export const adviserDeliverableStatus = mutation({
           userId: memberId,
           message: needsRevision
             ? `${caller.name} marked "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}) as needs revision. Please review the feedback and resubmit.`
-            : `${caller.name} approved "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}).`,
+            : chapterReviewComplete
+              ? `${caller.name} approved "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}). All chapters are approved again; IMRaD submission is unlocked.`
+              : `${caller.name} approved "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}).`,
           type: needsRevision ? "deliverable_needs_revision" : "deliverable_approved",
           relatedId: args.deliverableId,
           link: "/dashboard/student",

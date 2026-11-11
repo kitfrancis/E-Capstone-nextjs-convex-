@@ -27,7 +27,7 @@ type PipelineTeam = {
   stage?: string;
 };
 
-const FINAL_DEFENSE_STAGES = ["final_revisions", "ready_to_archive", "archived"];
+const FINAL_DEFENSE_STAGES = ["final_revisions", "chapter_revisions", "ready_to_archive", "archived"];
 const FINAL_REVISION_STAGES = ["ready_to_archive", "archived"];
 
 // The 9 core stages shown in the pipeline

@@ -127,6 +127,7 @@ const STAGE_STEP: Record<string, number> = {
   endorsed: 3,
   defense_scheduled: 3,
   final_revisions: 4,
+  chapter_revisions: 4,
   ready_to_archive: 5,
   archived: 6,
 };
@@ -1328,7 +1329,10 @@ const imradBlocked =
                               const deleteLocked =
                                 (cp?.status === "approved" || d.status === "approved") && !isAdmin;
                               const canView = isPdf(d.fileName) || isOffice(d.fileName);
-                              const canEdit = isOffice(d.fileName) && isLatest;
+                              const canEdit =
+                                isOffice(d.fileName) &&
+                                isLatest &&
+                                project?.stage !== "archived";
                               const StatusIcon = getStatusIcon(d.status);
                               return (
                                 <tr key={d._id} className={`border-t ${chNum && !isLatest ? "opacity-60" : ""}`}>
@@ -1720,6 +1724,7 @@ const imradBlocked =
                 phase={officeDoc.phase}
                 deliverables={deliverables ?? []}
                 workspaceSidebar
+                workspaceReadOnly={project?.stage === "archived"}
                 onSelectChapter={selectChapter}
                 mode={officeDoc.mode}
                 userId={user?.id}
