@@ -385,7 +385,7 @@ export default function OnlyOfficeEditor({
                   type="button"
                   onClick={() => setShowSubmitReminder(true)}
                   disabled={submitting || closing || loading || !!loadError}
-                  className="flex min-h-9 w-full appearance-none items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex min-h-9 w-full appearance-none items-center justify-center rounded-md bg-sky-400 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                   {submitting ? "Submitting…" : "Submit Version"}
