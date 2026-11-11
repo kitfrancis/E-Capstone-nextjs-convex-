@@ -329,6 +329,7 @@ function DashboardContent() {
     deliverableId: string;
     phase: string;
     mode: "edit" | "view";
+    fileUrl?: string;
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
 
@@ -356,7 +357,10 @@ function DashboardContent() {
   }, [officeDoc, officeUrl, loadedOfficeUrl]);
 
   const resolvedOfficeUrl =
-    officeDoc && loadedOfficeUrl?.storageId === officeDoc.storageId ? loadedOfficeUrl.url : null;
+    officeDoc?.fileUrl ??
+    (officeDoc && loadedOfficeUrl?.storageId === officeDoc.storageId
+      ? loadedOfficeUrl.url
+      : null);
 
   useEffect(() => {
     if (officeDoc && officeUrl === null && !resolvedOfficeUrl) {
@@ -544,6 +548,10 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
     }
 
     if (isPdf(target.fileName)) {
+      const targetUrl = await convex.query(api.dashboard.getFileUrl, {
+        storageId: target.storageId as Id<"_storage">,
+      });
+      if (!targetUrl) throw new Error("The selected chapter file is unavailable.");
       sessionStorage.removeItem(EDITOR_SESSION_KEY);
       setOfficeDoc({
         fileName: target.fileName,
@@ -551,17 +559,23 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
         deliverableId: target._id,
         phase: target.phase,
         mode: "view",
+        fileUrl: targetUrl,
       });
       return;
     }
 
     const draft = await startDraft({ deliverableId: target._id });
+    const targetUrl = await convex.query(api.dashboard.getFileUrl, {
+      storageId: draft.storageId,
+    });
+    if (!targetUrl) throw new Error("The selected chapter draft is unavailable.");
     setOfficeDoc({
       fileName: target.fileName,
       storageId: draft.storageId,
       deliverableId: target._id,
       phase: target.phase,
       mode: "edit",
+      fileUrl: targetUrl,
       draft: {
         id: draft.draftId,
         baseVersion: draft.baseVersion,
