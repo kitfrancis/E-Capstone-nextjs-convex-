@@ -40,11 +40,12 @@ async function revisionState(ctx: QueryCtx | MutationCtx, project: Doc<"capstone
     .collect();
   const progress = computeProgress(deliverables);
   const since = project.defenseRecordedAt ?? 0;
+  const reopenedChapterReview = project.stage === "chapter_revisions";
   let revised = 0;
   let approved = 0;
   for (const c of progress.chapters) {
     const d = c.latestId ? deliverables.find((x) => x._id === c.latestId) : undefined;
-    if (d && Date.parse(d.uploadedAt) > since) {
+    if (d && (reopenedChapterReview || Date.parse(d.uploadedAt) > since)) {
       revised++;
       if (d.status === "approved") approved++;
     }
@@ -457,7 +458,10 @@ export const finalRevisionInfo = query({
     for (const f of project.evaluationForms ?? []) {
       forms.push({ fileName: f.fileName, url: await ctx.storage.getUrl(f.storageId) });
     }
-    const rev = project.stage === "final_revisions" ? await revisionState(ctx, project) : null;
+    const rev =
+      project.stage === "final_revisions" || project.stage === "chapter_revisions"
+        ? await revisionState(ctx, project)
+        : null;
 
     return {
       stage: project.stage ?? null,

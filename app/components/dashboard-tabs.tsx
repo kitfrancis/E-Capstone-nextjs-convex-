@@ -160,12 +160,14 @@ function TaskActions({
 export function TabsDemo({
   capstoneProjectId,
   proposalResult,
+  isArchived = false,
   highlightDeliverableId,
   highlightPage,
   showBanner = true,
 }: {
   capstoneProjectId?: Id<"capstoneProjects">;
   proposalResult?: "passed" | "passed_with_revisions" | "failed";
+  isArchived?: boolean;
   highlightDeliverableId?: Id<"deliverables"> | null;
   highlightPage?: number | null;
   /** Set to false if your page already renders its own "Manuscript & Task Management" banner. */
@@ -207,6 +209,7 @@ export function TabsDemo({
     deliverableId: string;
     phase: string;
     mode: "edit" | "view";
+    fileUrl?: string;
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
@@ -382,6 +385,74 @@ export function TabsDemo({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
     }
+  };
+
+  const selectChapter = async (targetPhase: string, hasChanges: boolean) => {
+    const target = deliverables
+      ?.filter((item) => item.phase === targetPhase)
+      .reduce<Deliverable | null>(
+        (latest, item) => (!latest || item.version > latest.version ? item : latest),
+        null,
+      );
+
+    if (!target?.storageId) throw new Error("This chapter has no available file.");
+    if (!isOffice(target.fileName) && !isPdf(target.fileName)) {
+      throw new Error("This file type cannot be opened in OnlyOffice.");
+    }
+
+    const current = officeDoc;
+    if (current?.draft && hasChanges) {
+      await forceSaveDraft(
+        current.draft.docKey,
+        () =>
+          convex.query(api.drafts.getByDeliverable, {
+            deliverableId: current.deliverableId as Id<"deliverables">,
+          }),
+        current.storageId,
+      );
+    }
+
+    if (isPdf(target.fileName)) {
+      const targetUrl = await convex.query(api.dashboard.getFileUrl, {
+        storageId: target.storageId as Id<"_storage">,
+      });
+      if (!targetUrl) throw new Error("The selected chapter file is unavailable.");
+      sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      setOfficeDoc({
+        fileName: target.fileName,
+        storageId: target.storageId,
+        deliverableId: target._id,
+        phase: target.phase,
+        mode: "view",
+        fileUrl: targetUrl,
+      });
+      return;
+    }
+
+    const draft = await startDraft({ deliverableId: target._id });
+    const targetUrl = await convex.query(api.dashboard.getFileUrl, {
+      storageId: draft.storageId,
+    });
+    if (!targetUrl) throw new Error("The selected chapter draft is unavailable.");
+    setOfficeDoc({
+      fileName: target.fileName,
+      storageId: draft.storageId,
+      deliverableId: target._id,
+      phase: target.phase,
+      mode: "edit",
+      fileUrl: targetUrl,
+      draft: {
+        id: draft.draftId,
+        baseVersion: draft.baseVersion,
+        docKey: `${draft.draftId}-${draft.storageId}`,
+        phase: target.phase,
+        fileSize: target.fileSize,
+      },
+    });
+    sessionStorage.setItem(
+      EDITOR_SESSION_KEY,
+      JSON.stringify({ deliverableId: target._id }),
+    );
   };
 
   const viewDocument = (d: Deliverable) => {
@@ -800,7 +871,7 @@ export function TabsDemo({
                     const deleteLocked =
                       (cp?.status === "approved" || d.status === "approved") && !isAdmin;
                     const canView = isPdf(d.fileName) || isOffice(d.fileName);
-                    const canEdit = isOffice(d.fileName) && isLatest;
+                    const canEdit = isOffice(d.fileName) && isLatest && !isArchived;
                     const StatusIcon = getStatusIcon(d.status);
                     return (
                       <tr key={d._id} className={`border-t ${chNum && !isLatest ? "opacity-60" : ""}`}>
@@ -1056,6 +1127,8 @@ export function TabsDemo({
           phase={officeDoc.phase}
           deliverables={deliverables ?? []}
           workspaceSidebar
+          workspaceReadOnly={isArchived}
+          onSelectChapter={selectChapter}
           mode={officeDoc.mode}
           userId={user?.id}
           userName={user?.fullName ?? undefined}

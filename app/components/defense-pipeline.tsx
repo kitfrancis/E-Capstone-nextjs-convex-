@@ -38,6 +38,8 @@ function statusOf(p: Project, progress: number) {
       return { label: "Defense scheduled", cls: BLUE };
     case "final_revisions":
       return { label: "Final revisions", cls: AMBER };
+    case "chapter_revisions":
+      return { label: "Chapter review", cls: AMBER };
     case "ready_to_archive":
       return { label: "Ready to archive", cls: GREEN };
     case "archived":
@@ -302,6 +304,8 @@ function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: ()
         <Archive className="h-3.5 w-3.5" /> Archive project
       </Button>
     );
+  } else if (project.stage === "chapter_revisions") {
+    action = <span className="text-xs text-muted-foreground">Waiting for updated chapters to be approved</span>;
   } else if (project.stage === "final_revisions") {
     action = <span className="text-xs text-muted-foreground">Waiting for final manuscript</span>;
   } else if (project.stage === "archived") {

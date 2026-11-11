@@ -6,12 +6,16 @@ import {
   FileText,
   History,
   Keyboard,
+  Loader2,
   Power,
+  RotateCw,
   Save,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type WorkspaceDeliverable = {
   _id: string;
+  storageId?: string;
   fileName: string;
   phase: string;
   version: number;
@@ -28,9 +32,11 @@ type OnlyOfficeEditorProps = {
   phase?: string;
   deliverables?: WorkspaceDeliverable[];
   workspaceSidebar?: boolean;
+  workspaceReadOnly?: boolean;
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
+  onSelectChapter?: (phase: string, hasChanges: boolean) => Promise<void>;
   onClose: (hasChanges: boolean) => void | Promise<void>;
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
@@ -44,6 +50,20 @@ type DocsApi = {
     destroyEditor: () => void;
   };
 };
+
+type OnlyOfficeInstance = {
+  destroyEditor: () => void;
+};
+
+type EditorSlot = 0 | 1;
+const elementIds = ["onlyoffice-editor-0", "onlyoffice-editor-1"] as const;
+const CALLBACK_TARGET_ERROR = "The OnlyOffice save callback points to a different site";
+
+function notifyCallbackTargetError(error: unknown) {
+  if (error instanceof Error && error.message.includes(CALLBACK_TARGET_ERROR)) {
+    toast.error("Internal server error. Please refresh the page.");
+  }
+}
 
 declare global {
   interface Window {
@@ -121,25 +141,37 @@ export default function OnlyOfficeEditor({
   phase,
   deliverables = [],
   workspaceSidebar = false,
+  workspaceReadOnly = false,
   mode = "view",
   userId,
   userName,
+  onSelectChapter,
   onClose,
   docKey,
   draftId,
   baseVersion,
   onSubmit,
 }: OnlyOfficeEditorProps) {
-  const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
+  const activeEditorRef = useRef<{ editor: OnlyOfficeInstance; slot: EditorSlot } | null>(null);
+  const stagedEditorRef = useRef<{ editor: OnlyOfficeInstance; slot: EditorSlot } | null>(null);
+  const activeSlotRef = useRef<EditorSlot | null>(null);
   const hasPendingChangesRef = useRef(false);
   const hasChangesRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeEditorSlot, setActiveEditorSlot] = useState<EditorSlot | null>(null);
+  const [activeDocument, setActiveDocument] = useState<{
+    phase?: string;
+    fileName: string;
+    draftId?: string;
+    baseVersion?: number;
+  } | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [closing, setClosing] = useState(false); // NEW
   const [showSubmitReminder, setShowSubmitReminder] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const elementId = "onlyoffice-editor";
+  const [switchingChapter, setSwitchingChapter] = useState<string | null>(null);
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
     process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL?.trim() ||
@@ -147,7 +179,8 @@ export default function OnlyOfficeEditor({
       ? ""
       : `${window.location.origin}/api/onlyoffice/callback`);
 
-  const canSubmit = mode === "edit" && !!onSubmit;
+  const editorMode = workspaceReadOnly ? "view" : mode;
+  const canSubmit = editorMode === "edit" && !!onSubmit;
   const chapterNames = [
     "Chapter 1: Introduction",
     "Chapter 2: Literature Review",
@@ -155,7 +188,10 @@ export default function OnlyOfficeEditor({
     "Chapter 4: Results & Discussion",
     "Chapter 5: Conclusion",
   ];
-  const currentPhase = phase ?? "";
+  const currentPhase = activeDocument?.phase ?? phase ?? "";
+  const displayedFileName = activeDocument?.fileName ?? fileName;
+  const displayedDraftId = activeDocument?.draftId ?? draftId;
+  const displayedBaseVersion = activeDocument?.baseVersion ?? baseVersion;
   const chapterMatch = currentPhase.match(/chapter\s*(\d+)/i);
   const currentChapterNumber = chapterMatch ? Number(chapterMatch[1]) : null;
   const currentPhaseDeliverables = deliverables
@@ -163,12 +199,67 @@ export default function OnlyOfficeEditor({
     .sort((a, b) => b.version - a.version);
   const latestVersion = currentPhaseDeliverables[0]?.version ?? baseVersion ?? 1;
   const nextVersion = Math.max(latestVersion, baseVersion ?? 0) + 1;
-  const workspaceTitle = currentPhase || fileName;
+  const workspaceTitle = currentPhase || displayedFileName;
+
+  useEffect(() => {
+    hasPendingChangesRef.current = false;
+    hasChangesRef.current = false;
+  }, [fileId, draftId, fileName, phase]);
+
+  useEffect(() => {
+    if (switchingChapter && activeDocument?.phase === switchingChapter) {
+      setSwitchingChapter(null);
+    }
+  }, [activeDocument, switchingChapter]);
+
+  useEffect(
+    () => () => {
+      activeEditorRef.current?.editor.destroyEditor();
+      stagedEditorRef.current?.editor.destroyEditor();
+      activeEditorRef.current = null;
+      stagedEditorRef.current = null;
+      activeSlotRef.current = null;
+    },
+    [],
+  );
+
+  async function handleSelectChapter(chapterPhase: string) {
+    if (
+      !onSelectChapter ||
+      chapterPhase === currentPhase ||
+      switchingChapter ||
+      submitting ||
+      closing
+    ) {
+      return;
+    }
+
+    setSwitchingChapter(chapterPhase);
+    setSubmitError(null);
+    try {
+      await onSelectChapter(chapterPhase, hasChangesRef.current);
+    } catch (error) {
+      notifyCallbackTargetError(error);
+      setSwitchingChapter(null);
+      setSubmitError(
+        error instanceof Error ? error.message : "Couldn't open that chapter.",
+      );
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
+    let activated = false;
+    let createdEditor: OnlyOfficeInstance | null = null;
+    const activeSlot = activeSlotRef.current;
+    const editorSlot: EditorSlot = activeSlot === null ? 0 : activeSlot === 0 ? 1 : 0;
+    const elementId = elementIds[editorSlot];
     setLoadError(null);
     setLoading(true);
+
+    const clearSlot = (slot: EditorSlot) => {
+      document.getElementById(elementIds[slot])?.replaceChildren();
+    };
 
     async function createEditor() {
       try {
@@ -176,6 +267,7 @@ export default function OnlyOfficeEditor({
       } catch (error) {
         if (!cancelled) {
           setLoading(false);
+          setSwitchingChapter(null);
           setLoadError(
             error instanceof Error
               ? error.message
@@ -185,77 +277,142 @@ export default function OnlyOfficeEditor({
         return;
       }
 
-      if (cancelled || !window.DocsAPI) return;
+      if (cancelled) return;
+      if (!window.DocsAPI) {
+        onlyOfficeApiPromise = null;
+        setLoading(false);
+        setSwitchingChapter(null);
+        setLoadError("OnlyOffice could not be initialized.");
+        return;
+      }
 
       // NEW: draftId is added so the callback knows to write to the draft
       const query =
         `fileId=${encodeURIComponent(deliverableId)}` +
         (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
-        (mode === "comment" ? "&notify=1" : "");
+        (editorMode === "comment" ? "&notify=1" : "");
       const documentKey = docKey ?? fileId;
-        
-      document.getElementById(elementId)?.replaceChildren();
-      editorRef.current = new window.DocsAPI.DocEditor(elementId, {
-        document: {
-          fileType: fileName.split(".").pop()?.toLowerCase() || "docx",
-          key: documentKey,
-          permissions: {
-            comment: mode !== "view",
-            edit: mode === "edit",
-            review: mode === "review",
-            fillForms: mode === "edit",
-            print: true,
+
+      clearSlot(editorSlot);
+      let editor: OnlyOfficeInstance;
+      try {
+        editor = new window.DocsAPI.DocEditor(elementId, {
+          document: {
+            fileType: fileName.split(".").pop()?.toLowerCase() || "docx",
+            key: documentKey,
+            permissions: {
+              comment: editorMode !== "view",
+              edit: editorMode === "edit",
+              review: editorMode === "review",
+              fillForms: editorMode === "edit",
+              print: true,
+            },
+            title: fileName,
+            url: fileUrl,
           },
-          title: fileName,
-          url: fileUrl,
-        },
-        documentType: getDocumentType(fileName),
-        editorConfig: {
-          callbackUrl: `${callbackUrl}?${query}`,
-          coEditing: {
-            mode: "fast",
-            change: true,
+          documentType: getDocumentType(fileName),
+          editorConfig: {
+            callbackUrl: `${callbackUrl}?${query}`,
+            coEditing: {
+              mode: "fast",
+              change: true,
+            },
+            customization: { autosave: true, forcesave: true },
+            mode: editorMode === "view" ? "view" : "edit",
+            user: userId ? { id: userId, name: userName ?? "User" } : undefined,
           },
-          customization: { autosave: true, forcesave: true },
-          mode: mode === "view" ? "view" : "edit",
-          user: userId ? { id: userId, name: userName ?? "User" } : undefined,
-        },
-        events: {
-          onAppReady: () => {
-            if (!cancelled) setLoading(false);
+          events: {
+            onAppReady: () => {
+              queueMicrotask(() => {
+                if (cancelled) return;
+                const readyEditor = createdEditor;
+                if (!readyEditor) return;
+                const previousEditor = activeEditorRef.current;
+                if (previousEditor && previousEditor.slot !== editorSlot) {
+                  previousEditor.editor.destroyEditor();
+                  clearSlot(previousEditor.slot);
+                }
+                activeEditorRef.current = { editor: readyEditor, slot: editorSlot };
+                stagedEditorRef.current = null;
+                activeSlotRef.current = editorSlot;
+                activated = true;
+                setActiveEditorSlot(editorSlot);
+                setActiveDocument({ phase, fileName, draftId, baseVersion });
+                setSwitchingChapter(null);
+                setLoading(false);
+              });
+            },
+            onDocumentStateChange: (event: { data?: boolean }) => {
+              if (typeof event.data !== "boolean") return;
+              hasPendingChangesRef.current = event.data;
+              if (event.data) hasChangesRef.current = true;
+            },
+            onError: (event: { data?: { errorDescription?: string } }) => {
+              queueMicrotask(() => {
+                console.error("OnlyOffice error:", event?.data);
+                if (cancelled) return;
+                if (createdEditor && stagedEditorRef.current?.editor === createdEditor) {
+                  createdEditor.destroyEditor();
+                  createdEditor = null;
+                  stagedEditorRef.current = null;
+                  clearSlot(editorSlot);
+                }
+                setSwitchingChapter(null);
+                setLoading(false);
+                setLoadError(
+                  event?.data?.errorDescription
+                    ? `OnlyOffice error: ${event.data.errorDescription}`
+                    : "OnlyOffice reported an error. Open the browser console for details.",
+                );
+              });
+            },
           },
-          onDocumentStateChange: (event: { data?: boolean }) => {
-            if (typeof event.data !== "boolean") return;
-            hasPendingChangesRef.current = event.data;
-            if (event.data) hasChangesRef.current = true;
-          },
-          onError: (event: { data?: { errorDescription?: string } }) => {
-            console.error("OnlyOffice error:", event?.data);
-            if (!cancelled) {
-              setLoading(false);
-              setLoadError(
-                event?.data?.errorDescription
-                  ? `OnlyOffice error: ${event.data.errorDescription}`
-                  : "OnlyOffice reported an error. Open the browser console for details.",
-              );
-            }
-          },
-        },
-        height: "100%",
-        type: "desktop",
-        width: "100%",
-      });
+          height: "100%",
+          type: "desktop",
+          width: "100%",
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setLoading(false);
+          setSwitchingChapter(null);
+          setLoadError(
+            error instanceof Error ? error.message : "OnlyOffice could not open this document.",
+          );
+        }
+        return;
+      }
+      createdEditor = editor;
+      stagedEditorRef.current = { editor, slot: editorSlot };
     }
 
     void createEditor();
 
     return () => {
       cancelled = true;
-      editorRef.current?.destroyEditor();
-      editorRef.current = null;
-      document.getElementById(elementId)?.replaceChildren();
+      if (!activated && createdEditor) {
+        createdEditor.destroyEditor();
+        if (stagedEditorRef.current?.editor === createdEditor) {
+          stagedEditorRef.current = null;
+        }
+        clearSlot(editorSlot);
+      }
     };
-  }, [callbackUrl, mode, userId, userName, deliverableId, fileId, fileName, fileUrl, serverUrl, docKey, draftId]);
+  }, [
+    callbackUrl,
+    editorMode,
+    userId,
+    userName,
+    deliverableId,
+    fileId,
+    fileName,
+    fileUrl,
+    serverUrl,
+    docKey,
+    draftId,
+    phase,
+    baseVersion,
+    retryCount,
+  ]);
 
   // NEW: Submit button handler
   async function handleSubmit() {
@@ -265,9 +422,12 @@ export default function OnlyOfficeEditor({
     setSubmitError(null);
     try {
       await onSubmit(hasChangesRef.current);
-      editorRef.current?.destroyEditor();
-      editorRef.current = null;
+      activeEditorRef.current?.editor.destroyEditor();
+      stagedEditorRef.current?.editor.destroyEditor();
+      activeEditorRef.current = null;
+      stagedEditorRef.current = null;
     } catch (error) {
+      notifyCallbackTargetError(error);
       setSubmitError(
         error instanceof Error ? error.message : "Submit failed. Your draft is still saved.",
       );
@@ -283,6 +443,7 @@ export default function OnlyOfficeEditor({
     try {
       await onClose(hasChangesRef.current);
     } catch (error) {
+      notifyCallbackTargetError(error);
       setSubmitError(
         error instanceof Error ? error.message : "Couldn't save your latest edits before closing.",
       );
@@ -306,7 +467,7 @@ export default function OnlyOfficeEditor({
             <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
               {workspaceTitle}
             </p>
-            {draftId && baseVersion !== undefined && (
+            {displayedDraftId && displayedBaseVersion !== undefined && (
               <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-1 text-[10px] font-semibold text-sky-700">
                 v{nextVersion}.0
               </span>
@@ -384,8 +545,8 @@ export default function OnlyOfficeEditor({
                 <button
                   type="button"
                   onClick={() => setShowSubmitReminder(true)}
-                  disabled={submitting || closing || loading || !!loadError}
-                  className="flex min-h-9 w-full appearance-none items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={submitting || closing || switchingChapter !== null || loading || !!loadError}
+                  className="flex min-h-9 w-full appearance-none items-center justify-center rounded-md bg-sky-400 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                   {submitting ? "Submitting…" : "Submit Version"}
@@ -412,25 +573,46 @@ export default function OnlyOfficeEditor({
                       null,
                     );
                   const isCurrent = currentChapterNumber === chapter;
+                  const canOpenChapter =
+                    !workspaceReadOnly &&
+                    !!latest?.storageId &&
+                    isOnlyOfficeEditable(latest.fileName);
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={chapterPhase}
                       aria-current={isCurrent ? "page" : undefined}
-                      className={`rounded-md border px-2.5 py-2 ${
+                      disabled={!canOpenChapter || switchingChapter !== null || submitting || closing}
+                      onClick={() => void handleSelectChapter(chapterPhase)}
+                      title={
+                        workspaceReadOnly
+                          ? "Archived projects are read-only."
+                          : canOpenChapter
+                          ? `Open ${chapterPhase}`
+                          : latest
+                            ? "This file type cannot be opened in OnlyOffice."
+                            : "No submission yet"
+                      }
+                      className={`block w-full rounded-md border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                         isCurrent
                           ? "border-sky-200 bg-sky-50 text-sky-700"
-                          : "border-transparent text-slate-600"
+                          : canOpenChapter
+                            ? "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"
+                            : "border-transparent text-slate-400"
                       }`}
                     >
                       <div className="flex items-center gap-2 text-xs font-medium">
                         <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        <span className="truncate">{name}</span>
+                        <span className="min-w-0 flex-1 truncate">{name}</span>
+                        {switchingChapter === chapterPhase && (
+                          <span className="shrink-0 text-[10px] text-sky-600">Opening…</span>
+                        )}
                       </div>
                       <p className="mt-1 truncate pl-5 text-[10px] text-slate-400">
                         {latest?.fileName ?? "No submission yet"}
                       </p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -446,7 +628,7 @@ export default function OnlyOfficeEditor({
             <button
               type="button"
               onClick={handleClose}
-              disabled={submitting || closing}
+              disabled={submitting || closing || switchingChapter !== null}
               className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Power className="h-3.5 w-3.5" />
@@ -460,10 +642,10 @@ export default function OnlyOfficeEditor({
         {!workspaceSidebar && (
           <div className="flex items-center justify-between gap-3 bg-[#173f4a] px-4 py-3 text-white">
             <div className="flex min-w-0 items-center gap-3">
-              <p className="truncate text-sm font-bold">{fileName}</p>
-              {draftId && baseVersion !== undefined && (
+              <p className="truncate text-sm font-bold">{displayedFileName}</p>
+              {displayedDraftId && displayedBaseVersion !== undefined && (
                 <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs">
-                  Draft based on v{baseVersion}
+                  Draft based on v{displayedBaseVersion}
                 </span>
               )}
             </div>
@@ -490,20 +672,49 @@ export default function OnlyOfficeEditor({
             </div>
           </div>
         )}
-        {loadError ? (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-white">
-            {loadError}
-          </div>
-        ) : (
-          <div className="relative min-h-0 min-w-0 flex-1">
-            {loading && (
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70">
-                Loading editor...
-              </div>
-            )}
-            <div id={elementId} className="absolute inset-0" />
-          </div>
-        )}
+        <div className="relative min-h-0 min-w-0 flex-1">
+          <div
+            id={elementIds[0]}
+            className="absolute inset-0"
+            style={{
+              visibility:
+                activeEditorSlot === 0 || activeEditorSlot === null
+                  ? "visible"
+                  : "hidden",
+              zIndex: activeEditorSlot === 0 || activeEditorSlot === null ? 1 : 0,
+            }}
+          />
+          <div
+            id={elementIds[1]}
+            className="absolute inset-0"
+            style={{
+              visibility: activeEditorSlot === 1 ? "visible" : "hidden",
+              zIndex: activeEditorSlot === 1 ? 1 : 0,
+            }}
+          />
+          {loading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950/55 px-6 text-center text-sm text-white">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
+              <span>{activeEditorRef.current ? `Loading ${phase ?? "chapter"}…` : "Loading editor…"}</span>
+            </div>
+          )}
+          {loadError && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-slate-950/70 px-6 text-center text-sm text-white">
+              <p role="alert">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadError(null);
+                  setRetryCount((count) => count + 1);
+                }}
+                className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700"
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                Retry loading
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       {showSubmitReminder && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4">

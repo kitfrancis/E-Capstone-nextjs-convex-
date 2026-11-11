@@ -90,6 +90,7 @@ export default defineSchema({
         v.literal("endorsed"),
         v.literal("defense_scheduled"),
         v.literal("final_revisions"),
+        v.literal("chapter_revisions"),
         v.literal("ready_to_archive"),
         
         v.literal("archived")

@@ -75,6 +75,8 @@ export function defenseStatus(project: Project, progress: number): { label: stri
       return formCount(project) < 3
         ? { label: "Awaiting evaluation forms", cls: AMBER }
         : { label: "Final revisions", cls: AMBER };
+    case "chapter_revisions":
+      return { label: "Chapter review", cls: AMBER };
     case "ready_to_archive":
       return project.archiveEndorsedAt
         ? { label: "Awaiting admin verification", cls: VIOLET }
