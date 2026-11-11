@@ -218,6 +218,19 @@ export default function OnlyOfficeEditor({
   }, [fileId, draftId, fileName, phase]);
 
   useEffect(() => {
+    if (!workspaceSidebar || editorMode !== "edit") return;
+
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (!hasPendingChangesRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [editorMode, workspaceSidebar]);
+
+  useEffect(() => {
     if (switchingChapter && activeDocument?.phase === switchingChapter) {
       setSwitchingChapter(null);
     }
