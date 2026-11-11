@@ -43,6 +43,8 @@ type OnlyOfficeEditorProps = {
   draftId?: string;                // tells the callback to save into the draft, not a version
   baseVersion?: number;            // shows "Draft based on v1" and labels the button "Submit as v2"
   onSubmit?: (hasChanges: boolean) => Promise<void>;
+  onEditorReady?: () => void;
+  onEditorError?: () => void;
 };
 
 type DocsApi = {
@@ -162,7 +164,13 @@ export default function OnlyOfficeEditor({
   draftId,
   baseVersion,
   onSubmit,
+  onEditorReady,
+  onEditorError,
 }: OnlyOfficeEditorProps) {
+  const onEditorReadyRef = useRef(onEditorReady);
+  const onEditorErrorRef = useRef(onEditorError);
+  onEditorReadyRef.current = onEditorReady;
+  onEditorErrorRef.current = onEditorError;
   const activeEditorRef = useRef<{ editor: OnlyOfficeInstance; slot: EditorSlot } | null>(null);
   const stagedEditorRef = useRef<{ editor: OnlyOfficeInstance; slot: EditorSlot } | null>(null);
   const activeSlotRef = useRef<EditorSlot | null>(null);
@@ -292,6 +300,7 @@ export default function OnlyOfficeEditor({
         await loadOnlyOfficeApi(serverUrl);
       } catch (error) {
         if (!cancelled) {
+          onEditorErrorRef.current?.();
           setLoading(false);
           setSwitchingChapter(null);
           setLoadError(
@@ -306,6 +315,7 @@ export default function OnlyOfficeEditor({
       if (cancelled) return;
       if (!window.DocsAPI) {
         onlyOfficeApiPromise = null;
+        onEditorErrorRef.current?.();
         setLoading(false);
         setSwitchingChapter(null);
         setLoadError("OnlyOffice could not be initialized.");
@@ -366,6 +376,7 @@ export default function OnlyOfficeEditor({
                 setActiveDocument({ phase, fileName, draftId, baseVersion });
                 setSwitchingChapter(null);
                 setLoading(false);
+                onEditorReadyRef.current?.();
               });
             },
             onDocumentStateChange: (event: { data?: boolean }) => {
@@ -377,6 +388,7 @@ export default function OnlyOfficeEditor({
               queueMicrotask(() => {
                 console.error("OnlyOffice error:", event?.data);
                 if (cancelled) return;
+                onEditorErrorRef.current?.();
                 if (createdEditor && stagedEditorRef.current?.editor === createdEditor) {
                   createdEditor.destroyEditor();
                   createdEditor = null;
@@ -399,6 +411,7 @@ export default function OnlyOfficeEditor({
         });
       } catch (error) {
         if (!cancelled) {
+          onEditorErrorRef.current?.();
           setLoading(false);
           setSwitchingChapter(null);
           setLoadError(

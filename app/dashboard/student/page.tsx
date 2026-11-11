@@ -7,7 +7,15 @@ import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status
 import { ProposalScheduleCard } from "@/app/components/proposal-schedule-card";
 import { Id } from "@/convex/_generated/dataModel";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
-import { useState, useMemo, useEffect, useRef, Suspense, Fragment } from "react";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  Suspense,
+  Fragment,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -334,6 +342,13 @@ function DashboardContent() {
   } | null>(null);
 
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
+  const restoreAttemptStartedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (sessionStorage.getItem(EDITOR_SESSION_KEY)) {
+      setIsRestoringEditor(true);
+    }
+  }, []);
 
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -365,31 +380,37 @@ function DashboardContent() {
   useEffect(() => {
     if (officeDoc && officeUrl === null && !resolvedOfficeUrl) {
       toast.error("The draft file is missing. Please try again.");
+      if (isRestoringEditor) {
+        sessionStorage.removeItem(EDITOR_SESSION_KEY);
+        setIsRestoringEditor(false);
+      }
       setOfficeDoc(null);
     }
-  }, [officeDoc, officeUrl, resolvedOfficeUrl]);
+  }, [officeDoc, officeUrl, resolvedOfficeUrl, isRestoringEditor]);
 
   // Restore editor session if refreshed during an edit
   useEffect(() => {
-    if (!deliverables || officeDoc || isRestoringEditor) return;
+    if (!deliverables || officeDoc || restoreAttemptStartedRef.current) return;
     const saved = sessionStorage.getItem(EDITOR_SESSION_KEY);
     if (!saved) return;
 
+    restoreAttemptStartedRef.current = true;
     let target: { deliverableId: string } | null = null;
     try {
       target = JSON.parse(saved) as { deliverableId: string };
     } catch {
       sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      setIsRestoringEditor(false);
       return;
     }
 
     const deliverable = deliverables.find((item) => item._id === target?.deliverableId);
     if (!deliverable) {
       sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      setIsRestoringEditor(false);
       return;
     }
 
-    sessionStorage.removeItem(EDITOR_SESSION_KEY);
     setIsRestoringEditor(true);
     void startDraft({ deliverableId: deliverable._id })
       .then((draft) => {
@@ -409,10 +430,11 @@ function DashboardContent() {
         });
       })
       .catch((error) => {
+        sessionStorage.removeItem(EDITOR_SESSION_KEY);
+        setIsRestoringEditor(false);
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
-      })
-      .finally(() => setIsRestoringEditor(false));
-  }, [deliverables, officeDoc, isRestoringEditor, startDraft]);
+      });
+  }, [deliverables, officeDoc, startDraft]);
 
   // Deep-link to open PDF from notification
   useEffect(() => {
@@ -1786,6 +1808,8 @@ const imradBlocked =
                 draftId={officeDoc.draft?.id}
                 baseVersion={officeDoc.draft?.baseVersion}
                 onSubmit={officeDoc.draft ? submitDraft : undefined}
+                onEditorReady={() => setIsRestoringEditor(false)}
+                onEditorError={() => setIsRestoringEditor(false)}
                 onClose={closeEditor}
               />
             )}
@@ -1794,7 +1818,7 @@ const imradBlocked =
               <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/80 text-white">
                 <div className="text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-                  <p className="mt-3 text-sm">Restoring your document editor…</p>
+                  <p className="mt-3 text-sm">Restoring your document workspace…</p>
                 </div>
               </div>
             )}
