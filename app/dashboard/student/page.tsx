@@ -38,7 +38,12 @@ import {
 import { SelectDemo } from "@/app/components/select";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
 import { toast } from "sonner";
-import { chapterOf, computeProgress, TOTAL_CHAPTERS } from "@/lib/progress";
+import {
+  CHAPTER_PHASES,
+  chapterOf,
+  computeProgress,
+  TOTAL_CHAPTERS,
+} from "@/lib/progress";
 import {
   CheckCircle2,
   Clock,
@@ -470,6 +475,10 @@ function DashboardContent() {
   }, [isImradUpload]);
 
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
+  const manuscriptChapterRows = progress.chapters.map((chapter, index) => ({
+    phase: CHAPTER_PHASES[index],
+    deliverable: deliverables?.find((item) => item._id === chapter.latestId) ?? null,
+  }));
 
   // IMRaD: available once the instructor approves the final revisions
 const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
@@ -1371,17 +1380,6 @@ const imradBlocked =
                       <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                       </div>
-                    ) : deliverables.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
-                        <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                        <p className="font-medium text-foreground">No documents submitted yet</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Upload your first chapter to start the review.
-                        </p>
-                        <Button asChild size="sm" className="mt-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
-                          <Link href="/dashboard/student?tab=uploads" scroll={false}>Upload Now</Link>
-                        </Button>
-                      </div>
                     ) : (
                       <div className="overflow-x-auto rounded-xl border">
                         <table className="w-full min-w-205 text-sm">
@@ -1395,7 +1393,38 @@ const imradBlocked =
                             </tr>
                           </thead>
                           <tbody>
-                            {deliverables.map((d) => {
+                            {manuscriptChapterRows.map(({ phase, deliverable: d }) => {
+                              if (!d) {
+                                return (
+                                  <tr key={phase} className="border-t">
+                                    <td className="px-4 py-3">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                          <FileText className="h-5 w-5" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="font-medium text-foreground">{phase}</p>
+                                          <p className="text-xs text-muted-foreground">No submission yet</p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">-</td>
+                                    <td className="px-4 py-3 text-muted-foreground">-</td>
+                                    <td className="px-4 py-3 text-muted-foreground">-</td>
+                                    <td className="px-4 py-3 text-right">
+                                      <Button asChild size="sm" variant="outline" className="rounded-lg">
+                                        <Link
+                                          href="/dashboard/student?tab=uploads"
+                                          scroll={false}
+                                        >
+                                          Upload
+                                        </Link>
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
                               const fs = fileStyle(d.fileName);
                               const FileTypeIcon = fs.icon;
                               const chNum = chapterOf(d.phase);
@@ -1418,14 +1447,7 @@ const imradBlocked =
                                       </div>
                                       <div className="min-w-0">
                                         <p className="font-medium text-foreground truncate max-w-64">{d.fileName}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {d.phase === IMRAD_PHASE ? "Final IMRaD Manuscript" : d.phase}
-                                        </p>
-                                        {!chNum && d.phase !== IMRAD_PHASE && (
-                                          <p className="text-xs text-amber-600 dark:text-amber-400">
-                                            Saved under an older phase, so it is not counted in progress.
-                                          </p>
-                                        )}
+                                        <p className="text-xs text-muted-foreground">{phase}</p>
                                       </div>
                                     </div>
                                   </td>

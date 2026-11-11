@@ -1,5 +1,12 @@
 export const TOTAL_CHAPTERS = 5;
 export const CHAPTER_MAX = 20;
+export const CHAPTER_PHASES = [
+  "Chapter 1: Introduction",
+  "Chapter 2: Literature Review",
+  "Chapter 3: Methodology",
+  "Chapter 4: Results & Discussion",
+  "Chapter 5: Conclusion",
+] as const;
 
 // true: uploads (10%) and revisions (15%) count as partial credit (original behavior).
 // false: only approved chapters count toward the total.
