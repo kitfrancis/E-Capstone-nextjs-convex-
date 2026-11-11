@@ -115,9 +115,9 @@ function AppSidebarContent() {
       {/* Logo */}
       <SidebarHeader className="px-4 pt-5 pb-2">
         <div className="flex items-center gap-3 cursor-default">
-          <Image src="/CCS.png" alt="Logo" width={44} height={44} className="rounded-lg" />
+          <Image src="/CCISnewlogo.jpg" alt="Logo" width={44} height={44} className="rounded-lg" />
           <div className="flex flex-col leading-tight">
-            <span className="font-semibold text-lg text-foreground">E-Capstone</span>
+            <span className="font-semibold text-lg text-foreground">E-Research</span>
             <span className="text-[11px] text-muted-foreground">Thesis &amp; Capstone Management</span>
           </div>
         </div>
