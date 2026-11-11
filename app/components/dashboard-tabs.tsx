@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -213,6 +213,14 @@ export function TabsDemo({
     draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
   } | null>(null);
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
+  const restoreAttemptStartedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (sessionStorage.getItem(EDITOR_SESSION_KEY)) {
+      setIsRestoringEditor(true);
+    }
+  }, []);
+
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
     officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
@@ -246,9 +254,13 @@ export function TabsDemo({
   useEffect(() => {
     if (officeDoc && officeUrl === null && !resolvedOfficeUrl) {
       toast.error("The draft file is missing. Please try again.");
+      if (isRestoringEditor) {
+        sessionStorage.removeItem(EDITOR_SESSION_KEY);
+        setIsRestoringEditor(false);
+      }
       setOfficeDoc(null);
     }
-  }, [officeDoc, officeUrl, resolvedOfficeUrl]);
+  }, [officeDoc, officeUrl, resolvedOfficeUrl, isRestoringEditor]);
 
   const generateUploadUrl = useMutation(api.dashboard.generateUploadUrl);
   const saveDeliverable = useMutation(api.dashboard.saveDeliverable);
@@ -268,25 +280,27 @@ export function TabsDemo({
 
   // Restore editor session if the page was refreshed during an edit
   useEffect(() => {
-    if (!deliverables || officeDoc || isRestoringEditor) return;
+    if (!deliverables || officeDoc || restoreAttemptStartedRef.current) return;
     const saved = sessionStorage.getItem(EDITOR_SESSION_KEY);
     if (!saved) return;
 
+    restoreAttemptStartedRef.current = true;
     let target: { deliverableId: string } | null = null;
     try {
       target = JSON.parse(saved) as { deliverableId: string };
     } catch {
       sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      setIsRestoringEditor(false);
       return;
     }
 
     const deliverable = deliverables.find((item) => item._id === target?.deliverableId);
     if (!deliverable) {
       sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      setIsRestoringEditor(false);
       return;
     }
 
-    sessionStorage.removeItem(EDITOR_SESSION_KEY);
     setIsRestoringEditor(true);
     void startDraft({ deliverableId: deliverable._id })
       .then((draft) => {
@@ -306,10 +320,11 @@ export function TabsDemo({
         });
       })
       .catch((error) => {
+        sessionStorage.removeItem(EDITOR_SESSION_KEY);
+        setIsRestoringEditor(false);
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
-      })
-      .finally(() => setIsRestoringEditor(false));
-  }, [deliverables, officeDoc, isRestoringEditor, startDraft]);
+      });
+  }, [deliverables, officeDoc, startDraft]);
 
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
   const chosenChapter = chapterOf(phase);
@@ -1178,6 +1193,8 @@ export function TabsDemo({
           draftId={officeDoc.draft?.id}
           baseVersion={officeDoc.draft?.baseVersion}
           onSubmit={officeDoc.draft ? submitDraft : undefined}
+          onEditorReady={() => setIsRestoringEditor(false)}
+          onEditorError={() => setIsRestoringEditor(false)}
           onClose={closeEditor}
         />
       )}
@@ -1185,7 +1202,7 @@ export function TabsDemo({
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/80 text-white">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-            <p className="mt-3 text-sm">Restoring your document editor…</p>
+            <p className="mt-3 text-sm">Restoring your document workspace…</p>
           </div>
         </div>
       )}
