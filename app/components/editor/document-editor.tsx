@@ -60,7 +60,13 @@ const elementIds = ["onlyoffice-editor-0", "onlyoffice-editor-1"] as const;
 const CALLBACK_TARGET_ERROR = "The OnlyOffice save callback points to a different site";
 
 function notifyCallbackTargetError(error: unknown) {
-  if (error instanceof Error && error.message.includes(CALLBACK_TARGET_ERROR)) {
+  if (
+    error instanceof Error &&
+    (error.message.includes(CALLBACK_TARGET_ERROR) ||
+      error.message.startsWith("Couldn't save your latest edits") ||
+      (error.message.toLowerCase().includes("onlyoffice") &&
+        error.message.toLowerCase().includes("save")))
+  ) {
     toast.error("Internal server error. Please refresh the page.");
   }
 }
@@ -237,7 +243,7 @@ export default function OnlyOfficeEditor({
     setSwitchingChapter(chapterPhase);
     setSubmitError(null);
     try {
-      await onSelectChapter(chapterPhase, hasChangesRef.current);
+      await onSelectChapter(chapterPhase, hasPendingChangesRef.current);
     } catch (error) {
       notifyCallbackTargetError(error);
       setSwitchingChapter(null);
@@ -345,7 +351,7 @@ export default function OnlyOfficeEditor({
             onDocumentStateChange: (event: { data?: boolean }) => {
               if (typeof event.data !== "boolean") return;
               hasPendingChangesRef.current = event.data;
-              if (event.data) hasChangesRef.current = true;
+              hasChangesRef.current = event.data;
             },
             onError: (event: { data?: { errorDescription?: string } }) => {
               queueMicrotask(() => {
@@ -677,10 +683,9 @@ export default function OnlyOfficeEditor({
             id={elementIds[0]}
             className="absolute inset-0"
             style={{
-              visibility:
-                activeEditorSlot === 0 || activeEditorSlot === null
-                  ? "visible"
-                  : "hidden",
+              opacity: activeEditorSlot === 0 || activeEditorSlot === null ? 1 : 0,
+              pointerEvents:
+                activeEditorSlot === 0 || activeEditorSlot === null ? "auto" : "none",
               zIndex: activeEditorSlot === 0 || activeEditorSlot === null ? 1 : 0,
             }}
           />
@@ -688,7 +693,8 @@ export default function OnlyOfficeEditor({
             id={elementIds[1]}
             className="absolute inset-0"
             style={{
-              visibility: activeEditorSlot === 1 ? "visible" : "hidden",
+              opacity: activeEditorSlot === 1 ? 1 : 0,
+              pointerEvents: activeEditorSlot === 1 ? "auto" : "none",
               zIndex: activeEditorSlot === 1 ? 1 : 0,
             }}
           />
