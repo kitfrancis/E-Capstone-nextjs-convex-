@@ -12,6 +12,7 @@ import {
 
 type WorkspaceDeliverable = {
   _id: string;
+  storageId?: string;
   fileName: string;
   phase: string;
   version: number;
@@ -31,6 +32,7 @@ type OnlyOfficeEditorProps = {
   mode?: "edit" | "review" | "comment" | "view";
   userId?: string;
   userName?: string;
+  onSelectChapter?: (phase: string, hasChanges: boolean) => Promise<void>;
   onClose: (hasChanges: boolean) => void | Promise<void>;
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
@@ -124,6 +126,7 @@ export default function OnlyOfficeEditor({
   mode = "view",
   userId,
   userName,
+  onSelectChapter,
   onClose,
   docKey,
   draftId,
@@ -139,6 +142,7 @@ export default function OnlyOfficeEditor({
   const [closing, setClosing] = useState(false); // NEW
   const [showSubmitReminder, setShowSubmitReminder] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [switchingChapter, setSwitchingChapter] = useState<string | null>(null);
   const elementId = "onlyoffice-editor";
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
@@ -164,6 +168,38 @@ export default function OnlyOfficeEditor({
   const latestVersion = currentPhaseDeliverables[0]?.version ?? baseVersion ?? 1;
   const nextVersion = Math.max(latestVersion, baseVersion ?? 0) + 1;
   const workspaceTitle = currentPhase || fileName;
+
+  useEffect(() => {
+    hasPendingChangesRef.current = false;
+    hasChangesRef.current = false;
+  }, [fileId, draftId, fileName, phase]);
+
+  useEffect(() => {
+    if (switchingChapter === phase) setSwitchingChapter(null);
+  }, [phase, switchingChapter]);
+
+  async function handleSelectChapter(chapterPhase: string) {
+    if (
+      !onSelectChapter ||
+      chapterPhase === currentPhase ||
+      switchingChapter ||
+      submitting ||
+      closing
+    ) {
+      return;
+    }
+
+    setSwitchingChapter(chapterPhase);
+    setSubmitError(null);
+    try {
+      await onSelectChapter(chapterPhase, hasChangesRef.current);
+    } catch (error) {
+      setSwitchingChapter(null);
+      setSubmitError(
+        error instanceof Error ? error.message : "Couldn't open that chapter.",
+      );
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -384,7 +420,7 @@ export default function OnlyOfficeEditor({
                 <button
                   type="button"
                   onClick={() => setShowSubmitReminder(true)}
-                  disabled={submitting || closing || loading || !!loadError}
+                  disabled={submitting || closing || switchingChapter !== null || loading || !!loadError}
                   className="flex min-h-9 w-full appearance-none items-center justify-center rounded-md bg-sky-400 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
@@ -412,25 +448,42 @@ export default function OnlyOfficeEditor({
                       null,
                     );
                   const isCurrent = currentChapterNumber === chapter;
+                  const canOpenChapter =
+                    !!latest?.storageId && isOnlyOfficeEditable(latest.fileName);
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={chapterPhase}
                       aria-current={isCurrent ? "page" : undefined}
-                      className={`rounded-md border px-2.5 py-2 ${
+                      disabled={!canOpenChapter || switchingChapter !== null || submitting || closing}
+                      onClick={() => void handleSelectChapter(chapterPhase)}
+                      title={
+                        canOpenChapter
+                          ? `Open ${chapterPhase}`
+                          : latest
+                            ? "This file type cannot be opened in OnlyOffice."
+                            : "No submission yet"
+                      }
+                      className={`block w-full rounded-md border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                         isCurrent
                           ? "border-sky-200 bg-sky-50 text-sky-700"
-                          : "border-transparent text-slate-600"
+                          : canOpenChapter
+                            ? "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"
+                            : "border-transparent text-slate-400"
                       }`}
                     >
                       <div className="flex items-center gap-2 text-xs font-medium">
                         <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        <span className="truncate">{name}</span>
+                        <span className="min-w-0 flex-1 truncate">{name}</span>
+                        {switchingChapter === chapterPhase && (
+                          <span className="shrink-0 text-[10px] text-sky-600">Opening…</span>
+                        )}
                       </div>
                       <p className="mt-1 truncate pl-5 text-[10px] text-slate-400">
                         {latest?.fileName ?? "No submission yet"}
                       </p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -446,7 +499,7 @@ export default function OnlyOfficeEditor({
             <button
               type="button"
               onClick={handleClose}
-              disabled={submitting || closing}
+              disabled={submitting || closing || switchingChapter !== null}
               className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Power className="h-3.5 w-3.5" />

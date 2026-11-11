@@ -517,6 +517,64 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
     }
   };
 
+  const selectChapter = async (targetPhase: string, hasChanges: boolean) => {
+    const target = deliverables
+      ?.filter((item) => item.phase === targetPhase)
+      .reduce<Deliverable | null>(
+        (latest, item) => (!latest || item.version > latest.version ? item : latest),
+        null,
+      );
+
+    if (!target?.storageId) throw new Error("This chapter has no available file.");
+    if (!isOffice(target.fileName) && !isPdf(target.fileName)) {
+      throw new Error("This file type cannot be opened in OnlyOffice.");
+    }
+
+    const current = officeDoc;
+    if (current?.draft && hasChanges) {
+      await forceSaveDraft(
+        current.draft.docKey,
+        () =>
+          convex.query(api.drafts.getByDeliverable, {
+            deliverableId: current.deliverableId as Id<"deliverables">,
+          }),
+        current.storageId,
+      );
+    }
+
+    if (isPdf(target.fileName)) {
+      sessionStorage.removeItem(EDITOR_SESSION_KEY);
+      setOfficeDoc({
+        fileName: target.fileName,
+        storageId: target.storageId,
+        deliverableId: target._id,
+        phase: target.phase,
+        mode: "view",
+      });
+      return;
+    }
+
+    const draft = await startDraft({ deliverableId: target._id });
+    setOfficeDoc({
+      fileName: target.fileName,
+      storageId: draft.storageId,
+      deliverableId: target._id,
+      phase: target.phase,
+      mode: "edit",
+      draft: {
+        id: draft.draftId,
+        baseVersion: draft.baseVersion,
+        docKey: `${draft.draftId}-${draft.storageId}`,
+        phase: target.phase,
+        fileSize: target.fileSize,
+      },
+    });
+    sessionStorage.setItem(
+      EDITOR_SESSION_KEY,
+      JSON.stringify({ deliverableId: target._id }),
+    );
+  };
+
   const viewDocument = (d: Deliverable) => {
     if (isPdf(d.fileName)) {
       setSelectedDeliverable({
@@ -1662,6 +1720,7 @@ const imradBlocked =
                 phase={officeDoc.phase}
                 deliverables={deliverables ?? []}
                 workspaceSidebar
+                onSelectChapter={selectChapter}
                 mode={officeDoc.mode}
                 userId={user?.id}
                 userName={user?.fullName ?? undefined}
