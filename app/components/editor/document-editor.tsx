@@ -62,6 +62,7 @@ type OnlyOfficeEditorProps = {
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
   draftId?: string;                // tells the callback to save into the draft, not a version
+  draftSessionRevision?: number;
   baseVersion?: number;            // shows "Draft based on v1" and labels the button "Submit as v2"
   onSubmit?: (hasChanges: boolean) => Promise<void>;
   onEditorReady?: () => void;
@@ -195,6 +196,7 @@ export default function OnlyOfficeEditor({
   onClose,
   docKey,
   draftId,
+  draftSessionRevision,
   baseVersion,
   onSubmit,
   onEditorReady,
@@ -438,7 +440,9 @@ export default function OnlyOfficeEditor({
       // NEW: draftId is added so the callback knows to write to the draft
       const query =
         `fileId=${encodeURIComponent(deliverableId)}` +
-        (draftId ? `&draftId=${encodeURIComponent(draftId)}` : "") +
+        (draftId
+          ? `&draftId=${encodeURIComponent(draftId)}&sessionRevision=${draftSessionRevision ?? 0}`
+          : "") +
         (editorMode === "comment" ? "&notify=1" : "");
       const editorFileName = comparison?.selectedFileName ?? fileName;
       const editorFileUrl = comparison?.selectedFileUrl ?? fileUrl;
@@ -597,6 +601,7 @@ export default function OnlyOfficeEditor({
     serverUrl,
     docKey,
     draftId,
+    draftSessionRevision,
     phase,
     baseVersion,
     retryCount,
@@ -869,7 +874,7 @@ export default function OnlyOfficeEditor({
               className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Power className="h-3.5 w-3.5" />
-              {closing ? "Saving…" : "Close Workspace"}
+              {closing ? (mode === "comment" ? "Closing…" : "Saving…") : mode === "comment" ? "Close Editor" : "Close Workspace"}
             </button>
           </div>
         </aside>
@@ -904,7 +909,7 @@ export default function OnlyOfficeEditor({
                 disabled={submitting || closing}
                 className="rounded-lg px-3 py-1.5 text-sm text-[#d8f1ed] hover:bg-white/10 disabled:opacity-50"
               >
-                {closing ? "Saving…" : "Close"}
+                {closing ? (mode === "comment" ? "Closing…" : "Saving…") : mode === "comment" ? "Close Editor" : "Close"}
               </button>
             </div>
           </div>

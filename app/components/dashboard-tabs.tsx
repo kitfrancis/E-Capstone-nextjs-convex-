@@ -212,7 +212,14 @@ export function TabsDemo({
     phase: string;
     mode: "edit" | "view";
     fileUrl?: string;
-    draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
+    draft?: {
+      id: string;
+      baseVersion: number;
+      sessionRevision: number;
+      docKey: string;
+      phase: string;
+      fileSize: string;
+    };
   } | null>(null);
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const restoreAttemptStartedRef = useRef(false);
@@ -315,7 +322,8 @@ export function TabsDemo({
           draft: {
             id: draft.draftId,
             baseVersion: draft.baseVersion,
-            docKey: `${draft.draftId}-${draft.storageId}`,
+            sessionRevision: draft.sessionRevision,
+            docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
             phase: deliverable.phase,
             fileSize: deliverable.fileSize,
           },
@@ -398,7 +406,8 @@ export function TabsDemo({
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: `${draft.draftId}-${draft.storageId}`,
+          sessionRevision: draft.sessionRevision,
+          docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
           phase: d.phase,
           fileSize: d.fileSize,
         },
@@ -469,7 +478,8 @@ export function TabsDemo({
       draft: {
         id: draft.draftId,
         baseVersion: draft.baseVersion,
-        docKey: `${draft.draftId}-${draft.storageId}`,
+        sessionRevision: draft.sessionRevision,
+        docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
         phase: target.phase,
         fileSize: target.fileSize,
       },
@@ -594,7 +604,7 @@ export function TabsDemo({
           fileUrl: comparisonFileUrl,
           draft: {
             ...active.draft,
-            docKey: `${currentDraft._id}-${currentDraft.storageId}`,
+            docKey: active.draft.docKey,
           },
         };
       });
@@ -698,7 +708,8 @@ export function TabsDemo({
       draft: {
         id: nextDraft.draftId,
         baseVersion: nextDraft.baseVersion,
-        docKey: `${nextDraft.draftId}-${nextDraft.storageId}`,
+        sessionRevision: nextDraft.sessionRevision,
+        docKey: `draft-${nextDraft.draftId}-${nextDraft.sessionRevision}`,
         phase: savedVersion.phase,
         fileSize: savedVersion.fileSize,
       },
@@ -1348,6 +1359,7 @@ export function TabsDemo({
           userName={user?.fullName ?? undefined}
           docKey={officeDoc.draft?.docKey}
           draftId={officeDoc.draft?.id}
+          draftSessionRevision={officeDoc.draft?.sessionRevision}
           baseVersion={officeDoc.draft?.baseVersion}
           onSubmit={officeDoc.draft ? submitDraft : undefined}
           onEditorReady={() => setIsRestoringEditor(false)}

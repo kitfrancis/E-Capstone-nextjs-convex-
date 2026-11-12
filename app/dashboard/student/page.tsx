@@ -252,6 +252,7 @@ function DashboardContent() {
   const currentTab = searchParams.get("tab") || "dashboard";
   const isImradUpload = searchParams.get("type") === "imrad";
   const deliverableIdFromUrl = searchParams.get("deliverableId") as Id<"deliverables"> | null;
+  const viewDraftFromUrl = searchParams.get("viewDraft") === "1";
   const pageFromUrl = searchParams.get("page") || "1";
   const highlightPageFromUrl = pageFromUrl ? parseInt(pageFromUrl) : null;
 
@@ -345,11 +346,19 @@ function DashboardContent() {
     phase: string;
     mode: "edit" | "view";
     fileUrl?: string;
-    draft?: { id: string; baseVersion: number; docKey: string; phase: string; fileSize: string };
+    draft?: {
+      id: string;
+      baseVersion: number;
+      sessionRevision: number;
+      docKey: string;
+      phase: string;
+      fileSize: string;
+    };
   } | null>(null);
 
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const restoreAttemptStartedRef = useRef(false);
+  const openedDraftDeliverableRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     if (sessionStorage.getItem(EDITOR_SESSION_KEY)) {
@@ -397,7 +406,7 @@ function DashboardContent() {
 
   // Restore editor session if refreshed during an edit
   useEffect(() => {
-    if (!deliverables || officeDoc || restoreAttemptStartedRef.current) return;
+    if (viewDraftFromUrl || !deliverables || officeDoc || restoreAttemptStartedRef.current) return;
     const saved = sessionStorage.getItem(EDITOR_SESSION_KEY);
     if (!saved) return;
 
@@ -430,7 +439,8 @@ function DashboardContent() {
           draft: {
             id: draft.draftId,
             baseVersion: draft.baseVersion,
-            docKey: `${draft.draftId}-${draft.storageId}`,
+            sessionRevision: draft.sessionRevision,
+            docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
             phase: deliverable.phase,
             fileSize: deliverable.fileSize,
           },
@@ -441,11 +451,71 @@ function DashboardContent() {
         setIsRestoringEditor(false);
         toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
       });
-  }, [deliverables, officeDoc, startDraft]);
+  }, [deliverables, officeDoc, startDraft, viewDraftFromUrl]);
+
+  useEffect(() => {
+    if (!viewDraftFromUrl) {
+      openedDraftDeliverableRef.current = null;
+      return;
+    }
+    if (
+      !deliverableIdFromUrl ||
+      !deliverables ||
+      !project?._id ||
+      openedDraftDeliverableRef.current === deliverableIdFromUrl
+    ) {
+      return;
+    }
+
+    const target = deliverables.find((item) => item._id === deliverableIdFromUrl);
+    if (!target?.storageId) {
+      openedDraftDeliverableRef.current = deliverableIdFromUrl;
+      toast.error("The shared draft is no longer available.");
+      return;
+    }
+
+    openedDraftDeliverableRef.current = deliverableIdFromUrl;
+    setIsRestoringEditor(true);
+    void startDraft({ deliverableId: target._id })
+      .then((draft) => {
+        setOfficeDoc({
+          fileName: target.fileName,
+          storageId: draft.storageId,
+          deliverableId: target._id,
+          phase: target.phase,
+          mode: "edit",
+          draft: {
+            id: draft.draftId,
+            baseVersion: draft.baseVersion,
+            sessionRevision: draft.sessionRevision,
+            docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
+            phase: target.phase,
+            fileSize: target.fileSize,
+          },
+        });
+        sessionStorage.setItem(
+          EDITOR_SESSION_KEY,
+          JSON.stringify({ deliverableId: target._id }),
+        );
+        router.replace(`${window.location.pathname}?tab=deliverables`, { scroll: false });
+      })
+      .catch((error) => {
+        openedDraftDeliverableRef.current = null;
+        setIsRestoringEditor(false);
+        toast.error(error instanceof Error ? error.message : "Couldn't open the shared draft.");
+      });
+  }, [
+    deliverableIdFromUrl,
+    deliverables,
+    project?._id,
+    router,
+    startDraft,
+    viewDraftFromUrl,
+  ]);
 
   // Deep-link to open PDF from notification
   useEffect(() => {
-    if (!deliverableIdFromUrl || !deliverables) return;
+    if (viewDraftFromUrl || !deliverableIdFromUrl || !deliverables) return;
     const match = deliverables.find((d) => d._id === deliverableIdFromUrl);
     if (match && match.storageId && isPdf(match.fileName)) {
       setSelectedDeliverable({
@@ -458,7 +528,7 @@ function DashboardContent() {
         router.replace(`${window.location.pathname}?tab=deliverables`, { scroll: false });
       }, 500);
     }
-  }, [deliverableIdFromUrl, deliverables, highlightPageFromUrl, router]);
+  }, [deliverableIdFromUrl, deliverables, highlightPageFromUrl, router, viewDraftFromUrl]);
 
   // Sidebar "tasks" link: jump to the tasks card on the combined page
   useEffect(() => {
@@ -541,7 +611,8 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
         draft: {
           id: draft.draftId,
           baseVersion: draft.baseVersion,
-          docKey: `${draft.draftId}-${draft.storageId}`,
+          sessionRevision: draft.sessionRevision,
+          docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
           phase: d.phase,
           fileSize: d.fileSize,
         },
@@ -612,7 +683,8 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
       draft: {
         id: draft.draftId,
         baseVersion: draft.baseVersion,
-        docKey: `${draft.draftId}-${draft.storageId}`,
+        sessionRevision: draft.sessionRevision,
+        docKey: `draft-${draft.draftId}-${draft.sessionRevision}`,
         phase: target.phase,
         fileSize: target.fileSize,
       },
@@ -737,7 +809,7 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
           fileUrl: comparisonFileUrl,
           draft: {
             ...active.draft,
-            docKey: `${currentDraft._id}-${currentDraft.storageId}`,
+            docKey: active.draft.docKey,
           },
         };
       });
@@ -839,7 +911,8 @@ const imradDoc = deliverables?.find((d) => d.phase === IMRAD_PHASE);
       draft: {
         id: nextDraft.draftId,
         baseVersion: nextDraft.baseVersion,
-        docKey: `${nextDraft.draftId}-${nextDraft.storageId}`,
+        sessionRevision: nextDraft.sessionRevision,
+        docKey: `draft-${nextDraft.draftId}-${nextDraft.sessionRevision}`,
         phase: savedVersion.phase,
         fileSize: savedVersion.fileSize,
       },
@@ -1966,6 +2039,7 @@ const imradBlocked =
                 userName={user?.fullName ?? undefined}
                 docKey={officeDoc.draft?.docKey}
                 draftId={officeDoc.draft?.id}
+                draftSessionRevision={officeDoc.draft?.sessionRevision}
                 baseVersion={officeDoc.draft?.baseVersion}
                 onSubmit={officeDoc.draft ? submitDraft : undefined}
                 onEditorReady={() => setIsRestoringEditor(false)}

@@ -213,6 +213,8 @@ export default defineSchema({
     baseVersion: v.number(),
     updatedAt: v.number(),
     saveRevision: v.optional(v.number()),
+    lastNotifiedSessionRevision: v.optional(v.number()),
+    sessionRevision: v.optional(v.number()),
   }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({

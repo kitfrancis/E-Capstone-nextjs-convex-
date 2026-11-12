@@ -32,8 +32,8 @@ const PDFViewer = dynamic(
   { ssr: false, loading: () => <div className="flex items-center justify-center h-64">Loading PDF viewer...</div> }
 );
 
-const OnlyOfficeEditor = dynamic(
-  () => import("@/app/components/editor/document-editor"),
+const StaffDraftEditor = dynamic(
+  () => import("@/app/components/editor/staff-draft-editor"),
   { ssr: false }
 );
 
@@ -115,11 +115,6 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
   const fileUrl = useQuery(
     api.dashboard.getFileUrl,
     selectedDeliverable ? { storageId: selectedDeliverable.storageId as Id<"_storage"> } : "skip"
-  );
-
-  const officeUrl = useQuery(
-    api.dashboard.getFileUrl,
-    officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
   );
 
   const updateStatus = useMutation(api.dashboard.adviserDeliverableStatus);
@@ -376,15 +371,12 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
       />
 
       {/* OnlyOffice editor */}
-      {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
-        <OnlyOfficeEditor
-          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
-          deliverableId={officeDoc.deliverableId}
+      {officeDoc && capstoneProjectId && (
+        <StaffDraftEditor
+          key={officeDoc.deliverableId}
+          deliverableId={officeDoc.deliverableId as Id<"deliverables">}
           capstoneProjectId={capstoneProjectId}
-          fileName={officeDoc.fileName}
-          fileUrl={officeUrl}
-          phase={officeDoc.phase}
-          mode="comment"
+          deliverables={deliverables ?? []}
           userId={me?.clerkId}
           userName={me?.name ?? undefined}
           onClose={() => setOfficeDoc(null)}
