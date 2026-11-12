@@ -10,11 +10,14 @@ import {
   History,
   Keyboard,
   Loader2,
+  Moon,
   Power,
   RotateCw,
   Save,
+  Sun,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useAppTheme } from "@/components/ui/theme-provider";
 import WorkspaceChat from "./workspace-chat";
 
 type WorkspaceDeliverable = {
@@ -204,6 +207,7 @@ export default function OnlyOfficeEditor({
   onEditorReady,
   onEditorError,
 }: OnlyOfficeEditorProps) {
+  const { theme, mounted: themeMounted, toggleTheme } = useAppTheme();
   const onEditorReadyRef = useRef(onEditorReady);
   const onEditorErrorRef = useRef(onEditorError);
   onEditorReadyRef.current = onEditorReady;
@@ -675,7 +679,9 @@ export default function OnlyOfficeEditor({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid bg-slate-200"
+      className={`fixed inset-0 z-50 grid bg-slate-200 text-slate-900 dark:bg-slate-950 dark:text-slate-100 ${
+        theme === "dark" ? "dark" : ""
+      }`}
       style={{
         gridTemplateColumns: workspaceSidebar
           ? capstoneProjectId
@@ -688,16 +694,31 @@ export default function OnlyOfficeEditor({
       }}
     >
       {workspaceSidebar && (
-        <aside className="flex min-h-0 min-w-0 flex-col border-r border-slate-200 bg-white text-slate-700">
-          <div className="flex min-h-14 items-center gap-3 border-b border-slate-200 px-4">
+        <aside className="flex min-h-0 min-w-0 flex-col border-r border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          <div className="flex min-h-14 items-center gap-2 border-b border-slate-200 px-3 dark:border-slate-700">
             <FileText className="h-5 w-5 shrink-0 text-sky-600" />
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
               {workspaceTitle}
             </p>
             {displayedDraftId && displayedBaseVersion !== undefined && (
-              <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-1 text-[10px] font-semibold text-sky-700">
+              <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-1 text-[10px] font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300">
                 v{nextVersion}.0
               </span>
+            )}
+            {themeMounted && (
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {theme === "dark" ? (
+                  <Sun className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
             )}
           </div>
 
@@ -705,7 +726,7 @@ export default function OnlyOfficeEditor({
             <section aria-labelledby="version-history-heading">
               <h2
                 id="version-history-heading"
-                className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-wide text-slate-500"
+                className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400"
               >
                 <History className="h-3.5 w-3.5" />
                 Version History
@@ -718,7 +739,7 @@ export default function OnlyOfficeEditor({
                   onClick={() =>
                     setExpandedVersionPhase(showAllVersions ? null : currentPhase)
                   }
-                  className="mb-2 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-50"
+                  className="mb-2 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-slate-800"
                 >
                   <span>
                     {showAllVersions
@@ -740,18 +761,18 @@ export default function OnlyOfficeEditor({
                     setComparisonError(null);
                     setLoadError(null);
                   }}
-                  className="mb-2 w-full rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-left text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                  className="mb-2 w-full rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-left text-xs font-semibold text-sky-700 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-950"
                 >
                   Return to current editor
                 </button>
               )}
               {comparisonError && (
-                <p role="alert" className="mb-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs text-rose-700">
+                <p role="alert" className="mb-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
                   {comparisonError}
                 </p>
               )}
               {comparing && (
-                <p className="mb-2 flex items-center gap-2 px-1 text-xs text-sky-700" role="status">
+                <p className="mb-2 flex items-center gap-2 px-1 text-xs text-sky-700 dark:text-sky-300" role="status">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Preparing comparison…
                 </p>
@@ -780,28 +801,28 @@ export default function OnlyOfficeEditor({
                       }
                       className={`block w-full rounded-md border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                         comparison?.selectedDeliverableId === item._id
-                          ? "border-violet-300 bg-violet-50"
+                          ? "border-violet-300 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/50"
                           : item.version === latestVersion
-                            ? "border-sky-200 bg-sky-50"
-                            : "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50"
+                            ? "border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
+                            : "border-slate-200 bg-white hover:border-sky-200 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-sky-800 dark:hover:bg-slate-700"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-sky-700">
+                        <span className="text-xs font-semibold text-sky-700 dark:text-sky-300">
                           v{item.version}.0
                           {item.versionLabel ? ` · ${item.versionLabel}` : ""}
                         </span>
-                        <time className="shrink-0 text-[10px] text-slate-400">
+                        <time className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
                           {new Date(item.uploadedAt).toLocaleDateString(undefined, {
                             month: "short",
                             day: "numeric",
                           })}
                         </time>
                       </div>
-                      <p className="mt-1 truncate text-[11px] text-slate-500">
+                      <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
                         {item.message || item.fileName}
                       </p>
-                      <p className="mt-1 text-[10px] text-slate-400">
+                      <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
                         {comparison?.selectedDeliverableId === item._id
                           ? "Currently comparing"
                           : "Select to compare"}
@@ -809,7 +830,7 @@ export default function OnlyOfficeEditor({
                     </button>
                   ))
                 ) : (
-                  <p className="rounded-md border border-dashed border-slate-200 px-2.5 py-3 text-xs text-slate-400">
+                  <p className="rounded-md border border-dashed border-slate-200 px-2.5 py-3 text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
                     No submitted versions yet.
                   </p>
                 )}
@@ -819,13 +840,13 @@ export default function OnlyOfficeEditor({
             {canSubmit && (
               <section
                 aria-labelledby="save-version-heading"
-                className="rounded-lg border border-slate-200 bg-slate-50 p-2.5"
+                className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800"
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h2 id="save-version-heading" className="text-xs font-semibold text-slate-700">
+                  <h2 id="save-version-heading" className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                     Save New Snapshot
                   </h2>
-                  <span className="rounded border border-sky-200 bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                  <span className="rounded border border-sky-200 bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
                     v{nextVersion}.0
                   </span>
                 </div>
@@ -849,7 +870,7 @@ export default function OnlyOfficeEditor({
             <section aria-labelledby="manuscript-chapters-heading">
               <h2
                 id="manuscript-chapters-heading"
-                className="mb-2 flex items-center gap-2 border-t border-slate-200 px-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-slate-500"
+                className="mb-2 flex items-center gap-2 border-t border-slate-200 px-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400"
               >
                 <BookOpen className="h-3.5 w-3.5" />
                 Manuscript Chapters
@@ -888,20 +909,20 @@ export default function OnlyOfficeEditor({
                       }
                       className={`block w-full rounded-md border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                         isCurrent
-                          ? "border-sky-200 bg-sky-50 text-sky-700"
+                          ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300"
                           : canOpenChapter
-                            ? "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"
-                            : "border-transparent text-slate-400"
+                            ? "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+                            : "border-transparent text-slate-400 dark:text-slate-600"
                       }`}
                     >
                       <div className="flex items-center gap-2 text-xs font-medium">
-                        <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
                         <span className="min-w-0 flex-1 truncate">{name}</span>
                         {switchingChapter === chapterPhase && (
                           <span className="shrink-0 text-[10px] text-sky-600">Opening…</span>
                         )}
                       </div>
-                      <p className="mt-1 truncate pl-5 text-[10px] text-slate-400">
+                      <p className="mt-1 truncate pl-5 text-[10px] text-slate-400 dark:text-slate-500">
                         {latest?.fileName ?? "No submission yet"}
                       </p>
                     </button>
@@ -911,7 +932,7 @@ export default function OnlyOfficeEditor({
             </section>
           </div>
 
-          <div className="border-t border-slate-200 bg-white p-2">
+          <div className="border-t border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
             {submitError && !canSubmit && (
               <p role="alert" className="mb-2 px-1 text-xs text-rose-600">
                 {submitError}
@@ -921,7 +942,7 @@ export default function OnlyOfficeEditor({
               type="button"
               onClick={handleClose}
               disabled={submitting || closing || switchingChapter !== null}
-              className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               <Power className="h-3.5 w-3.5" />
               {closing ? (mode === "comment" ? "Closing…" : "Saving…") : mode === "comment" ? "Close Editor" : "Close Workspace"}
@@ -961,6 +982,21 @@ export default function OnlyOfficeEditor({
               >
                 {closing ? (mode === "comment" ? "Closing…" : "Saving…") : mode === "comment" ? "Close Editor" : "Close"}
               </button>
+              {themeMounted && (
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                  title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-white/20 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                >
+                  {theme === "dark" ? (
+                    <Sun className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Moon className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}
