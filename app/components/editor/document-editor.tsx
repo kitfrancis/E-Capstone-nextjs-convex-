@@ -51,8 +51,7 @@ type OnlyOfficeEditorProps = {
   onSelectChapter?: (phase: string, hasChanges: boolean) => Promise<void>;
   onCompareVersion?: (
     deliverableId: string,
-    hasChanges: boolean,
-    draftStorageIdAtSelection: string | null,
+    shouldForceSave: boolean,
   ) => Promise<VersionComparison>;
   onGetDraftStorageId?: () => Promise<string | null>;
   onClose: (hasChanges: boolean) => void | Promise<void>;
@@ -328,17 +327,12 @@ export default function OnlyOfficeEditor({
   async function openVersionComparison(
     item: WorkspaceDeliverable,
     hasChanges: boolean,
-    storageIdAtSelection: string | null,
   ) {
     if (!onCompareVersion || comparing) return;
     setComparing(true);
     setComparisonError(null);
     try {
-      const nextComparison = await onCompareVersion(
-        item._id,
-        hasChanges,
-        storageIdAtSelection,
-      );
+      const nextComparison = await onCompareVersion(item._id, hasChanges);
       hasChangesRef.current = false;
       setComparison(nextComparison);
     } catch (error) {
@@ -357,13 +351,23 @@ export default function OnlyOfficeEditor({
 
   async function handleSelectVersion(item: WorkspaceDeliverable) {
     if (!onCompareVersion || comparing || submitting || closing || switchingChapter) return;
-    if (hasPendingChangesRef.current) {
-      setVersionAwaitingCompare(item);
-      setShowCompareReminder(true);
+    if (hasPendingChangesRef.current || hasChangesRef.current) {
       setCapturingDraftBaseline(true);
       try {
         const storageId = await onGetDraftStorageId?.();
         if (!storageId) throw new Error("The current draft could not be loaded.");
+        const baseStorageId = currentPhaseDeliverables.find(
+          (version) => version._id === deliverableId,
+        )?.storageId;
+        const needsSave =
+          hasPendingChangesRef.current ||
+          (hasChangesRef.current && storageId === baseStorageId);
+        if (!needsSave) {
+          void openVersionComparison(item, false);
+          return;
+        }
+        setVersionAwaitingCompare(item);
+        setShowCompareReminder(true);
         setDraftStorageIdAtSelection(storageId);
       } catch (error) {
         setShowCompareReminder(false);
@@ -376,7 +380,7 @@ export default function OnlyOfficeEditor({
       }
       return;
     }
-    void openVersionComparison(item, false, null);
+    void openVersionComparison(item, false);
   }
 
   useEffect(() => {
@@ -1009,30 +1013,30 @@ export default function OnlyOfficeEditor({
         </div>
       )}
       {showCompareReminder && versionAwaitingCompare && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 px-4">
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/65 px-4 py-8">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="compare-reminder-title"
-            className="w-full max-w-md rounded-xl bg-white p-6 text-slate-900 shadow-xl"
+            className="w-full max-w-xl rounded-2xl bg-white p-8 text-slate-900 shadow-2xl"
           >
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
-                <Save className="h-5 w-5" aria-hidden="true" />
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                <Save className="h-7 w-7" aria-hidden="true" />
               </div>
               <div>
-                <h2 id="compare-reminder-title" className="text-lg font-semibold">
+                <h2 id="compare-reminder-title" className="text-2xl font-semibold">
                   Save your draft before comparing
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  If you have not saved recently, press Ctrl+S in OnlyOffice. Then continue and we’ll confirm the draft is saved before opening the comparison.
+                <p className="mt-2 text-base leading-relaxed text-slate-600">
+                  Press Ctrl+S in OnlyOffice to save your latest edits, then continue. We’ll confirm the draft is updated before opening the comparison.
                 </p>
               </div>
             </div>
-            <p className="mt-3 text-sm text-slate-600">
-              Clicking Continue will also request a save if needed. Your draft will not be submitted as a new version.
+            <p className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900">
+              If the draft cannot be confirmed as saved, the comparison will not open. This does not submit a new version.
             </p>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-7 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -1040,7 +1044,7 @@ export default function OnlyOfficeEditor({
                   setVersionAwaitingCompare(null);
                   setDraftStorageIdAtSelection(null);
                 }}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-100"
+                className="min-h-11 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium hover:bg-slate-100"
               >
                 Cancel
               </button>
@@ -1051,16 +1055,19 @@ export default function OnlyOfficeEditor({
                   setShowCompareReminder(false);
                   setVersionAwaitingCompare(null);
                   if (selected) {
-                    void openVersionComparison(
-                      selected,
-                      true,
-                      draftStorageIdAtSelection,
-                    );
+                    const baseStorageId = currentPhaseDeliverables.find(
+                      (version) => version._id === deliverableId,
+                    )?.storageId;
+                    const shouldForceSave =
+                      hasPendingChangesRef.current ||
+                      (hasChangesRef.current &&
+                        draftStorageIdAtSelection === baseStorageId);
+                    void openVersionComparison(selected, shouldForceSave);
                   }
                   setDraftStorageIdAtSelection(null);
                 }}
                 disabled={comparing || capturingDraftBaseline}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                className="min-h-11 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
               >
                 {capturingDraftBaseline ? "Checking draft…" : "Continue to compare"}
               </button>
