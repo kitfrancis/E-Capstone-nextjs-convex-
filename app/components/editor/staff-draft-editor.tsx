@@ -173,6 +173,20 @@ export default function StaffDraftEditor({
       ? "This submitted version is no longer available."
       : null) ??
     (session && fileUrl === null ? "The shared draft file is unavailable." : null);
+  const latestForCurrentPhase = session
+    ? projectDeliverables
+        .filter((item) => item.phase === session.deliverable.phase && item.storageId)
+        .reduce<Deliverable | null>(
+          (latest, item) => (!latest || item.version > latest.version ? item : latest),
+          null,
+        )
+    : null;
+  const latestVersionAvailable =
+    latestForCurrentPhase &&
+    session &&
+    latestForCurrentPhase.version > session.deliverable.version
+      ? latestForCurrentPhase.version
+      : undefined;
 
   if (editorError) {
     return (
@@ -217,10 +231,31 @@ export default function StaffDraftEditor({
       baseVersion={session.baseVersion}
       onSelectChapter={handleSelectChapter}
       onCompareVersion={handleCompareVersion}
+      latestVersionAvailable={latestVersionAvailable}
+      onOpenLatestVersion={async (hasChanges) => {
+        if (!latestForCurrentPhase || !session) return;
+        if (hasChanges) {
+          await forceSaveDraft(
+            `draft-${session.draftId}-${session.sessionRevision}`,
+            () => getCurrentDraft(session.deliverable._id),
+            session.storageId,
+          );
+        }
+        await openDraft(latestForCurrentPhase);
+      }}
       onGetDraftStorageId={async () =>
         (await getCurrentDraft(session.deliverable._id))?.storageId ?? null
       }
-      onClose={onClose}
+      onClose={async (hasChanges) => {
+        if (hasChanges && session) {
+          await forceSaveDraft(
+            `draft-${session.draftId}-${session.sessionRevision}`,
+            () => getCurrentDraft(session.deliverable._id),
+            session.storageId,
+          );
+        }
+        onClose();
+      }}
     />
   );
 }

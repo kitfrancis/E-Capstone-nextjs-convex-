@@ -154,6 +154,7 @@ export async function POST(req: Request) {
             deliverableId: fileId as Id<"deliverables">,
             draftId: draftId as Id<"deliverableDrafts">,
             sessionRevision: saveState.sessionRevision,
+            saveRevision: saveState.saveRevision,
             sessionClosed: body.status === 2,
             clerkIds,
           });

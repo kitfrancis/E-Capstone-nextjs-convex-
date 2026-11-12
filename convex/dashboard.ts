@@ -1603,13 +1603,14 @@ export const joinTeam = mutation({
 });
 
 // Called ONLY by the OnlyOffice callback route (checked with the shared secret).
-// When an adviser/instructor leaves a document they commented on, tell the students.
+// Notify the project team when a staff member's draft save is committed.
 export const notifyOfficeComment = mutation({
   args: {
     secret: v.string(),
     deliverableId: v.id("deliverables"),
     draftId: v.id("deliverableDrafts"),
     sessionRevision: v.number(),
+    saveRevision: v.number(),
     sessionClosed: v.boolean(),
     clerkIds: v.array(v.string()),
   },
@@ -1628,7 +1629,8 @@ export const notifyOfficeComment = mutation({
       !draft ||
       draft.deliverableId !== args.deliverableId ||
       (draft.sessionRevision ?? 0) !== args.sessionRevision ||
-      draft.lastNotifiedSessionRevision === notificationSessionRevision
+      (draft.lastNotifiedSaveRevision ?? 0) >= args.saveRevision ||
+      (draft.saveRevision ?? 0) < args.saveRevision
     ) {
       return null;
     }
@@ -1651,11 +1653,19 @@ export const notifyOfficeComment = mutation({
 
     await ctx.db.patch(args.draftId, {
       lastNotifiedSessionRevision: notificationSessionRevision,
+      lastNotifiedSaveRevision: args.saveRevision,
     });
 
-    for (const memberId of project.members ?? []) {
+    const recipients = new Set([
+      ...(project.members ?? []),
+      ...(project.adviserId ? [project.adviserId] : []),
+      ...(project.instructorId ? [project.instructorId] : []),
+    ]);
+    recipients.delete(author._id);
+
+    for (const userId of recipients) {
       await ctx.runMutation(api.notifications.sendNotification, {
-        userId: memberId,
+        userId,
         message: `${author.name} added comments on the active draft of "${deliverable.fileName}" (${deliverable.phase}). Open the shared workspace to read them.`,
         type: "comment_added",
         relatedId: args.deliverableId,
