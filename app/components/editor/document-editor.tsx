@@ -52,6 +52,7 @@ type OnlyOfficeEditorProps = {
   onCompareVersion?: (
     deliverableId: string,
     shouldForceSave: boolean,
+    draftStorageIdAtSelection: string | null,
   ) => Promise<VersionComparison>;
   onGetDraftStorageId?: () => Promise<string | null>;
   onClose: (hasChanges: boolean) => void | Promise<void>;
@@ -327,12 +328,17 @@ export default function OnlyOfficeEditor({
   async function openVersionComparison(
     item: WorkspaceDeliverable,
     hasChanges: boolean,
+    storageIdAtSelection: string | null,
   ) {
     if (!onCompareVersion || comparing) return;
     setComparing(true);
     setComparisonError(null);
     try {
-      const nextComparison = await onCompareVersion(item._id, hasChanges);
+      const nextComparison = await onCompareVersion(
+        item._id,
+        hasChanges,
+        storageIdAtSelection,
+      );
       hasChangesRef.current = false;
       setComparison(nextComparison);
     } catch (error) {
@@ -363,7 +369,7 @@ export default function OnlyOfficeEditor({
           hasPendingChangesRef.current ||
           (hasChangesRef.current && storageId === baseStorageId);
         if (!needsSave) {
-          void openVersionComparison(item, false);
+          void openVersionComparison(item, false, storageId);
           return;
         }
         setVersionAwaitingCompare(item);
@@ -380,7 +386,7 @@ export default function OnlyOfficeEditor({
       }
       return;
     }
-    void openVersionComparison(item, false);
+    void openVersionComparison(item, false, null);
   }
 
   useEffect(() => {
@@ -1055,14 +1061,13 @@ export default function OnlyOfficeEditor({
                   setShowCompareReminder(false);
                   setVersionAwaitingCompare(null);
                   if (selected) {
-                    const baseStorageId = currentPhaseDeliverables.find(
-                      (version) => version._id === deliverableId,
-                    )?.storageId;
                     const shouldForceSave =
-                      hasPendingChangesRef.current ||
-                      (hasChangesRef.current &&
-                        draftStorageIdAtSelection === baseStorageId);
-                    void openVersionComparison(selected, shouldForceSave);
+                      hasPendingChangesRef.current || hasChangesRef.current;
+                    void openVersionComparison(
+                      selected,
+                      shouldForceSave,
+                      draftStorageIdAtSelection,
+                    );
                   }
                   setDraftStorageIdAtSelection(null);
                 }}

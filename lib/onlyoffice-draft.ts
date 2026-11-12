@@ -33,7 +33,6 @@ export async function forceSaveDraft<T extends DraftSaveState>(
   key: string,
   getDraft: () => Promise<T | null>,
   initialStorageId: string,
-  options: { allowNoop?: boolean } = {},
 ): Promise<T> {
   validateOnlyOfficeCallbackTarget();
 
@@ -97,7 +96,6 @@ export async function forceSaveDraft<T extends DraftSaveState>(
 
     const latest = await getDraft();
     if (latest && hasDraftAdvanced(latest)) return latest;
-    if (options.allowNoop && latest) return latest;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
