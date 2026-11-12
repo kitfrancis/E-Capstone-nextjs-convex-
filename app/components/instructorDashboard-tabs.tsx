@@ -191,6 +191,8 @@ export function InstructorTabsDemo({
     fileName: string;
     storageId: string;
     deliverableId: string;
+    capstoneProjectId: Id<"capstoneProjects">;
+    phase: string;
   } | null>(null);
   const fileUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -202,6 +204,8 @@ export function InstructorTabsDemo({
     fileName: string;
     storageId: string;
     deliverableId: string;
+    capstoneProjectId: Id<"capstoneProjects">;
+    phase: string;
   } | null>(null);
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -631,6 +635,8 @@ const handleStatus = async (
               fileName: d.fileName,
               storageId: d.storageId!,
               deliverableId: d._id,
+              capstoneProjectId: d.capstoneProjectId,
+              phase: d.phase,
             })
           }
         >
@@ -643,6 +649,8 @@ const handleStatus = async (
               fileName: d.fileName,
               storageId: d.storageId!,
               deliverableId: d._id,
+              capstoneProjectId: d.capstoneProjectId,
+              phase: d.phase,
             })
           }
         >
@@ -823,8 +831,10 @@ const handleStatus = async (
         <OnlyOfficeEditor
           fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
           deliverableId={officeDoc.deliverableId}
+          capstoneProjectId={officeDoc.capstoneProjectId}
           fileName={officeDoc.fileName}
           fileUrl={officeUrl}
+          phase={officeDoc.phase}
           mode="comment"
           userId={user?.id}
           userName={user?.fullName ?? undefined}

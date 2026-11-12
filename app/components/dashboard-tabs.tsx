@@ -1333,6 +1333,7 @@ export function TabsDemo({
         <OnlyOfficeEditor
           fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}${officeDoc.mode === "view" ? "-view2" : ""}`}
           deliverableId={officeDoc.deliverableId}
+          capstoneProjectId={capstoneProjectId}
           fileName={officeDoc.fileName}
           fileUrl={resolvedOfficeUrl}
           phase={officeDoc.phase}

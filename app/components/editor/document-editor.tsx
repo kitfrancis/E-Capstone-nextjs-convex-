@@ -12,6 +12,8 @@ import {
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { Id } from "@/convex/_generated/dataModel";
+import WorkspaceChat from "./workspace-chat";
 
 type WorkspaceDeliverable = {
   _id: string;
@@ -42,6 +44,7 @@ type OnlyOfficeEditorProps = {
   fileName: string;
   fileUrl: string;
   phase?: string;
+  capstoneProjectId?: Id<"capstoneProjects">;
   deliverables?: WorkspaceDeliverable[];
   workspaceSidebar?: boolean;
   workspaceReadOnly?: boolean;
@@ -179,6 +182,7 @@ export default function OnlyOfficeEditor({
   fileName,
   fileUrl,
   phase,
+  capstoneProjectId,
   deliverables = [],
   workspaceSidebar = false,
   workspaceReadOnly = false,
@@ -466,7 +470,7 @@ export default function OnlyOfficeEditor({
               mode: "fast",
               change: true,
             },
-            customization: { autosave: true, forcesave: true },
+            customization: { autosave: true, forcesave: true, chat: false, comments: true },
             mode: editorMode === "view" ? "view" : "edit",
             user: userId ? { id: userId, name: userName ?? "User" } : undefined,
           },
@@ -640,7 +644,13 @@ export default function OnlyOfficeEditor({
     <div
       className="fixed inset-0 z-50 grid bg-slate-200"
       style={{
-        gridTemplateColumns: workspaceSidebar ? "276px minmax(0, 1fr)" : "minmax(0, 1fr)",
+        gridTemplateColumns: workspaceSidebar
+          ? capstoneProjectId
+            ? "276px minmax(0, 1fr) 340px"
+            : "276px minmax(0, 1fr)"
+          : capstoneProjectId
+            ? "minmax(0, 1fr) 340px"
+            : "minmax(0, 1fr)",
         gridTemplateRows: "minmax(0, 1fr)",
       }}
     >
@@ -970,6 +980,9 @@ export default function OnlyOfficeEditor({
           )}
         </div>
       </div>
+      {capstoneProjectId && currentPhase && (
+        <WorkspaceChat capstoneProjectId={capstoneProjectId} phase={currentPhase} />
+      )}
       {showSubmitReminder && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4">
           <div

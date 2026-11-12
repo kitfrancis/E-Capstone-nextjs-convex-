@@ -1951,6 +1951,7 @@ const imradBlocked =
               <OnlyOfficeEditor
                 fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}${officeDoc.mode === "view" ? "-view2" : ""}`}
                 deliverableId={officeDoc.deliverableId}
+                capstoneProjectId={project?._id as Id<"capstoneProjects"> | undefined}
                 fileName={officeDoc.fileName}
                 fileUrl={resolvedOfficeUrl}
                 phase={officeDoc.phase}

@@ -226,6 +226,21 @@ export default defineSchema({
     createdAt: v.string(),
   }).index("by_deliverable", ["deliverableId"]),
 
+  workspaceChatMessages: defineTable({
+    capstoneProjectId: v.id("capstoneProjects"),
+    phase: v.string(),
+    authorId: v.id("users"),
+    authorName: v.string(),
+    authorRole: v.union(
+      v.literal("student"),
+      v.literal("instructor"),
+      v.literal("adviser"),
+      v.literal("admin")
+    ),
+    message: v.string(),
+    createdAt: v.number(),
+  }).index("by_project_phase", ["capstoneProjectId", "phase"]),
+
   tasks: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),
     title: v.string(),

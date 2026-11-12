@@ -264,6 +264,8 @@ export default function InstructorTeamManagementPage() {
     fileName: string;
     storageId: string;
     deliverableId: string;
+    capstoneProjectId: Id<"capstoneProjects">;
+    phase: string;
   } | null>(null);
   const fileUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -275,6 +277,8 @@ export default function InstructorTeamManagementPage() {
     fileName: string;
     storageId: string;
     deliverableId: string;
+    capstoneProjectId: Id<"capstoneProjects">;
+    phase: string;
   } | null>(null);
   const officeUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -966,6 +970,8 @@ export default function InstructorTeamManagementPage() {
                                         fileName: d.fileName,
                                         storageId: d.storageId,
                                         deliverableId: d._id,
+                                        capstoneProjectId: d.capstoneProjectId,
+                                        phase: d.phase,
                                       };
                                       if (isPdf(d.fileName)) setSelectedDeliverable(doc);
                                       else setOfficeDoc(doc);
@@ -1166,8 +1172,10 @@ export default function InstructorTeamManagementPage() {
         <OnlyOfficeEditor
           fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
           deliverableId={officeDoc.deliverableId}
+          capstoneProjectId={officeDoc.capstoneProjectId}
           fileName={officeDoc.fileName}
           fileUrl={officeUrl}
+          phase={officeDoc.phase}
           mode="comment"
           userId={user?.id}
           userName={user?.fullName ?? undefined}

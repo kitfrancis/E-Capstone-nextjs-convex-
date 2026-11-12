@@ -92,6 +92,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
     fileName: string;
     storageId: string;
     deliverableId: string;
+    phase: string;
   } | null>(null);
 
   // OnlyOffice editor: advisers can only comment (no editing); approved files are read-only
@@ -99,6 +100,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
     fileName: string;
     storageId: string;
     deliverableId: string;
+    phase: string;
     mode: "comment" | "view";
   } | null>(null);
 
@@ -123,13 +125,14 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
   const updateStatus = useMutation(api.dashboard.adviserDeliverableStatus);
 
   const openInOffice = (
-    d: { fileName: string; storageId?: string; _id: string; status: string }
+    d: { fileName: string; storageId?: string; _id: string; status: string; phase: string }
   ) => {
     if (!d.storageId) return;
     setOfficeDoc({
       fileName: d.fileName,
       storageId: d.storageId,
       deliverableId: d._id,
+      phase: d.phase,
       mode: d.status === "approved" ? "view" : "comment",
     });
   };
@@ -296,6 +299,7 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
                                     fileName: d.fileName,
                                     storageId: d.storageId!,
                                     deliverableId: d._id,
+                                    phase: d.phase,
                                   })
                                 : openInOffice(d)
                             }
@@ -376,8 +380,10 @@ export function AdviserTabsDemo({ capstoneProjectId }: { capstoneProjectId?: Id<
         <OnlyOfficeEditor
           fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
           deliverableId={officeDoc.deliverableId}
+          capstoneProjectId={capstoneProjectId}
           fileName={officeDoc.fileName}
           fileUrl={officeUrl}
+          phase={officeDoc.phase}
           mode="comment"
           userId={me?.clerkId}
           userName={me?.name ?? undefined}
