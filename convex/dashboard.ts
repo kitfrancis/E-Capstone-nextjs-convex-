@@ -1608,30 +1608,60 @@ export const notifyOfficeComment = mutation({
   args: {
     secret: v.string(),
     deliverableId: v.id("deliverables"),
-    clerkId: v.string(),
+    draftId: v.id("deliverableDrafts"),
+    sessionRevision: v.number(),
+    sessionClosed: v.boolean(),
+    clerkIds: v.array(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     if (args.secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
 
-    const author = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-    if (!author || (author.role !== "adviser" && author.role !== "instructor")) return;
-
     const deliverable = await ctx.db.get(args.deliverableId);
-    if (!deliverable) return;
+    if (!deliverable) return null;
     const project = await ctx.db.get(deliverable.capstoneProjectId);
-    if (!project || !canAccess(author, project)) return;
+    if (!project) return null;
+    const draft = await ctx.db.get(args.draftId);
+    const notificationSessionRevision =
+      args.sessionRevision - (args.sessionClosed ? 1 : 0);
+    if (
+      !draft ||
+      draft.deliverableId !== args.deliverableId ||
+      (draft.sessionRevision ?? 0) !== args.sessionRevision ||
+      draft.lastNotifiedSessionRevision === notificationSessionRevision
+    ) {
+      return null;
+    }
+
+    const authors = await Promise.all(
+      [...new Set(args.clerkIds)].map((clerkId) =>
+        ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+          .first(),
+      ),
+    );
+    const author = authors.find(
+      (user) =>
+        user &&
+        (user.role === "adviser" || user.role === "instructor") &&
+        canAccess(user, project),
+    );
+    if (!author) return null;
+
+    await ctx.db.patch(args.draftId, {
+      lastNotifiedSessionRevision: notificationSessionRevision,
+    });
 
     for (const memberId of project.members ?? []) {
       await ctx.runMutation(api.notifications.sendNotification, {
         userId: memberId,
-        message: `${author.name} added comments on "${deliverable.fileName}" (${deliverable.phase}, v${deliverable.version}). Open the file to read them.`,
+        message: `${author.name} added comments on the active draft of "${deliverable.fileName}" (${deliverable.phase}). Open the shared workspace to read them.`,
         type: "comment_added",
         relatedId: args.deliverableId,
-        link: "/dashboard/student",
+        link: `/dashboard/student?tab=deliverables&deliverableId=${args.deliverableId}&viewDraft=1`,
       });
     }
+    return null;
   },
 });

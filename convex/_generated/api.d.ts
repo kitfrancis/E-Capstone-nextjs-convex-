@@ -19,6 +19,7 @@ import type * as drafts from "../drafts.js";
 import type * as imrad from "../imrad.js";
 import type * as notifications from "../notifications.js";
 import type * as users from "../users.js";
+import type * as workspaceChat from "../workspaceChat.js";
 
 import type {
   ApiFromModules,
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   imrad: typeof imrad;
   notifications: typeof notifications;
   users: typeof users;
+  workspaceChat: typeof workspaceChat;
 }>;
 
 /**

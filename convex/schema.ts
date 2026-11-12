@@ -213,6 +213,8 @@ export default defineSchema({
     baseVersion: v.number(),
     updatedAt: v.number(),
     saveRevision: v.optional(v.number()),
+    lastNotifiedSessionRevision: v.optional(v.number()),
+    sessionRevision: v.optional(v.number()),
   }).index("by_deliverable", ["deliverableId"]),
 
   pdfComments: defineTable({
@@ -225,6 +227,21 @@ export default defineSchema({
     y: v.number(),
     createdAt: v.string(),
   }).index("by_deliverable", ["deliverableId"]),
+
+  workspaceChatMessages: defineTable({
+    capstoneProjectId: v.id("capstoneProjects"),
+    phase: v.string(),
+    authorId: v.id("users"),
+    authorName: v.string(),
+    authorRole: v.union(
+      v.literal("student"),
+      v.literal("instructor"),
+      v.literal("adviser"),
+      v.literal("admin")
+    ),
+    message: v.string(),
+    createdAt: v.number(),
+  }).index("by_project_phase", ["capstoneProjectId", "phase"]),
 
   tasks: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),

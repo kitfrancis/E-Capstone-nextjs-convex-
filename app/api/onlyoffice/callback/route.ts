@@ -98,8 +98,15 @@ export async function POST(req: Request) {
   if (draftId) {
     // Draft content is persisted in the draft until Submit creates a version.
     if (body.status === 2 || body.status === 6) {
+      const sessionRevisionParam = params.get("sessionRevision");
+      const sessionRevision =
+        sessionRevisionParam === null ? 0 : Number(sessionRevisionParam);
       if (typeof body.url !== "string" || !isAllowedOnlyOfficeFileUrl(body.url)) {
         console.error("Draft callback is missing a valid OnlyOffice file URL.");
+        return NextResponse.json({ error: 1 });
+      }
+      if (!Number.isSafeInteger(sessionRevision) || sessionRevision < 0) {
+        console.error("Draft callback contains an invalid OnlyOffice session revision.");
         return NextResponse.json({ error: 1 });
       }
       try {
@@ -126,41 +133,37 @@ export async function POST(req: Request) {
           throw new Error("Convex returned an invalid draft storage ID.");
         }
 
-        await convex.mutation(api.drafts.saveDraftFile, {
+        const saveState = await convex.mutation(api.drafts.saveDraftFile, {
           secret,
           draftId: draftId as Id<"deliverableDrafts">,
           storageId: uploadResult.storageId as Id<"_storage">,
+          sessionRevision,
+          sessionClosed: body.status === 2,
         });
+        if (
+          saveState !== null &&
+          (body.status === 2 || body.status === 6)
+        ) {
+          const fileId = params.get("fileId");
+          if (!fileId) throw new Error("Comment callback is missing its deliverable ID.");
+          const clerkIds = Array.isArray(body.users)
+            ? body.users.filter((userId): userId is string => typeof userId === "string")
+            : [];
+          await convex.mutation(api.dashboard.notifyOfficeComment, {
+            secret,
+            deliverableId: fileId as Id<"deliverables">,
+            draftId: draftId as Id<"deliverableDrafts">,
+            sessionRevision: saveState.sessionRevision,
+            sessionClosed: body.status === 2,
+            clerkIds,
+          });
+        }
       } catch (err) {
-        console.error("Draft save failed:", err);
+        console.error("Draft save or comment notification failed:", err);
         return NextResponse.json({ error: 1 });
       }
     }
     return NextResponse.json({ error: 0 });
-  }
-
-  // Adviser / instructor comment sessions: tell the students when the document
-  // is saved with changes (status 2 = closed after edits, 6 = force-save while
-  // still open). A failed notification never makes OnlyOffice show an error.
-  const fileId = params.get("fileId");
-  if (
-    params.get("notify") === "1" &&
-    (body.status === 2 || body.status === 6) &&
-    fileId
-  ) {
-    const clerkIds: string[] = Array.isArray(body.users) ? body.users : [];
-    for (const clerkId of clerkIds) {
-      try {
-        // The mutation ignores anyone who isn't an adviser/instructor on this team
-        await convex.mutation(api.dashboard.notifyOfficeComment, {
-          secret: process.env.ONLYOFFICE_SECRET!,
-          deliverableId: fileId as Id<"deliverables">,
-          clerkId,
-        });
-      } catch (err) {
-        console.error("Comment notification failed:", err);
-      }
-    }
   }
 
   return NextResponse.json({ error: 0 });

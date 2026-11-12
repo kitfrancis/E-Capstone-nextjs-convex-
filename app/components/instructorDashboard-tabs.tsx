@@ -58,8 +58,8 @@ const PDFViewer = dynamic(
   { ssr: false, loading: () => <div>Loading PDF viewer...</div> }
 );
 
-const OnlyOfficeEditor = dynamic(
-  () => import("@/app/components/editor/document-editor"),
+const StaffDraftEditor = dynamic(
+  () => import("@/app/components/editor/staff-draft-editor"),
   { ssr: false }
 );
 
@@ -191,6 +191,8 @@ export function InstructorTabsDemo({
     fileName: string;
     storageId: string;
     deliverableId: string;
+    capstoneProjectId: Id<"capstoneProjects">;
+    phase: string;
   } | null>(null);
   const fileUrl = useQuery(
     api.dashboard.getFileUrl,
@@ -202,12 +204,9 @@ export function InstructorTabsDemo({
     fileName: string;
     storageId: string;
     deliverableId: string;
+    capstoneProjectId: Id<"capstoneProjects">;
+    phase: string;
   } | null>(null);
-  const officeUrl = useQuery(
-    api.dashboard.getFileUrl,
-    officeDoc ? { storageId: officeDoc.storageId as Id<"_storage"> } : "skip"
-  );
-
   // Invite code
   const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
   const [viewingTeam, setViewingTeam] =
@@ -631,6 +630,8 @@ const handleStatus = async (
               fileName: d.fileName,
               storageId: d.storageId!,
               deliverableId: d._id,
+              capstoneProjectId: d.capstoneProjectId,
+              phase: d.phase,
             })
           }
         >
@@ -643,6 +644,8 @@ const handleStatus = async (
               fileName: d.fileName,
               storageId: d.storageId!,
               deliverableId: d._id,
+              capstoneProjectId: d.capstoneProjectId,
+              phase: d.phase,
             })
           }
         >
@@ -819,13 +822,16 @@ const handleStatus = async (
       />
 
       {/* OnlyOffice editor, comment-only */}
-      {officeDoc && typeof officeUrl === "string" && officeUrl.startsWith("http") && (
-        <OnlyOfficeEditor
-          fileId={`${officeDoc.deliverableId}-${officeDoc.storageId}`}
-          deliverableId={officeDoc.deliverableId}
-          fileName={officeDoc.fileName}
-          fileUrl={officeUrl}
-          mode="comment"
+      {officeDoc && (
+        <StaffDraftEditor
+          key={officeDoc.deliverableId}
+          deliverableId={officeDoc.deliverableId as Id<"deliverables">}
+          capstoneProjectId={officeDoc.capstoneProjectId}
+          deliverables={
+            (allDeliverables ?? []).filter(
+              (item) => item.capstoneProjectId === officeDoc.capstoneProjectId,
+            )
+          }
           userId={user?.id}
           userName={user?.fullName ?? undefined}
           onClose={() => setOfficeDoc(null)}
