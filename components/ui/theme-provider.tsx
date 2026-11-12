@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 const THEME_STORAGE_KEY = "theme";
 const DARK_CLASS = "dark";
 const THEME_CHANGE_EVENT = "app-theme-change";
+const EDITOR_WORKSPACE_EVENT = "onlyoffice-workspace-change";
 export type AppTheme = "light" | "dark";
+let openEditorWorkspaces = 0;
 
 function getSystemTheme() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -26,6 +28,21 @@ function applyTheme(theme: AppTheme) {
 
 export function applyAppTheme(theme: AppTheme) {
   applyTheme(theme);
+}
+
+export function registerEditorWorkspace() {
+  openEditorWorkspaces += 1;
+  window.dispatchEvent(
+    new CustomEvent<boolean>(EDITOR_WORKSPACE_EVENT, { detail: true }),
+  );
+  return () => {
+    openEditorWorkspaces = Math.max(0, openEditorWorkspaces - 1);
+    window.dispatchEvent(
+      new CustomEvent<boolean>(EDITOR_WORKSPACE_EVENT, {
+        detail: openEditorWorkspaces > 0,
+      }),
+    );
+  };
 }
 
 export function useAppTheme() {
@@ -58,7 +75,20 @@ export function useAppTheme() {
 
 export function ThemeToggle() {
   const { theme, mounted, toggleTheme } = useAppTheme();
+  const [editorWorkspaceOpen, setEditorWorkspaceOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setEditorWorkspaceOpen(openEditorWorkspaces > 0);
+    const handleWorkspaceChange = (event: Event) => {
+      setEditorWorkspaceOpen((event as CustomEvent<boolean>).detail);
+    };
+    window.addEventListener(EDITOR_WORKSPACE_EVENT, handleWorkspaceChange);
+    return () =>
+      window.removeEventListener(EDITOR_WORKSPACE_EVENT, handleWorkspaceChange);
+  }, []);
+
   if (!mounted) return null;
+  if (editorWorkspaceOpen) return null;
 
   return (
     <Button

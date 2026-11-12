@@ -10,14 +10,15 @@ import {
   History,
   Keyboard,
   Loader2,
-  Moon,
   Power,
   RotateCw,
   Save,
-  Sun,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useAppTheme } from "@/components/ui/theme-provider";
+import {
+  registerEditorWorkspace,
+  useAppTheme,
+} from "@/components/ui/theme-provider";
 import WorkspaceChat from "./workspace-chat";
 
 type WorkspaceDeliverable = {
@@ -207,7 +208,7 @@ export default function OnlyOfficeEditor({
   onEditorReady,
   onEditorError,
 }: OnlyOfficeEditorProps) {
-  const { theme, mounted: themeMounted, toggleTheme } = useAppTheme();
+  const { theme, mounted: themeMounted } = useAppTheme();
   const onEditorReadyRef = useRef(onEditorReady);
   const onEditorErrorRef = useRef(onEditorError);
   onEditorReadyRef.current = onEditorReady;
@@ -287,6 +288,8 @@ export default function OnlyOfficeEditor({
     hasPendingChangesRef.current = false;
     hasChangesRef.current = false;
   }, [fileId, draftId, fileName, phase]);
+
+  useEffect(() => registerEditorWorkspace(), []);
 
   useEffect(() => {
     if (!workspaceSidebar || editorMode !== "edit") return;
@@ -411,6 +414,8 @@ export default function OnlyOfficeEditor({
   }
 
   useEffect(() => {
+    if (!themeMounted) return;
+
     let cancelled = false;
     let activated = false;
     let comparisonRequested = false;
@@ -489,7 +494,13 @@ export default function OnlyOfficeEditor({
               mode: "fast",
               change: true,
             },
-            customization: { autosave: true, forcesave: true, chat: false, comments: true },
+            customization: {
+              autosave: true,
+              forcesave: true,
+              chat: false,
+              comments: true,
+              uiTheme: theme === "dark" ? "theme-dark" : "theme-light",
+            },
             mode: editorMode === "view" ? "view" : "edit",
             user: userId ? { id: userId, name: userName ?? "User" } : undefined,
           },
@@ -619,6 +630,8 @@ export default function OnlyOfficeEditor({
     draftSessionRevision,
     phase,
     baseVersion,
+    theme,
+    themeMounted,
     retryCount,
   ]);
 
@@ -704,21 +717,6 @@ export default function OnlyOfficeEditor({
               <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-1 text-[10px] font-semibold text-sky-700 dark:bg-sky-950 dark:text-sky-300">
                 v{nextVersion}.0
               </span>
-            )}
-            {themeMounted && (
-              <button
-                type="button"
-                onClick={toggleTheme}
-                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-                title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
-                {theme === "dark" ? (
-                  <Sun className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <Moon className="h-4 w-4" aria-hidden="true" />
-                )}
-              </button>
             )}
           </div>
 
@@ -982,21 +980,6 @@ export default function OnlyOfficeEditor({
               >
                 {closing ? (mode === "comment" ? "Closing…" : "Saving…") : mode === "comment" ? "Close Editor" : "Close"}
               </button>
-              {themeMounted && (
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-                  title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-                  className="flex h-8 w-8 items-center justify-center rounded-md border border-white/20 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
-                >
-                  {theme === "dark" ? (
-                    <Sun className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <Moon className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </button>
-              )}
             </div>
           </div>
         )}
