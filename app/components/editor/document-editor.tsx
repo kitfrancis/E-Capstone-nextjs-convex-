@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  CircleAlert,
   FileText,
   History,
   Keyboard,
@@ -102,7 +103,43 @@ function notifyCallbackTargetError(error: unknown) {
         error.message.toLowerCase().includes("save")));
 
   if (isSaveConfirmationError) {
-    toast.error(SAVE_WITH_SHORTCUT_MESSAGE, { position: "top-center" });
+    toast.custom(
+      (id) => (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 pointer-events-auto"
+          role="alert"
+          aria-live="assertive"
+        >
+          <div className="w-full max-w-xl rounded-2xl border border-amber-200 bg-white p-6 text-slate-900 shadow-2xl sm:p-8">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <CircleAlert className="h-7 w-7" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-bold sm:text-2xl">Save not confirmed</h2>
+                <p className="mt-2 text-base leading-relaxed text-slate-700 sm:text-lg">
+                  {SAVE_WITH_SHORTCUT_MESSAGE}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => toast.dismiss(id)}
+                className="min-w-24 rounded-lg bg-sky-700 px-5 py-2.5 text-base font-semibold text-white hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      ),
+      {
+        id: "onlyoffice-save-warning",
+        duration: Infinity,
+        position: "top-center",
+      },
+    );
   }
   return isSaveConfirmationError;
 }
