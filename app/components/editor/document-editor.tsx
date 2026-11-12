@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   CircleAlert,
   FileText,
   History,
@@ -237,6 +239,7 @@ export default function OnlyOfficeEditor({
   const [comparing, setComparing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [switchingChapter, setSwitchingChapter] = useState<string | null>(null);
+  const [expandedVersionPhase, setExpandedVersionPhase] = useState<string | null>(null);
   const serverUrl = process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080";
   const callbackUrl =
     process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL?.trim() ||
@@ -262,6 +265,10 @@ export default function OnlyOfficeEditor({
   const currentPhaseDeliverables = deliverables
     .filter((deliverable) => deliverable.phase === currentPhase)
     .sort((a, b) => b.version - a.version);
+  const showAllVersions = expandedVersionPhase === currentPhase;
+  const visibleVersions = showAllVersions
+    ? currentPhaseDeliverables
+    : currentPhaseDeliverables.slice(0, 3);
   const latestVersion = currentPhaseDeliverables[0]?.version ?? baseVersion ?? 1;
   const nextVersion = Math.max(latestVersion, baseVersion ?? 0) + 1;
   const workspaceTitle = comparison
@@ -703,6 +710,28 @@ export default function OnlyOfficeEditor({
                 <History className="h-3.5 w-3.5" />
                 Version History
               </h2>
+              {currentPhaseDeliverables.length > 3 && (
+                <button
+                  type="button"
+                  aria-expanded={showAllVersions}
+                  aria-controls="version-history-list"
+                  onClick={() =>
+                    setExpandedVersionPhase(showAllVersions ? null : currentPhase)
+                  }
+                  className="mb-2 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-sky-700 transition-colors hover:bg-sky-50"
+                >
+                  <span>
+                    {showAllVersions
+                      ? "Show latest 3"
+                      : `See all ${currentPhaseDeliverables.length} versions`}
+                  </span>
+                  {showAllVersions ? (
+                    <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                </button>
+              )}
               {comparison && (
                 <button
                   type="button"
@@ -727,9 +756,9 @@ export default function OnlyOfficeEditor({
                   Preparing comparison…
                 </p>
               )}
-              <div className="space-y-1.5">
+              <div id="version-history-list" className="space-y-1.5">
                 {currentPhaseDeliverables.length > 0 ? (
-                  currentPhaseDeliverables.map((item) => (
+                  visibleVersions.map((item) => (
                     <button
                       type="button"
                       key={item._id}
