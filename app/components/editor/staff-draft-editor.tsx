@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -48,6 +48,7 @@ export default function StaffDraftEditor({
   const startDraft = useMutation(api.drafts.startDraft);
   const [session, setSession] = useState<DraftSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const initializedDeliverableId = useRef<Id<"deliverables"> | null>(null);
   const initialDeliverable = deliverables?.find((item) => item._id === deliverableId);
   const projectDeliverables = (deliverables ?? []).filter(
     (item) => item.capstoneProjectId === capstoneProjectId,
@@ -66,11 +67,17 @@ export default function StaffDraftEditor({
 
   useEffect(() => {
     let cancelled = false;
-    if (!initialDeliverable) return;
+    if (
+      !initialDeliverable ||
+      initializedDeliverableId.current === deliverableId
+    ) {
+      return;
+    }
 
     void startDraft({ deliverableId })
       .then((draft) => {
         if (cancelled) return;
+        initializedDeliverableId.current = deliverableId;
         setSession({
           deliverable: initialDeliverable,
           draftId: draft.draftId,
@@ -214,6 +221,7 @@ export default function StaffDraftEditor({
 
   return (
     <OnlyOfficeEditor
+      key={`${session.draftId}-${session.sessionRevision}`}
       fileId={`${session.deliverable._id}-${session.draftId}`}
       deliverableId={session.deliverable._id}
       fileName={session.deliverable.fileName}
@@ -233,7 +241,7 @@ export default function StaffDraftEditor({
       onCompareVersion={handleCompareVersion}
       latestVersionAvailable={latestVersionAvailable}
       onOpenLatestVersion={async (hasChanges) => {
-        if (!latestForCurrentPhase || !session) return;
+        if (!session) return;
         if (hasChanges) {
           await forceSaveDraft(
             `draft-${session.draftId}-${session.sessionRevision}`,
@@ -241,7 +249,24 @@ export default function StaffDraftEditor({
             session.storageId,
           );
         }
-        await openDraft(latestForCurrentPhase);
+        const freshDeliverables = await convex.query(
+          api.dashboard.getDeliverables,
+          { capstoneProjectId },
+        );
+        const latest = freshDeliverables
+          .filter(
+            (item) =>
+              item.phase === session.deliverable.phase && item.storageId,
+          )
+          .reduce<Deliverable | null>(
+            (found, item) =>
+              !found || item.version > found.version ? item : found,
+            null,
+          );
+        if (!latest || latest.version <= session.deliverable.version) {
+          throw new Error("There is no newer submitted version to open.");
+        }
+        await openDraft(latest);
       }}
       onGetDraftStorageId={async () =>
         (await getCurrentDraft(session.deliverable._id))?.storageId ?? null
