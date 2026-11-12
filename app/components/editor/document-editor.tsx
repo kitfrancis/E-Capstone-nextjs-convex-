@@ -12,7 +12,6 @@ import {
   RotateCw,
   Save,
 } from "lucide-react";
-import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import WorkspaceChat from "./workspace-chat";
 
@@ -93,55 +92,15 @@ const CALLBACK_TARGET_ERROR = "The OnlyOffice save callback points to a differen
 const SAVE_WITH_SHORTCUT_MESSAGE =
   "OnlyOffice couldn't confirm your latest edits. Press Ctrl+S in the document, wait for it to save, then try again.";
 
-function notifyCallbackTargetError(error: unknown) {
-  const isSaveConfirmationError =
+function isSaveConfirmationError(error: unknown) {
+  return (
     error instanceof Error &&
     (error.message.includes(CALLBACK_TARGET_ERROR) ||
       error.message.startsWith("Couldn't save your latest edits") ||
       error.message.includes("has not confirmed your latest edits") ||
       (error.message.toLowerCase().includes("onlyoffice") &&
-        error.message.toLowerCase().includes("save")));
-
-  if (isSaveConfirmationError) {
-    toast.custom(
-      (id) => (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 pointer-events-auto"
-          role="alert"
-          aria-live="assertive"
-        >
-          <div className="w-full max-w-xl rounded-2xl border border-amber-200 bg-white p-6 text-slate-900 shadow-2xl sm:p-8">
-            <div className="flex items-start gap-4">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                <CircleAlert className="h-7 w-7" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-bold sm:text-2xl">Save not confirmed</h2>
-                <p className="mt-2 text-base leading-relaxed text-slate-700 sm:text-lg">
-                  {SAVE_WITH_SHORTCUT_MESSAGE}
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={() => toast.dismiss(id)}
-                className="min-w-24 rounded-lg bg-sky-700 px-5 py-2.5 text-base font-semibold text-white hover:bg-sky-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      ),
-      {
-        id: "onlyoffice-save-warning",
-        duration: Infinity,
-        position: "top-center",
-      },
-    );
-  }
-  return isSaveConfirmationError;
+        error.message.toLowerCase().includes("save")))
+  );
 }
 
 declare global {
@@ -255,6 +214,7 @@ export default function OnlyOfficeEditor({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeEditorSlot, setActiveEditorSlot] = useState<EditorSlot | null>(null);
+  const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [activeDocument, setActiveDocument] = useState<{
     phase?: string;
     fileName: string;
@@ -363,7 +323,8 @@ export default function OnlyOfficeEditor({
     try {
       await onSelectChapter(chapterPhase, hasChangesRef.current);
     } catch (error) {
-      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      const saveConfirmationFailed = isSaveConfirmationError(error);
+      if (saveConfirmationFailed) setShowSaveWarning(true);
       setSwitchingChapter(null);
       setSubmitError(saveConfirmationFailed
         ? null
@@ -390,7 +351,8 @@ export default function OnlyOfficeEditor({
       hasChangesRef.current = false;
       setComparison(nextComparison);
     } catch (error) {
-      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      const saveConfirmationFailed = isSaveConfirmationError(error);
+      if (saveConfirmationFailed) setShowSaveWarning(true);
       setComparisonError(
         saveConfirmationFailed
           ? SAVE_WITH_SHORTCUT_MESSAGE
@@ -658,7 +620,8 @@ export default function OnlyOfficeEditor({
     try {
       await onSubmit(hasChangesRef.current);
     } catch (error) {
-      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      const saveConfirmationFailed = isSaveConfirmationError(error);
+      if (saveConfirmationFailed) setShowSaveWarning(true);
       setSubmitError(saveConfirmationFailed
         ? null
         : error instanceof Error
@@ -691,7 +654,8 @@ export default function OnlyOfficeEditor({
     try {
       await onClose(hasChangesRef.current);
     } catch (error) {
-      const saveConfirmationFailed = notifyCallbackTargetError(error);
+      const saveConfirmationFailed = isSaveConfirmationError(error);
+      if (saveConfirmationFailed) setShowSaveWarning(true);
       setSubmitError(saveConfirmationFailed
         ? null
         : error instanceof Error
@@ -1060,6 +1024,62 @@ export default function OnlyOfficeEditor({
       </div>
       {capstoneProjectId && currentPhase && (
         <WorkspaceChat capstoneProjectId={capstoneProjectId} phase={currentPhase} />
+      )}
+      {showSaveWarning && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="save-warning-title"
+            aria-describedby="save-warning-description"
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white text-slate-900 shadow-[0_24px_80px_rgba(15,23,42,0.3)] ring-1 ring-black/5"
+          >
+            <div className="h-1.5 bg-red-400" />
+            <div className="p-6 sm:p-7">
+              <div className="flex items-start gap-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700 ring-1 ring-red-200">
+                  <CircleAlert className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <h2 id="save-warning-title" className="text-xl font-semibold tracking-tight">
+                    We couldn’t confirm your save
+                  </h2>
+                  <p
+                    id="save-warning-description"
+                    className="mt-2 text-sm leading-6 text-slate-600 sm:text-base"
+                  >
+                    Your latest edits may not be saved yet. Keep the document open and try again.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3.5">
+                <span className="shrink-0 text-sm text-slate-600">Try saving with</span>
+                <span className="inline-flex items-center gap-1.5" aria-label="Control plus S">
+                  <kbd className="rounded-md border border-slate-300 bg-white px-2 py-1 font-sans text-xs font-semibold text-slate-700 shadow-sm">
+                    Ctrl
+                  </kbd>
+                  <span className="text-xs text-slate-400">+</span>
+                  <kbd className="rounded-md border border-slate-300 bg-white px-2 py-1 font-sans text-xs font-semibold text-slate-700 shadow-sm">
+                    S
+                  </kbd>
+                </span>
+                <span className="min-w-0 text-sm leading-5 text-slate-600">
+                  then wait for OnlyOffice to finish saving.
+                </span>
+              </div>
+              <div className="mt-6 flex justify-end border-t border-slate-100 pt-5">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setShowSaveWarning(false)}
+                  className="min-h-10 rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       {showSubmitReminder && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 px-4">
