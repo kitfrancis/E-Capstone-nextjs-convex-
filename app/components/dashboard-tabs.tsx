@@ -490,8 +490,7 @@ export function TabsDemo({
 
   const compareVersion = async (
     targetDeliverableId: string,
-    hasChanges: boolean,
-    draftStorageIdAtSelection: string | null,
+    shouldForceSave: boolean,
   ) => {
     const current = officeDoc;
     if (!current || !deliverables) throw new Error("The current manuscript is unavailable.");
@@ -518,11 +517,16 @@ export function TabsDemo({
         });
       const beforeSave = await getDraft();
       if (!beforeSave) throw new Error("The current draft could not be loaded.");
-      if (
-        hasChanges &&
-        beforeSave.storageId === draftStorageIdAtSelection
-      ) {
-        await forceSaveDraft(current.draft.docKey, getDraft, beforeSave.storageId);
+      const saved = await forceSaveDraft(
+        current.draft.docKey,
+        getDraft,
+        beforeSave.storageId,
+        { allowNoop: true },
+      );
+      if (shouldForceSave && saved.storageId === beforeSave.storageId) {
+        throw new Error(
+          "OnlyOffice has not confirmed the latest edits in your draft. Save in OnlyOffice and try comparing again.",
+        );
       }
       savedDraft = await getDraft();
       if (!savedDraft) throw new Error("The current draft could not be loaded.");
