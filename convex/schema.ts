@@ -214,6 +214,7 @@ export default defineSchema({
     updatedAt: v.number(),
     saveRevision: v.optional(v.number()),
     lastNotifiedSessionRevision: v.optional(v.number()),
+    lastNotifiedSaveRevision: v.optional(v.number()),
     sessionRevision: v.optional(v.number()),
   }).index("by_deliverable", ["deliverableId"]),
 

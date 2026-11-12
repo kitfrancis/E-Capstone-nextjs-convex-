@@ -65,6 +65,8 @@ type OnlyOfficeEditorProps = {
   draftSessionRevision?: number;
   baseVersion?: number;            // shows "Draft based on v1" and labels the button "Submit as v2"
   onSubmit?: (hasChanges: boolean) => Promise<void>;
+  latestVersionAvailable?: number;
+  onOpenLatestVersion?: (hasChanges: boolean) => Promise<void>;
   onEditorReady?: () => void;
   onEditorError?: () => void;
 };
@@ -199,6 +201,8 @@ export default function OnlyOfficeEditor({
   draftSessionRevision,
   baseVersion,
   onSubmit,
+  latestVersionAvailable,
+  onOpenLatestVersion,
   onEditorReady,
   onEditorError,
 }: OnlyOfficeEditorProps) {
@@ -223,6 +227,7 @@ export default function OnlyOfficeEditor({
   const [retryCount, setRetryCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [closing, setClosing] = useState(false); // NEW
+  const [openingLatestVersion, setOpeningLatestVersion] = useState(false);
   const [showSubmitReminder, setShowSubmitReminder] = useState(false);
   const [versionAwaitingCompare, setVersionAwaitingCompare] =
     useState<WorkspaceDeliverable | null>(null);
@@ -627,6 +632,21 @@ export default function OnlyOfficeEditor({
     }
   }
 
+  async function handleOpenLatestVersion() {
+    if (!onOpenLatestVersion) return;
+    setOpeningLatestVersion(true);
+    setSubmitError(null);
+    try {
+      await onOpenLatestVersion(hasChangesRef.current);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Couldn't open the latest version.",
+      );
+    } finally {
+      setOpeningLatestVersion(false);
+    }
+  }
+
   // Close after OnlyOffice has finished its normal autosave synchronization.
   async function handleClose() {
     setClosing(true);
@@ -912,6 +932,22 @@ export default function OnlyOfficeEditor({
                 {closing ? (mode === "comment" ? "Closing…" : "Saving…") : mode === "comment" ? "Close Editor" : "Close"}
               </button>
             </div>
+          </div>
+        )}
+        {latestVersionAvailable !== undefined && onOpenLatestVersion && (
+          <div
+            className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950"
+            role="status"
+          >
+            <span>A newer submitted version is available.</span>
+            <button
+              type="button"
+              onClick={() => void handleOpenLatestVersion()}
+              disabled={openingLatestVersion || submitting || closing || switchingChapter !== null}
+              className="shrink-0 rounded-md bg-amber-700 px-3 py-1.5 font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {openingLatestVersion ? "Opening…" : `Open latest (v${latestVersionAvailable})`}
+            </button>
           </div>
         )}
         {comparison && !workspaceSidebar && (
