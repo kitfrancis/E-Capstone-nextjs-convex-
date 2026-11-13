@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery, useConvex } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import dynamic from "next/dynamic";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
 import {
   Combobox,
   ComboboxContent,
@@ -264,6 +265,11 @@ export default function Archive() {
     }
   };
 
+
+  const convex = useConvex();
+
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   if (projectsData === undefined) return <ArchiveSkeleton />;
 
   const courseTone = (course: string) =>
@@ -276,43 +282,53 @@ export default function Archive() {
     if (!isDesktop) setDetailOpen(true);
   };
 
-  const handleDownload = (project: Project) => {
-    const line = "=".repeat(60);
-    const content = `
-PROJECT ARCHIVE - ${project.title}
-${line}
+const downloadFile = async (storageId: string, downloadName: string) => {
+  const url = await convex.query(api.archive.getFileUrl, {
+    storageId: storageId as Id<"_storage">,
+  });
+  if (!url) return;
 
-TEAM: ${project.team}
-YEAR: ${project.year}
-COURSE: ${project.course}
-ADVISER: ${project.adviser}
-GRADE: ${project.grade}
-ARCHIVED DATE: ${project.archivedDate}
-
-${line}
-ABSTRACT
-${line}
-${project.abstract}
-
-${line}
-KEYWORDS
-${line}
-${project.keywords.join(", ")}
-
-${line}
-TEAM MEMBERS
-${line}
-${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
-  `.trim();
-
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
+  try {
+    // Fetch as a blob so the browser saves it instead of navigating,
+    // since the `download` attribute is ignored on cross-origin URLs
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Download failed");
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `${project.title.replace(/\s+/g, "_")}_Archive.txt`;
+    a.href = objectUrl;
+    a.download = downloadName;
     a.click();
-    URL.revokeObjectURL(url);
-  };
+    URL.revokeObjectURL(objectUrl);
+  } catch {
+    window.open(url, "_blank"); // fallback
+  }
+};
+
+const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: string }) => {
+  const busy = downloadingId === storageId;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="shrink-0"
+      title="Download"
+      aria-label={`Download ${fileName}`}
+      disabled={busy}
+      onClick={async () => {
+        setDownloadingId(storageId);
+        try {
+          await downloadFile(storageId, fileName);
+        } finally {
+          setDownloadingId(null);
+        }
+      }}
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+    </Button>
+  );
+};
 
   // Detail content shared by the desktop side panel and the mobile/tablet modal.
   const detailBody = selectedProject && (
@@ -375,48 +391,49 @@ ${project.members.map((m: string, i: number) => `${i + 1}. ${m}`).join("\n")}
         </ul>
       </section>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-5">
-        <h2 className="text-sm font-semibold text-foreground">Project files</h2>
-        {selectedProject.storageId && (
-          <Button
-            className="w-full"
-            onClick={() => {
-              const storageId = selectedProject.storageId;
-              if (!storageId) return;
-              setDetailOpen(false);
-              setViewingFile({
-                storageId,
-                fileName: selectedProject.title,
-              });
-            }}
-          >
-            <File className="mr-2 h-4 w-4" />
-            View original project PDF
-          </Button>
-        )}
-        {selectedProject.additionalFiles?.map((file) => (
-          <Button
-            key={file.storageId}
-            type="button"
-            variant="outline"
-            className="w-full justify-start"
-            onClick={() => {
-              setDetailOpen(false);
-              setViewingFile({
-                storageId: file.storageId,
-                fileName: file.fileName,
-              });
-            }}
-          >
-            <FileText className="mr-2 h-4 w-4 shrink-0" />
-            <span className="truncate">{file.fileName}</span>
-          </Button>
-        ))}
-        <Button variant="outline" className="w-full" onClick={() => handleDownload(selectedProject)}>
-          <Download className="mr-2 h-4 w-4" />
-          Download summary
-        </Button>
-      </div>
+<div className="flex flex-col gap-2 border-t border-border pt-5">
+  <h2 className="text-sm font-semibold text-foreground">Project files</h2>
+
+  {selectedProject.storageId && (
+    <div className="flex items-center gap-2">
+      <Button
+        className="min-w-0 flex-1"
+        onClick={() => {
+          setDetailOpen(false);
+          setViewingFile({
+            storageId: selectedProject.storageId!,
+            fileName: selectedProject.title,
+          });
+        }}
+      >
+        <File className="mr-2 h-4 w-4" />
+        View original project PDF
+      </Button>
+      <DownloadButton
+        storageId={selectedProject.storageId}
+        fileName={`${selectedProject.title.replace(/[^\w\-]+/g, "_").slice(0, 80)}.pdf`}
+      />
+    </div>
+  )}
+
+  {selectedProject.additionalFiles?.map((file) => (
+    <div key={file.storageId} className="flex items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        className="min-w-0 flex-1 justify-start"
+        onClick={() => {
+          setDetailOpen(false);
+          setViewingFile({ storageId: file.storageId, fileName: file.fileName });
+        }}
+      >
+        <FileText className="mr-2 h-4 w-4 shrink-0" />
+        <span className="truncate">{file.fileName}</span>
+      </Button>
+      <DownloadButton storageId={file.storageId} fileName={file.fileName} />
+    </div>
+  ))}
+</div>
     </div>
   );
 
