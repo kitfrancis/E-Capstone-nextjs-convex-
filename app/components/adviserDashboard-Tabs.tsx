@@ -2,7 +2,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   DropdownMenu,
@@ -32,6 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useTeamProgress } from "@/hooks/useTeamProgress";
+import { CHAPTER_PHASES, computeProgress } from "@/lib/progress";
 
 const PDFViewer = dynamic(
   () => import("@/app/components/PDFViewer").then((mod) => ({ default: mod.PDFViewer })),
@@ -216,13 +217,27 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
       year: "numeric",
     });
 
-  const filtered =
-    deliverables?.filter((d) =>
-      statusFilter === "all" ? true : d.status === statusFilter
-    ) ?? [];
+  const latestChapterRows = useMemo(() => {
+    if (!deliverables) return undefined;
 
-  const countFor = (v: StatusFilter) =>
-    v === "all" ? deliverables?.length ?? 0 : deliverables?.filter((d) => d.status === v).length ?? 0;
+    const { chapters } = computeProgress(deliverables);
+    return CHAPTER_PHASES.map((phase, index) => ({
+      phase,
+      deliverable:
+        deliverables.find((item) => item._id === chapters[index].latestId) ?? null,
+    }));
+  }, [deliverables]);
+
+  const filtered = (latestChapterRows ?? []).filter(
+    ({ deliverable }) =>
+      statusFilter === "all" || deliverable?.status === statusFilter
+  );
+
+  const countFor = (value: StatusFilter) =>
+    (latestChapterRows ?? []).filter(
+      ({ deliverable }) =>
+        deliverable && (value === "all" || deliverable.status === value)
+    ).length;
 
   const filterButtons: { label: string; value: StatusFilter }[] = [
     { label: "All", value: "all" },
@@ -428,15 +443,32 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 px-4 text-center rounded-2xl border border-dashed bg-card">
                 <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                <p className="font-medium text-foreground">No deliverables found</p>
+                <p className="font-medium text-foreground">No chapters found</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {statusFilter === "all"
-                    ? "No submissions yet from your group."
-                    : `No deliverables with status "${getStatusLabel(statusFilter)}".`}
+                  No chapters have a latest submission with status &quot;
+                  {getStatusLabel(statusFilter)}&quot;.
                 </p>
               </div>
             ) : (
-              filtered.map((d) => {
+              filtered.map(({ phase, deliverable: d }) => {
+                if (!d) {
+                  return (
+                    <div key={phase} className={rowClass}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground sm:h-12 sm:w-12">
+                          <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-foreground text-sm lg:text-base">
+                            {phase}
+                          </h3>
+                          <p className="text-muted-foreground text-xs">No submission yet</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const fs = fileStyle(d.fileName);
                 const FileTypeIcon = fs.icon;
                 return (
@@ -449,7 +481,7 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
                         <div className="min-w-0">
                           <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
                           <p className="text-muted-foreground text-xs">
-                            Phase: {d.phase} • Version {d.version}
+                            {phase} • Version {d.version}
                           </p>
                           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs mt-0.5">
                             <span className="inline-flex items-center gap-1">
