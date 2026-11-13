@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -131,6 +132,21 @@ const isArchivedTeam = (team: Doc<"capstoneProjects">) => {
   return Boolean(t.archived) || t.status === "archived";
 };
 
+// Small count pill used inside tab triggers
+function CountPill({ count }: { count: number }) {
+  return (
+    <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-medium leading-5 tabular-nums">
+      {count}
+    </span>
+  );
+}
+
+// Standard shadcn tabs, laid out as a grid so every option stays visible.
+// shadcn's TabsList has a fixed h-9 and its triggers use h-[calc(100%-1px)],
+// so both are forced with the important modifier (trailing "!" in Tailwind v4)
+// to let the list grow with its rows.
+// With three options, phones get "All" on its own row and the other two below it;
+// from sm up all three sit in one row.
 function FilterChips<T extends string>({
   options,
   value,
@@ -140,25 +156,28 @@ function FilterChips<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const three = options.length === 3;
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          aria-pressed={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-            value === o.value
-              ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
-              : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          {o.label}
-          {o.count !== undefined && ` (${o.count})`}
-        </button>
-      ))}
-    </div>
+    <Tabs value={value} onValueChange={(v) => onChange(v as T)}>
+      <TabsList
+        className={`grid h-auto! w-full gap-1 p-1 ${
+          three ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"
+        }`}
+      >
+        {options.map((o, i) => (
+          <TabsTrigger
+            key={o.value}
+            value={o.value}
+            className={`h-8! w-full px-2 text-xs ${
+              three && i === 0 ? "col-span-2 sm:col-span-1" : ""
+            }`}
+          >
+            {o.label}
+            {o.count !== undefined && <CountPill count={o.count} />}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -177,15 +196,16 @@ function TeamSelect({
       : `All Teams (${teams.length})`;
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-10 w-full rounded-xl text-sm" aria-label="Filter by team">
-        <SelectValue placeholder={allLabel} />
+      <SelectTrigger className="w-full" aria-label="Filter by team">
+        <div className="flex min-w-0 items-center gap-2">
+          <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <SelectValue placeholder={allLabel} />
+        </div>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all" className="text-sm">
-          {allLabel}
-        </SelectItem>
+        <SelectItem value="all">{allLabel}</SelectItem>
         {teams.map((t) => (
-          <SelectItem key={t._id} value={t._id} className="text-sm">
+          <SelectItem key={t._id} value={t._id}>
             {t.teamName}
           </SelectItem>
         ))}
@@ -194,7 +214,8 @@ function TeamSelect({
   );
 }
 
-// Section card: heading + description + optional action
+// Section card: heading + description + optional action.
+// On phones the action (e.g. the Active / Archived tabs) drops below the heading.
 function Section({
   title,
   description,
@@ -208,12 +229,12 @@ function Section({
 }) {
   return (
     <section className="min-w-0 rounded-2xl border bg-card p-4 sm:p-6">
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-foreground">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        {action}
+        {action && <div className="w-full shrink-0 sm:w-auto">{action}</div>}
       </div>
       {children}
     </section>
@@ -497,9 +518,9 @@ export default function InstructorTeamManagementPage() {
 
   return (
     <div className="w-full min-w-0 p-4 sm:p-6 lg:p-8">
-      {/* Page header */}
+      {/* Page header: on phones the two buttons share one full-width row */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Team Management</h1>
           {allDeliverables !== undefined && tasks !== undefined && (
             <p className="mt-1 text-sm text-muted-foreground">
@@ -511,17 +532,17 @@ export default function InstructorTeamManagementPage() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
           <CreateTaskDialog
             trigger={
-              <Button variant="outline" className="rounded-xl px-4">
+              <Button variant="outline" className="w-full rounded-xl px-4 sm:w-auto">
                 <Plus className="h-4 w-4" /> Create Task
               </Button>
             }
           />
           <CreateTeamDialog
             trigger={
-              <Button className="rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700">
+              <Button className="w-full rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 sm:w-auto">
                 <Plus className="h-4 w-4" /> Create Team
               </Button>
             }
@@ -537,32 +558,22 @@ export default function InstructorTeamManagementPage() {
           description="Manage your teams, track their progress, and provide guidance."
           action={
             allTeams !== undefined ? (
-              <div className="inline-flex shrink-0 rounded-xl bg-muted p-1 text-xs font-medium" role="tablist">
-                {(
-                  [
-                    ["active", "Active", activeTeams.length],
-                    ["archived", "Archived", archivedTeams.length],
-                  ] as const
-                ).map(([key, label, n]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    role="tab"
-                    aria-selected={teamTab === key}
-                    onClick={() => {
-                      setTeamTab(key);
-                      setShowAllTeams(false);
-                    }}
-                    className={`rounded-lg px-3 py-1.5 transition-colors ${
-                      teamTab === key
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {label} <span className="opacity-70">{n}</span>
-                  </button>
-                ))}
-              </div>
+              <Tabs
+                value={teamTab}
+                onValueChange={(v) => {
+                  setTeamTab(v as TeamTab);
+                  setShowAllTeams(false);
+                }}
+              >
+                <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
+                  <TabsTrigger value="active" className="px-3 text-xs">
+                    Active <CountPill count={activeTeams.length} />
+                  </TabsTrigger>
+                  <TabsTrigger value="archived" className="px-3 text-xs">
+                    Archived <CountPill count={archivedTeams.length} />
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             ) : undefined
           }
         >
@@ -628,9 +639,10 @@ export default function InstructorTeamManagementPage() {
                           <TeamIcon className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
+                          {/* Name and badge wrap onto two lines on narrow screens instead of squeezing the name */}
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                             <h3
-                              className="min-w-0 truncate text-base font-semibold text-foreground"
+                              className="max-w-full min-w-0 truncate text-base font-semibold text-foreground"
                               title={team.teamName}
                             >
                               {team.teamName}
@@ -668,7 +680,7 @@ export default function InstructorTeamManagementPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="rounded-full px-3 text-xs"
+                              className="flex-1 rounded-full px-3 text-xs sm:flex-none"
                               onClick={() =>
                                 imradDoc && handleStatus(imradDoc._id, "needs_revision")
                               }
@@ -881,26 +893,18 @@ export default function InstructorTeamManagementPage() {
 
         {/* ============ RIGHT COLUMN: Submissions / Tasks ============ */}
         <div className="min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
-          {/* Tab switcher */}
-          <div role="tablist" className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
-            {sideTabs.map(({ key, label, Icon, count }) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={sideTab === key}
-                onClick={() => setSideTab(key)}
-                className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  sideTab === key
-                    ? "bg-card text-blue-600 shadow-sm dark:text-blue-400"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label} ({count})
-              </button>
-            ))}
-          </div>
+          {/* Tab switcher (standard shadcn tabs). Smaller text and no icons on very narrow phones. */}
+          <Tabs value={sideTab} onValueChange={(v) => setSideTab(v as SideTab)}>
+            <TabsList className="grid w-full grid-cols-2">
+              {sideTabs.map(({ key, label, Icon, count }) => (
+                <TabsTrigger key={key} value={key} className="gap-1 px-2 text-xs sm:gap-1.5 sm:text-sm">
+                  <Icon className="hidden h-4 w-4 min-[380px]:block" />
+                  {label}
+                  <CountPill count={count} />
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
           {/* Team filter */}
           <div className="mt-4 border-t pt-4">
@@ -949,14 +953,14 @@ export default function InstructorTeamManagementPage() {
                       {shownDeliverables?.map((d) => (
                         <div key={d._id} className={rowClass}>
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-300">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-600 sm:h-11 sm:w-11 dark:bg-green-900/50 dark:text-green-300">
                               <FileText className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
                               <h3 className="truncate text-sm font-semibold text-foreground" title={d.fileName}>
                                 {d.fileName}
                               </h3>
-                              <p className="break-words text-xs text-muted-foreground">
+                              <p className="wrap-break-word text-xs text-muted-foreground">
                                 Team: {d.teamName} • Phase: {d.phase} • Version {d.version}
                               </p>
                               <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -1080,20 +1084,20 @@ export default function InstructorTeamManagementPage() {
                         const expanded = expandedTask === task._id;
                         return (
                           <div key={task._id ?? i} className={rowClass}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex items-start justify-between gap-2 sm:gap-3">
+                              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                                 <div
-                                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${
                                     late
                                       ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300"
                                       : "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-300"
                                   }`}
                                 >
-                                  {late ? <AlertTriangle className="h-5 w-5" /> : <ListChecks className="h-5 w-5" />}
+                                  {late ? <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" /> : <ListChecks className="h-4 w-4 sm:h-5 sm:w-5" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <h3 className="break-words text-sm font-semibold text-foreground">{task.title}</h3>
-                                  <p className="break-words text-xs text-muted-foreground">
+                                  <h3 className="wrap-break-word text-sm font-semibold text-foreground">{task.title}</h3>
+                                  <p className="wrap-break-word text-xs text-muted-foreground">
                                     Team: {task.assignedTo} • Assigned to {task.targetRole ?? "all members"}
                                   </p>
                                 </div>
@@ -1162,7 +1166,7 @@ export default function InstructorTeamManagementPage() {
 
                             {expanded && (
                               <div className="mt-3 space-y-1.5 rounded-xl bg-muted/50 p-3 text-xs">
-                                <p className="break-words text-foreground">
+                                <p className="wrap-break-word text-foreground">
                                   {task.description || "No description."}
                                 </p>
                                 <p
