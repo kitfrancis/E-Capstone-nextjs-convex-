@@ -23,6 +23,8 @@ import {
   Activity,
   Zap,
   ClipboardCheck,
+  User2,
+  Users2,
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AdviserTabsDemo } from "@/app/components/adviserDashboard-Tabs";
@@ -38,6 +40,7 @@ const initialsOf = (name?: string) =>
     .toUpperCase();
 
 const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
 
 const timeAgo = (dateStr: string) => {
   const minutes = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
@@ -383,6 +386,13 @@ export default function AdviserDashboard() {
             <p className="text-sm lg:text-base text-muted-foreground mt-2">
               Monitor your teams, review deliverables, and guide your students to success.
             </p>
+            <div>
+              <Button className="bg-blue-500 flex flex-row items-center mt-4 text-white hover:bg-blue-600 dark:hover:bg-blue-700" onClick={() => router.push("/team-management/adviser")}>
+                <Users2 className="h-4 w-4" />
+                Manage Teams
+                </Button>
+            </div>
+            
           </div>
 
           <div className="rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 p-5 lg:p-6 flex items-start gap-3">
@@ -544,113 +554,9 @@ export default function AdviserDashboard() {
         </div>
 
         {/* Selected team detail */}
-        {project && (
-          <div id="team-detail" className="scroll-mt-4 space-y-5">
-            <div className="rounded-2xl border bg-card p-5 lg:p-6">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-foreground leading-tight">{project.teamName}</h2>
-                  <p className="text-sm text-muted-foreground mt-1">{project.projectTitle}</p>
-                </div>
-                <span className="shrink-0 inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white">
-                  {project.phase}
-                </span>
-              </div>
+        
 
-              <div className="mt-5">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-muted-foreground">
-                    Current phase: <span className="font-medium text-foreground">{project.phase}</span>
-                  </p>
-                  <span className="text-sm font-semibold text-foreground">{projectProgress}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-500 ${projectProgress >= 100 ? "bg-green-600" : "bg-blue-600"}`}
-                    style={{ width: `${projectProgress}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 mt-5">
-                {projectStats.map((s) => {
-                  const Icon = s.icon;
-                  return (
-                    <div
-                      key={s.label}
-                      className={`${s.card} rounded-2xl p-3 lg:p-4 flex flex-col items-center text-center gap-2`}
-                    >
-                      <div className={`${s.iconWrap} flex h-9 w-9 lg:h-10 lg:w-10 items-center justify-center rounded-full`}>
-                        <Icon className="h-4 w-4 lg:h-5 lg:w-5" />
-                      </div>
-                      <p className="text-2xl font-semibold text-foreground leading-none">{s.value}</p>
-                      <p className="text-xs text-muted-foreground">{s.label}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
-                  <UserCheck className="h-4 w-4 text-blue-600" /> Adviser
-                </h2>
-                <div className="rounded-2xl border bg-card p-4 lg:p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">
-                      {initialsOf(me?.name) || "?"}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm lg:text-base font-medium text-foreground truncate">{me?.name ?? "—"}</p>
-                        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">You</span>
-                      </div>
-                      <p className="text-xs lg:text-sm text-muted-foreground capitalize">{me?.role ?? "—"}</p>
-                      <p className="flex items-center gap-1 text-xs lg:text-sm text-muted-foreground">
-                        <Mail className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{me?.email ?? "—"}</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
-                  <Users className="h-4 w-4 text-blue-600" /> Team members
-                </h2>
-                <div className="rounded-2xl border bg-card p-4 lg:p-5">
-                  {teamMembers === undefined ? (
-                    <p className="text-sm text-muted-foreground animate-pulse">Loading members...</p>
-                  ) : teamMembers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No team members found</p>
-                  ) : (
-                    <div className="flex flex-col divide-y">
-                      {teamMembers.map((member) => (
-                        <div key={member._id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-                            {initialsOf(member.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm lg:text-base font-medium text-foreground truncate">{member.name}</p>
-                            <p className="text-xs lg:text-sm text-muted-foreground capitalize">{member.role}</p>
-                            <p className="text-xs lg:text-sm text-muted-foreground truncate">{member.email}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div id="reviews" className="scroll-mt-4 w-full">
-          <AdviserTabsDemo capstoneProjectId={project?._id} />
-        </div>
+        
       </div>
     </div>
   );
