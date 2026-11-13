@@ -79,9 +79,18 @@ type TaskFilter = "all" | "overdue" | "under_review";
 type TeamTab = "active" | "archived";
 type SideTab = "submissions" | "tasks";
 
-// How many rows each card shows before "View all"
-const TEAM_PREVIEW = 5;
+// Submissions and Tasks show this many rows before "View all"
 const SIDE_PREVIEW = 3;
+
+// The Teams list scrolls inside its card once it has this many teams
+const SCROLL_AT = 3;
+
+// Returns the scroll classes for the Teams list. The small negative margin and padding
+// keep card borders and hover shadows from being clipped by the scroll area.
+const scrollClass = (count: number, maxHeight: string) =>
+  count >= SCROLL_AT
+    ? `${maxHeight} overflow-y-auto -mx-1 px-1 py-1 [scrollbar-width:thin]`
+    : "";
 
 // Icon + color combos, cycled per team row
 const TEAM_STYLES = [
@@ -275,8 +284,7 @@ export default function InstructorTeamManagementPage() {
   // Team filter shared by the Submissions and Tasks tabs ("all" or a team id)
   const [teamFilter, setTeamFilter] = useState<string>("all");
 
-  // "View all" toggles
-  const [showAllTeams, setShowAllTeams] = useState(false);
+  // "View all" toggles (Submissions and Tasks)
   const [showAllSubmissions, setShowAllSubmissions] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
 
@@ -467,7 +475,6 @@ export default function InstructorTeamManagementPage() {
   const activeTeams = allTeams?.filter((t) => !teamIsArchived(t)) ?? [];
   const archivedTeams = allTeams?.filter(teamIsArchived) ?? [];
   const tabTeams = teamTab === "active" ? activeTeams : archivedTeams;
-  const shownTeams = showAllTeams ? tabTeams : tabTeams.slice(0, TEAM_PREVIEW);
 
   // Header summary: everything waiting on the instructor
   const waitingSubmissions = allDeliverables?.filter((d) => d.status === "under_review").length ?? 0;
@@ -558,13 +565,7 @@ export default function InstructorTeamManagementPage() {
           description="Manage your teams, track their progress, and provide guidance."
           action={
             allTeams !== undefined ? (
-              <Tabs
-                value={teamTab}
-                onValueChange={(v) => {
-                  setTeamTab(v as TeamTab);
-                  setShowAllTeams(false);
-                }}
-              >
+              <Tabs value={teamTab} onValueChange={(v) => setTeamTab(v as TeamTab)}>
                 <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
                   <TabsTrigger value="active" className="px-3 text-xs">
                     Active <CountPill count={activeTeams.length} />
@@ -590,8 +591,12 @@ export default function InstructorTeamManagementPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {shownTeams.map((team, index) => {
+            // Scrolls inside the card once there are 3 or more teams
+            <div
+              key={teamTab}
+              className={`space-y-4 ${scrollClass(tabTeams.length, "max-h-144")}`}
+            >
+              {tabTeams.map((team, index) => {
                 const teamDeliverables =
                   allDeliverables?.filter((d) => d.capstoneProjectId === team._id) ?? [];
                 const teamTasks = tasks?.filter((t) => t.capstoneProjectId === team._id) ?? [];
@@ -877,16 +882,6 @@ export default function InstructorTeamManagementPage() {
                   </div>
                 );
               })}
-
-              {tabTeams.length > TEAM_PREVIEW && (
-                <div className="text-center">
-                  <ViewAllLink
-                    expanded={showAllTeams}
-                    onClick={() => setShowAllTeams((v) => !v)}
-                    label="View all teams"
-                  />
-                </div>
-              )}
             </div>
           )}
         </Section>
