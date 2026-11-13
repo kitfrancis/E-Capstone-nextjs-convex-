@@ -81,9 +81,7 @@ const BADGE_BASE =
   "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
 
 const TAB_COPY: Record<string, { title: string; description: string }> = {
-  groupManagement: { title: "Group management", description: "Overview of your assigned capstone group." },
   reviewDeliverables: { title: "Review deliverables", description: "Review, comment on, and approve your group's submissions." },
-  trackProgress: { title: "Track progress", description: "Generate and download your detailed reports." },
 };
 
 const cardClass = "rounded-2xl border bg-card shadow-sm";
@@ -378,11 +376,11 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
         {/* Tabs card */}
         <Tabs value={tab} onValueChange={setTab} className={`${cardClass} w-full min-w-0 p-4 sm:p-6`}>
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-foreground">{TAB_COPY[tab].title}</h2>
-              <p className="text-sm text-muted-foreground">{TAB_COPY[tab].description}</p>
-            </div>
-            <TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 bg-transparent p-0 lg:flex lg:w-auto">
+              <div className="mb-5 min-w-0">
+    <h2 className="text-lg font-semibold text-foreground">{TAB_COPY[tab].title}</h2>
+    <p className="text-sm text-muted-foreground">{TAB_COPY[tab].description}</p>
+  </div>
+            {/* <TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 bg-transparent p-0 lg:flex lg:w-auto">
               {[
                 { v: "groupManagement", short: "Groups", long: "Group Management" },
                 { v: "reviewDeliverables", short: "Reviews", long: "Review Deliverables" },
@@ -397,18 +395,18 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
                   <span className="hidden md:block">{t.long}</span>
                 </TabsTrigger>
               ))}
-            </TabsList>
+            </TabsList> */}
           </div>
 
           {/* Group Management */}
-          <TabsContent value="groupManagement">
+          {/* <TabsContent value="groupManagement">
             <div className="rounded-2xl border bg-muted/30 p-4 text-sm sm:p-5">
               <p className="text-muted-foreground">Project</p>
               <p className="wrap-break-word font-semibold text-foreground">{project?.projectTitle ?? "-"}</p>
               <p className="mt-3 text-muted-foreground">Phase</p>
               <p className="font-semibold text-foreground">{project?.phase ?? "-"}</p>
             </div>
-          </TabsContent>
+          </TabsContent> */}
 
           {/* Review Deliverables */}
           <TabsContent value="reviewDeliverables">
@@ -498,49 +496,23 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
                         <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
 
                         <div className="flex items-center gap-1">
-                          {/* PDFs open in your viewer (its Comment button goes to OnlyOffice).
-                              Word / Excel / PowerPoint go straight to OnlyOffice. */}
-                          <Button
-                            size="sm"
-                            className="rounded-full bg-blue-600 px-4 gap-1.5 text-white hover:bg-blue-700"
-                            onClick={() =>
-                              isPdf(d.fileName)
-                                ? setSelectedDeliverable({
-                                    fileName: d.fileName,
-                                    storageId: d.storageId!,
-                                    deliverableId: d._id,
-                                    phase: d.phase,
-                                  })
-                                : openInOffice(d)
-                            }
-                          >
-                            <Eye className="h-3.5 w-3.5" /> View
-                          </Button>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="p-1.5 rounded-md hover:bg-muted transition-colors" aria-label="Review options">
-                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuGroup>
-                                {d.status === "under_review" && (
-                                  <DropdownMenuItem onClick={() => openInOffice(d)}>Add Comment</DropdownMenuItem>
-                                )}
-                                {d.status === "needs_revision" && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => openInOffice(d)}>View Feedback</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => openInOffice(d)}>Add Comment</DropdownMenuItem>
-                                  </>
-                                )}
-                                {d.status === "approved" && (
-                                  <DropdownMenuItem onClick={() => openInOffice(d)}>View Comments</DropdownMenuItem>
-                                )}
-                              </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+  <Button
+    size="sm"
+    className="rounded-full bg-blue-600 px-4 gap-1.5 text-white hover:bg-blue-700"
+    onClick={() =>
+      isPdf(d.fileName)
+        ? setSelectedDeliverable({
+            fileName: d.fileName,
+            storageId: d.storageId!,
+            deliverableId: d._id,
+            phase: d.phase,
+          })
+        : openInOffice(d)
+    }
+  >
+    <Eye className="h-3.5 w-3.5" /> View
+  </Button>
+</div>
                       </div>
                     </div>
                   </div>
@@ -550,14 +522,14 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
           </TabsContent>
 
           {/* Track Progress */}
-          <TabsContent value="trackProgress">
+          {/* <TabsContent value="trackProgress">
             <div className="rounded-2xl border bg-muted/30 p-4 sm:p-6 flex items-center gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-300">
                 <BarChart3 className="h-6 w-6" />
               </div>
               <p className="text-sm text-muted-foreground">You have 5 reports ready and available to export.</p>
             </div>
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       </div>
 
