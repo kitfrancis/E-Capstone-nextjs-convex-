@@ -49,6 +49,7 @@ const instructorLinks = [
 
 const adviserLinks = [
   { label: "Dashboard", href: "/dashboard/adviser", icon: LayoutDashboard },
+  { label: "Team Management", href: "/team-management/adviser", icon: Users },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/adviser", icon: User },
 ];
