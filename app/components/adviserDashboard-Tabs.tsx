@@ -255,7 +255,7 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
         {/* Team header card */}
         <div className={`${cardClass} p-4 sm:p-6`}>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="break-words text-2xl font-bold text-foreground sm:text-3xl">{project?.teamName ?? "..."}</h1>
+            <h1 className="wrap-break-word text-2xl font-bold text-foreground sm:text-3xl">{project?.teamName ?? "..."}</h1>
             {project?.projectTitle && (
               <span className="max-w-full truncate rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
                 {project.projectTitle}
@@ -389,7 +389,7 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
           <TabsContent value="groupManagement">
             <div className="rounded-2xl border bg-muted/30 p-4 text-sm sm:p-5">
               <p className="text-muted-foreground">Project</p>
-              <p className="break-words font-semibold text-foreground">{project?.projectTitle ?? "-"}</p>
+              <p className="wrap-break-word font-semibold text-foreground">{project?.projectTitle ?? "-"}</p>
               <p className="mt-3 text-muted-foreground">Phase</p>
               <p className="font-semibold text-foreground">{project?.phase ?? "-"}</p>
             </div>
