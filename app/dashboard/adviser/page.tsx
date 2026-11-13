@@ -23,6 +23,8 @@ import {
   Activity,
   Zap,
   ClipboardCheck,
+  User2,
+  Users2,
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 import { AdviserTabsDemo } from "@/app/components/adviserDashboard-Tabs";
@@ -38,6 +40,7 @@ const initialsOf = (name?: string) =>
     .toUpperCase();
 
 const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
 
 const timeAgo = (dateStr: string) => {
   const minutes = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
@@ -383,6 +386,13 @@ export default function AdviserDashboard() {
             <p className="text-sm lg:text-base text-muted-foreground mt-2">
               Monitor your teams, review deliverables, and guide your students to success.
             </p>
+            <div>
+              <Button className="bg-blue-500 flex flex-row items-center mt-4 text-white hover:bg-blue-600 dark:hover:bg-blue-700" onClick={() => router.push("/team-management/adviser")}>
+                <Users2 className="h-4 w-4" />
+                Manage Teams
+                </Button>
+            </div>
+            
           </div>
 
           <div className="rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 p-5 lg:p-6 flex items-start gap-3">
