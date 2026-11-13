@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,8 @@ import {
   Plus,
   Users,
   FileText,
-  CheckSquare,
+  ListChecks,
+  AlertTriangle,
   BookOpen,
   Code2,
   GraduationCap,
@@ -75,10 +77,20 @@ const IMRAD_PHASE = "IMRaD Final";
 type SubmissionFilter = "all" | "under_review" | "needs_revision" | "approved";
 type TaskFilter = "all" | "overdue" | "under_review";
 type TeamTab = "active" | "archived";
+type SideTab = "submissions" | "tasks";
 
-// How many rows each card shows before "View all"
-const TEAM_PREVIEW = 5;
+// Submissions and Tasks show this many rows before "View all"
 const SIDE_PREVIEW = 3;
+
+// The Teams list scrolls inside its card once it has this many teams
+const SCROLL_AT = 3;
+
+// Returns the scroll classes for the Teams list. The small negative margin and padding
+// keep card borders and hover shadows from being clipped by the scroll area.
+const scrollClass = (count: number, maxHeight: string) =>
+  count >= SCROLL_AT
+    ? `${maxHeight} overflow-y-auto -mx-1 px-1 py-1 [scrollbar-width:thin]`
+    : "";
 
 // Icon + color combos, cycled per team row
 const TEAM_STYLES = [
@@ -123,20 +135,27 @@ const daysUntil = (dateStr: string) => {
   return Math.round((due.getTime() - today.getTime()) / 86_400_000);
 };
 
-const dueLabel = (dateStr: string) => {
-  const n = daysUntil(dateStr);
-  if (n < 0) return `${-n} ${-n === 1 ? "day" : "days"} overdue`;
-  if (n === 0) return "due today";
-  if (n === 1) return "due tomorrow";
-  return `in ${n} days`;
-};
-
 // TODO: adjust to however your schema marks an archived team
 const isArchivedTeam = (team: Doc<"capstoneProjects">) => {
   const t = team as unknown as { archived?: boolean; status?: string };
   return Boolean(t.archived) || t.status === "archived";
 };
 
+// Small count pill used inside tab triggers
+function CountPill({ count }: { count: number }) {
+  return (
+    <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-medium leading-5 tabular-nums">
+      {count}
+    </span>
+  );
+}
+
+// Standard shadcn tabs, laid out as a grid so every option stays visible.
+// shadcn's TabsList has a fixed h-9 and its triggers use h-[calc(100%-1px)],
+// so both are forced with the important modifier (trailing "!" in Tailwind v4)
+// to let the list grow with its rows.
+// With three options, phones get "All" on its own row and the other two below it;
+// from sm up all three sit in one row.
 function FilterChips<T extends string>({
   options,
   value,
@@ -146,25 +165,28 @@ function FilterChips<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const three = options.length === 3;
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          aria-pressed={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-            value === o.value
-              ? "border-blue-600 bg-blue-600 text-white"
-              : "bg-card text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {o.label}
-          {o.count !== undefined && <span className="ml-1.5 opacity-70">{o.count}</span>}
-        </button>
-      ))}
-    </div>
+    <Tabs value={value} onValueChange={(v) => onChange(v as T)}>
+      <TabsList
+        className={`grid h-auto! w-full gap-1 p-1 ${
+          three ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"
+        }`}
+      >
+        {options.map((o, i) => (
+          <TabsTrigger
+            key={o.value}
+            value={o.value}
+            className={`h-8! w-full px-2 text-xs ${
+              three && i === 0 ? "col-span-2 sm:col-span-1" : ""
+            }`}
+          >
+            {o.label}
+            {o.count !== undefined && <CountPill count={o.count} />}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -177,17 +199,22 @@ function TeamSelect({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const allLabel =
+    teams.length <= 2
+      ? `All Teams (${teams.map((t) => t.teamName).join(" & ")})`
+      : `All Teams (${teams.length})`;
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-9 w-full rounded-full text-xs" aria-label="Filter by team">
-        <SelectValue placeholder="All teams" />
+      <SelectTrigger className="w-full" aria-label="Filter by team">
+        <div className="flex min-w-0 items-center gap-2">
+          <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <SelectValue placeholder={allLabel} />
+        </div>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all" className="text-xs">
-          All teams
-        </SelectItem>
+        <SelectItem value="all">{allLabel}</SelectItem>
         {teams.map((t) => (
-          <SelectItem key={t._id} value={t._id} className="text-xs">
+          <SelectItem key={t._id} value={t._id}>
             {t.teamName}
           </SelectItem>
         ))}
@@ -196,7 +223,8 @@ function TeamSelect({
   );
 }
 
-// Section card: heading + description + optional action
+// Section card: heading + description + optional action.
+// On phones the action (e.g. the Active / Archived tabs) drops below the heading.
 function Section({
   title,
   description,
@@ -209,13 +237,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <section className="min-w-0 rounded-2xl border bg-card p-4 sm:p-6">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-foreground">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        {action}
+        {action && <div className="w-full shrink-0 sm:w-auto">{action}</div>}
       </div>
       {children}
     </section>
@@ -235,7 +263,7 @@ function ViewAllLink({
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 text-sm font-medium text-blue-600 hover:underline"
+      className="text-sm font-medium text-blue-600 hover:underline"
     >
       {expanded ? "Show less" : label}
     </button>
@@ -250,12 +278,13 @@ export default function InstructorTeamManagementPage() {
   const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>("all");
   const [taskFilter, setTaskFilter] = useState<TaskFilter>("all");
   const [teamTab, setTeamTab] = useState<TeamTab>("active");
+  const [sideTab, setSideTab] = useState<SideTab>("submissions");
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
 
-  // Team filter shared by the Submissions and Tasks cards ("all" or a team id)
+  // Team filter shared by the Submissions and Tasks tabs ("all" or a team id)
   const [teamFilter, setTeamFilter] = useState<string>("all");
 
-  // "View all" toggles
-  const [showAllTeams, setShowAllTeams] = useState(false);
+  // "View all" toggles (Submissions and Tasks)
   const [showAllSubmissions, setShowAllSubmissions] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
 
@@ -436,13 +465,16 @@ export default function InstructorTeamManagementPage() {
   const overdueCount = scopedTasks?.filter(isOverdue).length ?? 0;
   const reviewCount = scopedTasks?.filter((t) => t.status === "under_review").length ?? 0;
 
+  // Tab badges: what still needs attention
+  const pendingSubmissionCount = countStatus("under_review");
+  const openTaskCount = scopedTasks?.filter((t) => t.status !== "completed").length ?? 0;
+
   // Teams: Active / Archived tabs
   const teamIsArchived = (t: Doc<"capstoneProjects">) =>
     isArchivedTeam(t) || defenseStatus(t, progressByTeam.get(t._id) ?? 0)?.label === "Archived";
   const activeTeams = allTeams?.filter((t) => !teamIsArchived(t)) ?? [];
   const archivedTeams = allTeams?.filter(teamIsArchived) ?? [];
   const tabTeams = teamTab === "active" ? activeTeams : archivedTeams;
-  const shownTeams = showAllTeams ? tabTeams : tabTeams.slice(0, TEAM_PREVIEW);
 
   // Header summary: everything waiting on the instructor
   const waitingSubmissions = allDeliverables?.filter((d) => d.status === "under_review").length ?? 0;
@@ -461,14 +493,6 @@ export default function InstructorTeamManagementPage() {
     return "Needs Revision";
   };
 
-  const getTaskBadge = (status: string) => {
-    if (status === "completed") return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
-    if (status === "in_progress") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
-    if (status === "under_review") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
-    if (status === "needs_revision") return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
-    return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
-  };
-
   const getTaskLabel = (status: string) => {
     if (status === "completed") return "Completed";
     if (status === "in_progress") return "In Progress";
@@ -477,15 +501,33 @@ export default function InstructorTeamManagementPage() {
     return "Pending";
   };
 
+  // Due badge shown at the top right of each task card
+  const dueBadge = (t: { dueDate: string; status: string }) => {
+    if (t.status === "completed")
+      return { label: "Completed", cls: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" };
+    if (isOverdue(t))
+      return { label: "Overdue", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" };
+    const n = daysUntil(t.dueDate);
+    if (n === 0)
+      return { label: "Due Today", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
+    if (n === 1)
+      return { label: "Due Tomorrow", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
+    return { label: `Due in ${n} days`, cls: "bg-muted text-muted-foreground" };
+  };
+
   const rowClass =
     "min-w-0 rounded-2xl border bg-card p-3 sm:p-4 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900";
-  const filterBarClass = "mb-4 flex flex-col gap-3";
+
+  const sideTabs = [
+    { key: "submissions" as const, label: "Submissions", Icon: FileText, count: pendingSubmissionCount },
+    { key: "tasks" as const, label: "Tasks", Icon: ListChecks, count: openTaskCount },
+  ];
 
   return (
     <div className="w-full min-w-0 p-4 sm:p-6 lg:p-8">
-      {/* Page header */}
+      {/* Page header: on phones the two buttons share one full-width row */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Team Management</h1>
           {allDeliverables !== undefined && tasks !== undefined && (
             <p className="mt-1 text-sm text-muted-foreground">
@@ -493,21 +535,21 @@ export default function InstructorTeamManagementPage() {
                 ? "You're all caught up. Nothing is waiting for your review."
                 : `${waitingTotal} ${waitingTotal === 1 ? "item needs" : "items need"} your review: ${waitingSubmissions} ${
                     waitingSubmissions === 1 ? "submission" : "submissions"
-                  } and ${waitingTasks} ${waitingTasks === 1 ? "task" : "tasks"}.`}
+                  } and ${waitingTasks} ${waitingTasks === 1 ? "task" : "tasks"} pending approval.`}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
           <CreateTaskDialog
             trigger={
-              <Button variant="outline" className="rounded-full px-4">
+              <Button variant="outline" className="w-full rounded-xl px-4 sm:w-auto">
                 <Plus className="h-4 w-4" /> Create Task
               </Button>
             }
           />
           <CreateTeamDialog
             trigger={
-              <Button className="rounded-full bg-blue-600 px-4 text-white hover:bg-blue-700">
+              <Button className="w-full rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 sm:w-auto">
                 <Plus className="h-4 w-4" /> Create Team
               </Button>
             }
@@ -516,50 +558,26 @@ export default function InstructorTeamManagementPage() {
       </div>
 
       {/* Explicit shrinkable column below xl so wide content can't push the page past the screen */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_400px] xl:items-start">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         {/* ============ TEAMS (left) ============ */}
         <Section
           title="Teams"
           description="Manage your teams, track their progress, and provide guidance."
           action={
-            tabTeams.length > TEAM_PREVIEW ? (
-              <ViewAllLink
-                expanded={showAllTeams}
-                onClick={() => setShowAllTeams((v) => !v)}
-                label="View all teams"
-              />
+            allTeams !== undefined ? (
+              <Tabs value={teamTab} onValueChange={(v) => setTeamTab(v as TeamTab)}>
+                <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
+                  <TabsTrigger value="active" className="px-3 text-xs">
+                    Active <CountPill count={activeTeams.length} />
+                  </TabsTrigger>
+                  <TabsTrigger value="archived" className="px-3 text-xs">
+                    Archived <CountPill count={archivedTeams.length} />
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             ) : undefined
           }
         >
-          {allTeams !== undefined && (
-            <div className="mb-4 inline-flex rounded-full bg-muted p-1 text-xs font-medium" role="tablist">
-              {(
-                [
-                  ["active", "Active", activeTeams.length],
-                  ["archived", "Archived", archivedTeams.length],
-                ] as const
-              ).map(([key, label, n]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={teamTab === key}
-                  onClick={() => {
-                    setTeamTab(key);
-                    setShowAllTeams(false);
-                  }}
-                  className={`rounded-full px-3 py-1 transition-colors ${
-                    teamTab === key
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {label} <span className="opacity-70">{n}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
           {allTeams === undefined ? (
             <p className="text-center py-4 text-muted-foreground">Loading...</p>
           ) : allTeams.length === 0 ? (
@@ -573,8 +591,12 @@ export default function InstructorTeamManagementPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {shownTeams.map((team, index) => {
+            // Scrolls inside the card once there are 3 or more teams
+            <div
+              key={teamTab}
+              className={`space-y-4 ${scrollClass(tabTeams.length, "max-h-144")}`}
+            >
+              {tabTeams.map((team, index) => {
                 const teamDeliverables =
                   allDeliverables?.filter((d) => d.capstoneProjectId === team._id) ?? [];
                 const teamTasks = tasks?.filter((t) => t.capstoneProjectId === team._id) ?? [];
@@ -588,7 +610,9 @@ export default function InstructorTeamManagementPage() {
                 // and the action button replaces "View Team" while there's a step to do
                 const defense = defenseStatus(team, teamProgress);
                 const badgeLabel = defense?.label ?? team.phase;
-                const badgeCls = defense?.cls ?? "bg-blue-600 text-white";
+                const badgeCls =
+                  defense?.cls ??
+                  "border border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300";
                 const defenseAction = defenseActionKind(team, teamProgress);
 
                 // Final revisions / archive flow
@@ -613,16 +637,17 @@ export default function InstructorTeamManagementPage() {
 
                 return (
                   <div key={team._id} className={rowClass}>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-4">
-                      {/* Line 1: identity + phase badge */}
-                      <div className="order-1 flex min-w-0 flex-1 items-center gap-3 sm:min-w-60">
-                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${style.wrap}`}>
-                          <TeamIcon className="h-6 w-6" />
+                    {/* Header: identity + primary action */}
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3 sm:min-w-60">
+                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${style.wrap}`}>
+                          <TeamIcon className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
+                          {/* Name and badge wrap onto two lines on narrow screens instead of squeezing the name */}
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                             <h3
-                              className="min-w-0 truncate text-base font-semibold text-foreground"
+                              className="max-w-full min-w-0 truncate text-base font-semibold text-foreground"
                               title={team.teamName}
                             >
                               {team.teamName}
@@ -632,72 +657,11 @@ export default function InstructorTeamManagementPage() {
                           <p className="truncate text-xs text-muted-foreground" title={team.projectTitle}>
                             {team.projectTitle}
                           </p>
-                          {readyToArchive && (
-                            <p
-                              className={`mt-0.5 text-xs font-medium ${
-                                imradStatus === "approved"
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-amber-600 dark:text-amber-400"
-                              }`}
-                            >
-                              {!imradSubmitted
-                                ? "Waiting for the team's IMRaD upload."
-                                : imradStatus === "needs_revision"
-                                  ? "IMRaD sent back. Waiting for a new upload."
-                                  : imradStatus === "under_review"
-                                    ? "IMRaD submitted. Waiting for your verification."
-                                    : endorsed
-                                      ? "Endorsed. Waiting for admin verification."
-                                      : "IMRaD verified. Ready to endorse for archiving."}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Line 2: stats + progress */}
-                      <div className="order-2 flex basis-full flex-wrap sm:order-3 items-center gap-x-8 gap-y-3 border-t pt-3">
-                        <div className="grid grid-cols-3 gap-4 sm:gap-6">
-                          <div>
-                            <p className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
-                              <Users className="h-3.5 w-3.5 shrink-0" /> Members
-                            </p>
-                            {memberCount === 0 ? (
-                              <p className="whitespace-nowrap text-sm font-semibold text-amber-600 dark:text-amber-400">None yet</p>
-                            ) : (
-                              <p className="text-sm font-semibold text-foreground">{memberCount}</p>
-                            )}
-                          </div>
-                          <div>
-                            <p className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
-                              <FileText className="h-3.5 w-3.5 shrink-0" /> Deliverables
-                            </p>
-                            <p className="text-sm font-semibold text-foreground">{teamDeliverables.length}</p>
-                          </div>
-                          <div>
-                            <p className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
-                              <CheckSquare className="h-3.5 w-3.5 shrink-0" /> Tasks done
-                            </p>
-                            <p className="text-sm font-semibold text-foreground">
-                              {completedTasks}/{teamTasks.length}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 flex-1 basis-full sm:min-w-45 sm:basis-0">
-                          <p className="mb-1 text-xs text-muted-foreground">Progress</p>
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <InstructorProgress progress={teamProgress} />
-                            </div>
-                            <span className="w-9 shrink-0 text-right text-xs font-semibold text-foreground">
-                              {teamProgress}%
-                            </span>
-                          </div>
                         </div>
                       </div>
 
                       {/* Actions: every row has a primary action */}
-                      <div className="order-3 flex w-full items-center gap-1 sm:order-2 sm:ml-auto sm:w-auto">
+                      <div className="flex w-full items-center gap-1 sm:w-auto">
                         {awaitingFinalApproval ? (
                           <Button
                             size="sm"
@@ -709,9 +673,10 @@ export default function InstructorTeamManagementPage() {
                         ) : awaitingImrad ? (
                           <Button
                             size="sm"
+                            variant="outline"
                             disabled
                             title="The team hasn't uploaded a valid IMRaD manuscript yet"
-                            className="flex-1 rounded-full px-4 sm:flex-none"
+                            className="flex-1 rounded-full border-amber-300 bg-amber-50 px-4 text-amber-700 disabled:opacity-100 sm:flex-none dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
                           >
                             <Clock className="h-3.5 w-3.5" /> Waiting for IMRaD
                           </Button>
@@ -720,7 +685,7 @@ export default function InstructorTeamManagementPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="rounded-full px-3 text-xs"
+                              className="flex-1 rounded-full px-3 text-xs sm:flex-none"
                               onClick={() =>
                                 imradDoc && handleStatus(imradDoc._id, "needs_revision")
                               }
@@ -746,8 +711,9 @@ export default function InstructorTeamManagementPage() {
                         ) : endorsed ? (
                           <Button
                             size="sm"
+                            variant="outline"
                             disabled
-                            className="flex-1 rounded-full px-4 sm:flex-none"
+                            className="flex-1 rounded-full border-emerald-300 bg-emerald-50 px-4 text-emerald-700 disabled:opacity-100 sm:flex-none dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
                           >
                             <Check className="h-3.5 w-3.5" /> Endorsed
                           </Button>
@@ -810,11 +776,12 @@ export default function InstructorTeamManagementPage() {
                               <DropdownMenuItem className="text-xs" onSelect={() => setViewingTeam(team)}>
                                 View team
                               </DropdownMenuItem>
-                              {/* Filter the Submissions and Tasks cards to this team */}
+                              {/* Filter the Submissions and Tasks tabs to this team */}
                               <DropdownMenuItem
                                 className="text-xs"
                                 onSelect={() => {
                                   setTeamFilter(team._id);
+                                  setSideTab("submissions");
                                   setSubmissionFilter("all");
                                   setTaskFilter("all");
                                   setShowAllSubmissions(true);
@@ -856,6 +823,62 @@ export default function InstructorTeamManagementPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Archive status line */}
+                    {readyToArchive && (
+                      <p
+                        className={`mt-3 text-xs font-medium ${
+                          imradStatus === "approved"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-amber-700 dark:text-amber-400"
+                        }`}
+                      >
+                        {!imradSubmitted
+                          ? "Waiting for the team's IMRaD upload."
+                          : imradStatus === "needs_revision"
+                            ? "IMRaD sent back. Waiting for a new upload."
+                            : imradStatus === "under_review"
+                              ? "IMRaD submitted. Waiting for your verification."
+                              : endorsed
+                                ? "Endorsed. Waiting for admin verification."
+                                : "IMRaD verified. Ready to endorse for archiving."}
+                      </p>
+                    )}
+
+                    {/* Stats */}
+                    <div className="mt-4 grid grid-cols-3 gap-4 border-t pt-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Members</p>
+                        {memberCount === 0 ? (
+                          <p className="whitespace-nowrap text-sm font-semibold text-amber-600 dark:text-amber-400">
+                            None yet
+                          </p>
+                        ) : (
+                          <p className="text-sm font-semibold text-foreground">{memberCount}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Deliverables</p>
+                        <p className="text-sm font-semibold text-foreground">{teamDeliverables.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Tasks done</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {completedTasks}/{teamTasks.length}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Progress</span>
+                        <span className="font-semibold text-foreground">{teamProgress}%</span>
+                      </div>
+                      <div className="mt-1.5">
+                        <InstructorProgress progress={teamProgress} />
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -863,69 +886,88 @@ export default function InstructorTeamManagementPage() {
           )}
         </Section>
 
-        {/* ============ RIGHT COLUMN ============ */}
-        <div className="min-w-0 space-y-5">
-          {/* SUBMISSIONS */}
-          <Section
-            title="Submissions"
-            description="Review deliverables your teams have submitted."
-            action={
-              filteredDeliverables && filteredDeliverables.length > SIDE_PREVIEW ? (
-                <ViewAllLink
-                  expanded={showAllSubmissions}
-                  onClick={() => setShowAllSubmissions((v) => !v)}
-                />
-              ) : undefined
-            }
-          >
-            {allDeliverables === undefined ? (
-              <p className="text-center py-4 text-muted-foreground">Loading...</p>
-            ) : allDeliverables.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                <p className="text-muted-foreground">No submissions yet</p>
-              </div>
-            ) : (
-              <>
-                <div className={filterBarClass}>
-                  <FilterChips<SubmissionFilter>
-                    value={submissionFilter}
-                    onChange={setSubmissionFilter}
-                    options={[
-                      { label: "All", value: "all", count: scopedDeliverables?.length ?? 0 },
-                      { label: "Needs Revision", value: "needs_revision", count: countStatus("needs_revision") },
-                      { label: "Under Review", value: "under_review", count: countStatus("under_review") },
-                      { label: "Approved", value: "approved", count: countStatus("approved") },
-                    ]}
-                  />
-                  {allTeams && <TeamSelect teams={allTeams} value={activeTeam} onChange={setTeamFilter} />}
+        {/* ============ RIGHT COLUMN: Submissions / Tasks ============ */}
+        <div className="min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
+          {/* Tab switcher (standard shadcn tabs). Smaller text and no icons on very narrow phones. */}
+          <Tabs value={sideTab} onValueChange={(v) => setSideTab(v as SideTab)}>
+            <TabsList className="grid w-full grid-cols-2">
+              {sideTabs.map(({ key, label, Icon, count }) => (
+                <TabsTrigger key={key} value={key} className="gap-1 px-2 text-xs sm:gap-1.5 sm:text-sm">
+                  <Icon className="hidden h-4 w-4 min-[380px]:block" />
+                  {label}
+                  <CountPill count={count} />
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          {/* Team filter */}
+          <div className="mt-4 border-t pt-4">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Filter by team
+            </p>
+            {allTeams && <TeamSelect teams={allTeams} value={activeTeam} onChange={setTeamFilter} />}
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {sideTab === "submissions"
+                ? "Review deliverables your teams have submitted."
+                : "Tasks you've assigned across your teams."}
+            </p>
+          </div>
+
+          {/* ---------- SUBMISSIONS ---------- */}
+          {sideTab === "submissions" && (
+            <div className="mt-4 border-t pt-4">
+              {allDeliverables === undefined ? (
+                <p className="text-center py-4 text-muted-foreground">Loading...</p>
+              ) : allDeliverables.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                  <p className="text-muted-foreground">No submissions yet</p>
                 </div>
-                {shownDeliverables && shownDeliverables.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
-                    <p className="text-muted-foreground">No submissions match this filter</p>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <FilterChips<SubmissionFilter>
+                      value={submissionFilter}
+                      onChange={setSubmissionFilter}
+                      options={[
+                        { label: "All", value: "all", count: scopedDeliverables?.length ?? 0 },
+                        { label: "Needs Revision", value: "needs_revision", count: countStatus("needs_revision") },
+                        { label: "Under Review", value: "under_review", count: countStatus("under_review") },
+                        { label: "Approved", value: "approved", count: countStatus("approved") },
+                      ]}
+                    />
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {shownDeliverables?.map((d) => (
-                      <div key={d._id} className={rowClass}>
-                        <div className="flex flex-col gap-3">
+
+                  {shownDeliverables && shownDeliverables.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
+                      <p className="text-muted-foreground">No submissions match this filter</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {shownDeliverables?.map((d) => (
+                        <div key={d._id} className={rowClass}>
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-300">
-                              <FileText className="h-6 w-6" />
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-600 sm:h-11 sm:w-11 dark:bg-green-900/50 dark:text-green-300">
+                              <FileText className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                              <h3 className="font-semibold text-foreground text-sm lg:text-base truncate">{d.fileName}</h3>
-                              <p className="text-muted-foreground text-xs wrap-break-words">
+                              <h3 className="truncate text-sm font-semibold text-foreground" title={d.fileName}>
+                                {d.fileName}
+                              </h3>
+                              <p className="wrap-break-word text-xs text-muted-foreground">
                                 Team: {d.teamName} • Phase: {d.phase} • Version {d.version}
                               </p>
-                              <p className="text-muted-foreground text-xs mt-0.5">
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
                                 {formatDate(d.uploadedAt)} • {d.fileSize}
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>{getStatusLabel(d.status)}</span>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                            <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>
+                              {getStatusLabel(d.status)}
+                            </span>
 
                             <div className="flex flex-wrap items-center gap-1">
                               {/* Quick actions for submissions waiting on you */}
@@ -934,14 +976,14 @@ export default function InstructorTeamManagementPage() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="rounded-full px-3 text-xs"
+                                    className="rounded-lg px-3 text-xs"
                                     onClick={() => handleStatus(d._id, "needs_revision")}
                                   >
                                     Request revision
                                   </Button>
                                   <Button
                                     size="sm"
-                                    className="rounded-full bg-green-600 px-3 text-xs text-white hover:bg-green-700"
+                                    className="rounded-lg bg-green-600 px-3 text-xs text-white hover:bg-green-700"
                                     onClick={() => handleStatus(d._id, "approved")}
                                   >
                                     Approve
@@ -979,155 +1021,197 @@ export default function InstructorTeamManagementPage() {
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </Section>
+                      ))}
 
-          {/* TASKS */}
-          <Section
-            title="Tasks"
-            description="Tasks you've assigned across your teams."
-            action={
-              filteredTasks && filteredTasks.length > SIDE_PREVIEW ? (
-                <ViewAllLink expanded={showAllTasks} onClick={() => setShowAllTasks((v) => !v)} />
-              ) : undefined
-            }
-          >
-            {tasks === undefined ? (
-              <p className="text-center py-4 text-muted-foreground">Loading...</p>
-            ) : tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-muted-foreground">You haven&apos;t created any tasks yet</p>
-              </div>
-            ) : (
-              <>
-                <div className={filterBarClass}>
-                  <FilterChips<TaskFilter>
-                    value={taskFilter}
-                    onChange={setTaskFilter}
-                    options={[
-                      { label: "All", value: "all", count: scopedTasks?.length ?? 0 },
-                      { label: "Under Review", value: "under_review", count: reviewCount },
-                      { label: "Overdue", value: "overdue", count: overdueCount },
-                    ]}
-                  />
-                  {allTeams && <TeamSelect teams={allTeams} value={activeTeam} onChange={setTeamFilter} />}
+                      {filteredDeliverables && filteredDeliverables.length > SIDE_PREVIEW && (
+                        <div className="pt-1 text-center">
+                          <ViewAllLink
+                            expanded={showAllSubmissions}
+                            onClick={() => setShowAllSubmissions((v) => !v)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ---------- TASKS ---------- */}
+          {sideTab === "tasks" && (
+            <div className="mt-4 border-t pt-4">
+              {tasks === undefined ? (
+                <p className="text-center py-4 text-muted-foreground">Loading...</p>
+              ) : tasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <p className="text-muted-foreground">You haven&apos;t created any tasks yet</p>
                 </div>
-                {shownTasks && shownTasks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
-                    <p className="text-muted-foreground">
-                      {taskFilter === "under_review"
-                        ? "No tasks waiting for review"
-                        : taskFilter === "overdue"
-                          ? "No overdue tasks"
-                          : "No tasks for this team"}
-                    </p>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <FilterChips<TaskFilter>
+                      value={taskFilter}
+                      onChange={setTaskFilter}
+                      options={[
+                        { label: "All", value: "all", count: scopedTasks?.length ?? 0 },
+                        { label: "Under Review", value: "under_review", count: reviewCount },
+                        { label: "Overdue", value: "overdue", count: overdueCount },
+                      ]}
+                    />
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {shownTasks?.map((task, i) => {
-                      const open = task.status !== "completed";
-                      const late = isOverdue(task);
-                      return (
-                        <div key={task._id ?? i} className={rowClass}>
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="flex items-start gap-3 min-w-0">
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                                <CheckSquare className="h-6 w-6" />
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="font-semibold text-foreground text-sm lg:text-base wrap-break-words">{task.title}</h3>
-                                <p className="text-muted-foreground text-xs mt-0.5 wrap-break-words">{task.description}</p>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                                  <span>Team: {task.assignedTo}</span>
-                                  <span>Role: {task.targetRole ?? "All Roles"}</span>
-                                  <span
-                                    className={`inline-flex items-center gap-1 ${
-                                      late ? "text-red-600 dark:text-red-400" : ""
-                                    }`}
-                                  >
-                                    <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
-                                    {open && ` · ${dueLabel(task.dueDate)}`}
-                                  </span>
+
+                  {shownTasks && shownTasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center rounded-2xl border border-dashed bg-card">
+                      <p className="text-muted-foreground">
+                        {taskFilter === "under_review"
+                          ? "No tasks waiting for review"
+                          : taskFilter === "overdue"
+                            ? "No overdue tasks"
+                            : "No tasks for this team"}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {shownTasks?.map((task, i) => {
+                        const late = isOverdue(task);
+                        const badge = dueBadge(task);
+                        const expanded = expandedTask === task._id;
+                        return (
+                          <div key={task._id ?? i} className={rowClass}>
+                            <div className="flex items-start justify-between gap-2 sm:gap-3">
+                              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                                <div
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${
+                                    late
+                                      ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300"
+                                      : "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-300"
+                                  }`}
+                                >
+                                  {late ? <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" /> : <ListChecks className="h-4 w-4 sm:h-5 sm:w-5" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="wrap-break-word text-sm font-semibold text-foreground">{task.title}</h3>
+                                  <p className="wrap-break-word text-xs text-muted-foreground">
+                                    Team: {task.assignedTo} • Assigned to {task.targetRole ?? "all members"}
+                                  </p>
                                 </div>
                               </div>
+
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                <span className={`${BADGE_BASE} ${badge.cls}`}>{badge.label}</span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className={ICON_BTN} aria-label="Task options">
+                                      <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="space-y-1 p-1">
+                                    <DropdownMenuItem className="p-0" onSelect={(e) => e.preventDefault()}>
+                                      <EditTask
+                                        taskId={task._id}
+                                        initialTitle={task.title}
+                                        initialDescription={task.description}
+                                        initialDueDate={task.dueDate}
+                                        initialTeamId={task.capstoneProjectId}
+                                        initialTargetRole={task.targetRole}
+                                        trigger={
+                                          <button className="w-full px-2 py-2.5 text-left text-xs">
+                                            Edit Task
+                                          </button>
+                                        }
+                                      />
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="p-0" onSelect={(e) => e.preventDefault()}>
+                                      <DeleteTask
+                                        taskId={task._id}
+                                        taskTitle={task.title}
+                                        trigger={
+                                          <button className="w-full px-2 py-2.5 text-left text-xs text-destructive">
+                                            Delete Task
+                                          </button>
+                                        }
+                                      />
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-1 shrink-0">
-                              <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>{getTaskLabel(task.status)}</span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className={ICON_BTN} aria-label="Task options">
-                                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="space-y-1 p-1">
-                                  <DropdownMenuItem className="p-0" onSelect={(e) => e.preventDefault()}>
-                                    <EditTask
-                                      taskId={task._id}
-                                      initialTitle={task.title}
-                                      initialDescription={task.description}
-                                      initialDueDate={task.dueDate}
-                                      initialTeamId={task.capstoneProjectId}
-                                      initialTargetRole={task.targetRole}
-                                      trigger={
-                                        <button className="w-full px-2 py-2.5 text-left text-xs">
-                                          Edit Task
-                                        </button>
-                                      }
-                                    />
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="p-0" onSelect={(e) => e.preventDefault()}>
-                                    <DeleteTask
-                                      taskId={task._id}
-                                      taskTitle={task.title}
-                                      trigger={
-                                        <button className="w-full px-2 py-2.5 text-left text-xs text-destructive">
-                                          Delete Task
-                                        </button>
-                                      }
-                                    />
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-
-                          {/* The team marked this as done: confirm it or send it back */}
-                          {task.status === "under_review" && (
-                            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                              <span className="mr-auto text-xs text-muted-foreground">
-                                The team marked this as done.
+                            {/* Status row */}
+                            <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3 text-xs">
+                              <span className="text-muted-foreground">
+                                Status:{" "}
+                                <span
+                                  className={`font-semibold ${
+                                    late ? "text-red-600 dark:text-red-400" : "text-foreground"
+                                  }`}
+                                >
+                                  {getTaskLabel(task.status)}
+                                </span>
                               </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-full px-4 gap-1.5"
-                                onClick={() => handleReview(task._id, "revise")}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTask(expanded ? null : task._id)}
+                                className="font-medium text-blue-600 hover:underline"
                               >
-                                <RotateCcw className="h-3.5 w-3.5" /> Revise
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="rounded-full bg-green-600 px-4 gap-1.5 text-white hover:bg-green-700"
-                                onClick={() => handleReview(task._id, "confirm")}
-                              >
-                                <Check className="h-3.5 w-3.5" /> Confirm
-                              </Button>
+                                {expanded ? "Hide details" : "View details"}
+                              </button>
                             </div>
-                          )}
+
+                            {expanded && (
+                              <div className="mt-3 space-y-1.5 rounded-xl bg-muted/50 p-3 text-xs">
+                                <p className="wrap-break-word text-foreground">
+                                  {task.description || "No description."}
+                                </p>
+                                <p
+                                  className={`inline-flex items-center gap-1 ${
+                                    late ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                                  }`}
+                                >
+                                  <CalendarDays className="h-3.5 w-3.5" /> Due {formatDate(task.dueDate)}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* The team marked this as done: confirm it or send it back */}
+                            {task.status === "under_review" && (
+                              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                                <span className="mr-auto text-xs text-muted-foreground">
+                                  The team marked this as done.
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-lg px-4 gap-1.5"
+                                  onClick={() => handleReview(task._id, "revise")}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" /> Revise
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="rounded-lg bg-green-600 px-4 gap-1.5 text-white hover:bg-green-700"
+                                  onClick={() => handleReview(task._id, "confirm")}
+                                >
+                                  <Check className="h-3.5 w-3.5" /> Confirm
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {filteredTasks && filteredTasks.length > SIDE_PREVIEW && (
+                        <div className="pt-1 text-center">
+                          <ViewAllLink expanded={showAllTasks} onClick={() => setShowAllTasks((v) => !v)} />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-          </Section>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

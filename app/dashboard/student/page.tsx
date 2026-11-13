@@ -1251,16 +1251,16 @@ const imradBlocked =
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                         <BarChart3 className="h-5 w-5" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 mb-3">
                         <h2 className="text-lg font-semibold text-foreground leading-tight">
-                          Project Progress
+                          {project.teamName || "Capstone Project"}
                         </h2>
                         <p className="text-sm text-muted-foreground mt-0.5 truncate">
                           {project.projectTitle || "Your current progress in the capstone journey."}
                         </p>
                       </div>
                     </div>
-                    <DefenseBadge project={project} progress={progress.total} />
+                    {/* <DefenseBadge project={project} progress={progress.total} /> */}
                   </div>
 
                   {/* Journey stepper */}
@@ -1392,10 +1392,10 @@ const imradBlocked =
                         ` ${progress.superseded} older ${progress.superseded === 1 ? "version is" : "versions are"} superseded.`}
                     </p>
                   </div>
-
+{/* 
                   <DefenseStatusCard project={project} progress={progress.total} />
                   <ProposalScheduleCard project={project} />
-                  <FinalRevisionsCard projectId={project._id as Id<"capstoneProjects">} />
+                  <FinalRevisionsCard projectId={project._id as Id<"capstoneProjects">} /> */}
                 </div>
 
                 {/* Members / Adviser / Quick info */}

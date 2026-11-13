@@ -60,7 +60,7 @@ const adminLinks = [
   { label: "Approvals", href: "/dashboard/admin/approvals", icon: UserCheck },
   { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
   { label: "Imrad Processing", href: "/dashboard/admin/imrad-processing", icon: FileText },
-  { label: "Archive", href: "/components/Archive", icon: Archive },
+  // { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Reports", href: "/dashboard/admin/reports", icon: FileText },
   { label: "System Settings", href: "/dashboard/admin/system-settings", icon: ScrollText },
   { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ScrollText },
