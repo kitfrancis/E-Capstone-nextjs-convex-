@@ -64,6 +64,7 @@ type OnlyOfficeEditorProps = {
     draftStorageIdAtSelection: string | null,
   ) => Promise<VersionComparison>;
   onGetDraftStorageId?: () => Promise<string | null>;
+  onGetDraftFileUrl?: () => Promise<string>;
   onClose: (hasChanges: boolean) => void | Promise<void>;
   // NEW: draft editing
   docKey?: string;                 // unique per editor session (falls back to fileId)
@@ -197,6 +198,7 @@ export default function OnlyOfficeEditor({
   onSelectChapter,
   onCompareVersion,
   onGetDraftStorageId,
+  onGetDraftFileUrl,
   onClose,
   docKey,
   draftId,
@@ -211,8 +213,10 @@ export default function OnlyOfficeEditor({
   const { theme, mounted: themeMounted } = useAppTheme();
   const onEditorReadyRef = useRef(onEditorReady);
   const onEditorErrorRef = useRef(onEditorError);
+  const onGetDraftFileUrlRef = useRef(onGetDraftFileUrl);
   onEditorReadyRef.current = onEditorReady;
   onEditorErrorRef.current = onEditorError;
+  onGetDraftFileUrlRef.current = onGetDraftFileUrl;
   const activeEditorRef = useRef<{ editor: OnlyOfficeInstance; slot: EditorSlot } | null>(null);
   const stagedEditorRef = useRef<{ editor: OnlyOfficeInstance; slot: EditorSlot } | null>(null);
   const activeSlotRef = useRef<EditorSlot | null>(null);
@@ -465,7 +469,23 @@ export default function OnlyOfficeEditor({
           : "") +
         (editorMode === "comment" ? "&notify=1" : "");
       const editorFileName = comparison?.selectedFileName ?? fileName;
-      const editorFileUrl = comparison?.selectedFileUrl ?? fileUrl;
+      let editorFileUrl = comparison?.selectedFileUrl ?? fileUrl;
+      if (!comparison && onGetDraftFileUrlRef.current) {
+        try {
+          editorFileUrl = await onGetDraftFileUrlRef.current();
+        } catch (error) {
+          if (!cancelled) {
+            onEditorErrorRef.current?.();
+            setLoading(false);
+            setSwitchingChapter(null);
+            setLoadError(
+              error instanceof Error ? error.message : "Couldn't load the shared draft.",
+            );
+          }
+          return;
+        }
+        if (cancelled) return;
+      }
       const documentKey = comparison
         ? `compare-${comparison.selectedDeliverableId}-${deliverableId}-${comparison.selectedVersion}-${comparison.comparisonStorageId}`
         : docKey ?? fileId;
