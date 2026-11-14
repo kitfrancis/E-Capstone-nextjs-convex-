@@ -17,7 +17,6 @@ import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
   Check,
-  Clock,
   Copy,
   Key,
   MoreVertical,
@@ -44,6 +43,7 @@ import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
 import { InstructorTeamDetailsDialog } from "@/app/components/instructor-team-details-dialog";
+import { ImradProgressSummary } from "@/app/components/imrad-progress-summary";
 import {
   DefenseActionButton,
   defenseActionKind,
@@ -70,9 +70,6 @@ const StaffDraftEditor = dynamic(
 );
 
 const isPdf = (fileName: string) => fileName.toLowerCase().endsWith(".pdf");
-
-// Phase name the student's final IMRaD upload is saved under
-const IMRAD_PHASE = "IMRaD Final";
 
 type SubmissionFilter = "all" | "under_review" | "needs_revision" | "approved";
 type TaskFilter = "all" | "overdue" | "under_review";
@@ -270,6 +267,81 @@ function ViewAllLink({
   );
 }
 
+function InstructorImradWorkflow({
+  projectId,
+  stage,
+}: {
+  projectId: Id<"capstoneProjects">;
+  stage?: string;
+}) {
+  const progress = useQuery(api.imrad.projectProgress, { projectId });
+  const unlockStudentImrad = useMutation(api.imrad.unlockStudentImrad);
+  const [unlocking, setUnlocking] = useState(false);
+  const [error, setError] = useState("");
+
+  if (progress === undefined || progress === null) return null;
+  const showWorkflow =
+    stage === "ready_to_archive" ||
+    !!progress.unlockedAt ||
+    !!progress.submission;
+  if (!showWorkflow) return null;
+
+  const unlock = async () => {
+    setUnlocking(true);
+    setError("");
+    try {
+      await unlockStudentImrad({ projectId });
+      toast.success("IMRaD is unlocked for this team.");
+    } catch (unlockError) {
+      console.error("Failed to unlock IMRaD:", unlockError);
+      setError(
+        unlockError instanceof Error
+          ? unlockError.message
+          : "Could not unlock IMRaD."
+      );
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">IMRaD process</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {progress.submission?.fileName ??
+              (progress.unlockedAt
+                ? "Waiting for the team to start in My Manuscript."
+                : "Ready for the instructor to unlock.")}
+          </p>
+        </div>
+        {progress.canUnlock && (
+          <Button size="sm" onClick={unlock} disabled={unlocking}>
+            {unlocking ? "Unlocking..." : "Unlock IMRaD"}
+          </Button>
+        )}
+      </div>
+      {progress.unlockedAt && (
+        <ImradProgressSummary
+          completedParts={progress.submission?.completedParts ?? []}
+        />
+      )}
+      {progress.submission?.status === "instructor_review" && (
+        <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+          The team submitted its document for your review.
+        </p>
+      )}
+      {progress.submission?.verificationComment && (
+        <p className="rounded-lg bg-orange-500/10 px-3 py-2 text-sm text-orange-700 dark:text-orange-300">
+          {progress.submission.verificationComment}
+        </p>
+      )}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 export default function InstructorTeamManagementPage() {
   const { user } = useUser();
   const me = useQuery(api.users.getMe);
@@ -350,31 +422,15 @@ export default function InstructorTeamManagementPage() {
   const approveFinalRevisions = useMutation(api.dashboard.approveFinalRevisions);
   const handleApproveFinal = async (team: Doc<"capstoneProjects">) => {
     const ok = window.confirm(
-      `Approve the final revisions of ${team.teamName}? The team will be asked to upload their IMRaD manuscript for archiving or binding.`
+      `Approve the final revisions of ${team.teamName}? You can then unlock the IMRaD process for the team.`
     );
     if (!ok) return;
     try {
       await approveFinalRevisions({ projectId: team._id });
-      toast.success(`${team.teamName} is now ready for archiving.`);
+      toast.success(`${team.teamName} is now eligible for the IMRaD unlock.`);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Couldn't approve the final revisions.");
-    }
-  };
-
-  // Endorse for archiving: only works once the IMRaD file is verified (approved)
-  const endorseForArchiving = useMutation(api.defense.endorseForArchiving);
-  const handleEndorse = async (team: Doc<"capstoneProjects">) => {
-    const ok = window.confirm(
-      `Endorse ${team.teamName} for archiving? The admin will do the final verification.`
-    );
-    if (!ok) return;
-    try {
-      await endorseForArchiving({ projectId: team._id });
-      toast.success(`${team.teamName} was endorsed for archiving.`);
-    } catch (err) {
-      console.error(err);
-      toast.error(err instanceof Error ? err.message : "Couldn't endorse the project.");
     }
   };
 
@@ -615,25 +671,8 @@ export default function InstructorTeamManagementPage() {
                   "border border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300";
                 const defenseAction = defenseActionKind(team, teamProgress);
 
-                // Final revisions / archive flow
                 const stageStr = String(team.stage ?? "");
                 const awaitingFinalApproval = stageStr === "final_revisions";
-                const readyToArchive = stageStr === "ready_to_archive";
-                // Latest IMRaD version the team uploaded (if any)
-                const imradDoc = teamDeliverables
-                  .filter((d) => d.phase === IMRAD_PHASE)
-                  .sort((a, b) => Number(b.version) - Number(a.version))[0];
-                const imradStatus = imradDoc?.status;
-                const imradSubmitted = !!imradDoc;
-                // No IMRaD yet, or it was sent back and the team must upload a new one
-                const awaitingImrad =
-                  readyToArchive && (!imradSubmitted || imradStatus === "needs_revision");
-                // Uploaded and waiting for the instructor to verify it
-                const verifyImrad = readyToArchive && imradStatus === "under_review";
-                // Verified (approved) but not yet endorsed for archiving
-                const canEndorse =
-                  readyToArchive && imradStatus === "approved" && !team.archiveEndorsedAt;
-                const endorsed = readyToArchive && !!team.archiveEndorsedAt;
 
                 return (
                   <div key={team._id} className={rowClass}>
@@ -669,53 +708,6 @@ export default function InstructorTeamManagementPage() {
                             className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
                           >
                             <Check className="h-3.5 w-3.5" /> Approve Final Revisions
-                          </Button>
-                        ) : awaitingImrad ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled
-                            title="The team hasn't uploaded a valid IMRaD manuscript yet"
-                            className="flex-1 rounded-full border-amber-300 bg-amber-50 px-4 text-amber-700 disabled:opacity-100 sm:flex-none dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
-                          >
-                            <Clock className="h-3.5 w-3.5" /> Waiting for IMRaD
-                          </Button>
-                        ) : verifyImrad ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 rounded-full px-3 text-xs sm:flex-none"
-                              onClick={() =>
-                                imradDoc && handleStatus(imradDoc._id, "needs_revision")
-                              }
-                            >
-                              Request revision
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => imradDoc && handleStatus(imradDoc._id, "approved")}
-                              className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
-                            >
-                              <Check className="h-3.5 w-3.5" /> Verify IMRaD
-                            </Button>
-                          </>
-                        ) : canEndorse ? (
-                          <Button
-                            size="sm"
-                            onClick={() => handleEndorse(team)}
-                            className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
-                          >
-                            <Check className="h-3.5 w-3.5" /> Endorse for Archiving
-                          </Button>
-                        ) : endorsed ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled
-                            className="flex-1 rounded-full border-emerald-300 bg-emerald-50 px-4 text-emerald-700 disabled:opacity-100 sm:flex-none dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
-                          >
-                            <Check className="h-3.5 w-3.5" /> Endorsed
                           </Button>
                         ) : defenseAction !== null ? (
                           <div className="min-w-0 flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
@@ -824,26 +816,10 @@ export default function InstructorTeamManagementPage() {
                       </div>
                     </div>
 
-                    {/* Archive status line */}
-                    {readyToArchive && (
-                      <p
-                        className={`mt-3 text-xs font-medium ${
-                          imradStatus === "approved"
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-amber-700 dark:text-amber-400"
-                        }`}
-                      >
-                        {!imradSubmitted
-                          ? "Waiting for the team's IMRaD upload."
-                          : imradStatus === "needs_revision"
-                            ? "IMRaD sent back. Waiting for a new upload."
-                            : imradStatus === "under_review"
-                              ? "IMRaD submitted. Waiting for your verification."
-                              : endorsed
-                                ? "Endorsed. Waiting for admin verification."
-                                : "IMRaD verified. Ready to endorse for archiving."}
-                      </p>
-                    )}
+                    <InstructorImradWorkflow
+                      projectId={team._id}
+                      stage={stageStr}
+                    />
 
                     {/* Stats */}
                     <div className="mt-4 grid grid-cols-3 gap-4 border-t pt-4">

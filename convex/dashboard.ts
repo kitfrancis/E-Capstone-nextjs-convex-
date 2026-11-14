@@ -8,7 +8,7 @@ import { computeProgress } from "../lib/progress";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
 
-// Phase name the student's final IMRaD upload is saved under
+// Legacy phase retained so old IMRaD upload requests can be rejected.
 const IMRAD_PHASE = "IMRaD Final";
 
 const teamRoleValidator = v.union(
@@ -610,6 +610,11 @@ export const saveDeliverable = mutation({
     if (project.stage === "archived") {
       throw new Error("This project is archived and read-only.");
     }
+    if (args.phase === IMRAD_PHASE) {
+      throw new Error(
+        "IMRaD documents must be created through the instructor-unlocked workflow."
+      );
+    }
 
     // Chapters 4-5 stay locked until the proposal defense is passed
     const chapterNum = Number(args.phase.match(/\d+/)?.[0]);
@@ -622,30 +627,15 @@ export const saveDeliverable = mutation({
       }
     }
 
-    const isImrad = args.phase === IMRAD_PHASE;
-
     // Final revisions only open once the instructor uploaded the 3 evaluation forms
     const inFinalRevisions = project.stage === "final_revisions";
     const formsReady = (project.evaluationForms ?? []).length >= 3;
-    if (inFinalRevisions && !isImrad && !formsReady) {
+    if (inFinalRevisions && !formsReady) {
       throw new Error(
         "Wait for your instructor to upload the panel evaluation forms before submitting revisions."
       );
     }
     const revisionsOpen = inFinalRevisions && formsReady;
-
-    // The final IMRaD manuscript: only after the final revisions are approved, and only as a PDF
-    if (isImrad) {
-      if (project.stage !== "ready_to_archive") {
-        throw new Error("The IMRaD upload unlocks after your final revisions are approved.");
-      }
-      if (!args.fileName.toLowerCase().endsWith(".pdf")) {
-        throw new Error("The IMRaD manuscript must be a PDF.");
-      }
-      if (args.draftId) {
-        throw new Error("The IMRaD manuscript must be uploaded as a PDF file.");
-      }
-    }
 
     let storageId = args.storageId;
     let draft: Doc<"deliverableDrafts"> | null = null;
@@ -688,15 +678,9 @@ export const saveDeliverable = mutation({
       null
     );
 
-    // One IMRaD per team, unless the instructor sent it back for changes
-    if (isImrad && latest && latest.status !== "needs_revision") {
-      throw new Error("Your IMRaD manuscript is already submitted.");
-    }
-
     // Approved chapters are locked, except once during the final revisions
     if (
       !args.draftId &&
-      !isImrad &&
       Number.isFinite(chapterNum) &&
       latest?.status === "approved"
     ) {
@@ -726,7 +710,6 @@ export const saveDeliverable = mutation({
 
     const reopensChapterReview =
       project.stage === "ready_to_archive" &&
-      !isImrad &&
       Number.isFinite(chapterNum) &&
       chapterNum >= 1;
     if (reopensChapterReview) {
@@ -747,7 +730,7 @@ export const saveDeliverable = mutation({
     await logAction(
       ctx,
       caller,
-      isImrad ? "Uploaded IMRaD manuscript" : "Uploaded deliverable",
+      "Uploaded deliverable",
       `${args.fileName} (v${version}) for team "${project.teamName}"`
     );
 
@@ -761,9 +744,7 @@ export const saveDeliverable = mutation({
     for (const userId of recipients) {
       await ctx.runMutation(api.notifications.sendNotification, {
         userId,
-        message: isImrad
-          ? `Team "${project.teamName}" submitted their final IMRaD manuscript: "${args.fileName}". It's waiting for your verification.`
-          : isResubmission
+        message: isResubmission
             ? `Team "${project.teamName}" resubmitted "${args.fileName}" as version ${version}. It's waiting for your review.`
             : `Team "${project.teamName}" uploaded a deliverable: "${args.fileName}".`,
         type: isResubmission ? "deliverable_resubmitted" : "deliverable_uploaded",
@@ -779,9 +760,7 @@ export const saveDeliverable = mutation({
   },
 });
 
-// INSTRUCTOR (this team's) or admin: approve the final revisions.
-// Moves the team from "final_revisions" to "ready_to_archive", which shows the
-// "Upload IMRaD File" banner on the students' dashboard.
+// INSTRUCTOR (this team's) or admin: approve the final revisions and make the team eligible for IMRaD unlock.
 export const approveFinalRevisions = mutation({
   args: { projectId: v.id("capstoneProjects") },
   returns: v.null(),
@@ -804,12 +783,12 @@ export const approveFinalRevisions = mutation({
       `Team "${project.teamName}" is ready for archiving`
     );
 
-    // Tell every student they can upload the IMRaD now
+    // Tell students the instructor can now unlock the shared IMRaD workflow.
     for (const memberId of project.members ?? []) {
       if (memberId === caller._id) continue;
       await ctx.runMutation(api.notifications.sendNotification, {
         userId: memberId,
-        message: `${caller.name} approved your final revisions. Upload your final IMRaD manuscript (PDF) for archiving or binding.`,
+        message: `${caller.name} approved your final revisions. Your instructor can now unlock the shared IMRaD process, which you will start from My Manuscript.`,
         type: "deliverable_approved",
         relatedId: args.projectId,
         link: "/dashboard/student",
@@ -925,7 +904,7 @@ export const adviserDeliverableStatus = mutation({
         });
       }
     }
-    // Last revised chapter approved -> unlock the IMRaD upload right away
+    // Last revised chapter approved -> make the team eligible for instructor unlock
     if (changed && args.status === "approved" && project.stage === "final_revisions") {
       await ctx.runMutation(api.defense.syncFinalRevisions, { projectId: project._id });
     }

@@ -172,7 +172,7 @@ function ScheduleDialog({
 }
 
 const RESULTS = [
-  { value: "passed", title: "Passed", sub: "No changes needed. IMRaD upload opens right away." },
+  { value: "passed", title: "Passed", sub: "No changes needed. The instructor can unlock the shared IMRaD process." },
   { value: "passed_with_revisions", title: "Passed with revisions", sub: "Upload the 3 evaluation forms next. The team then submits final revisions." },
   { value: "failed", title: "Failed", sub: "A re-defense will be needed." },
 ] as const;
@@ -460,7 +460,7 @@ export function DefenseActionButton({ project, progress }: { project: Project; p
   const syncFinal = useMutation(api.defense.syncFinalRevisions);
 
   // Final revisions: once every chapter is back at 100%, the server checks that all of them
-  // were resubmitted and approved, then unlocks the IMRaD upload.
+  // were resubmitted and approved, then makes the team eligible for instructor unlock.
   useEffect(() => {
     if (project.stage === "final_revisions" && progress >= 100) {
       syncFinal({ projectId: project._id }).catch(() => {});
