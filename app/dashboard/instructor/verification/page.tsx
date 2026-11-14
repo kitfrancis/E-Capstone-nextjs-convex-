@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, FileText, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, RotateCcw } from "lucide-react";
 
 const PDFViewer = dynamic(
   () => import("@/app/components/PDFViewer").then((module) => ({ default: module.PDFViewer })),
@@ -22,9 +22,8 @@ const PDFViewer = dynamic(
 );
 
 export default function InstructorVerificationPage() {
-  const submissions = useQuery(api.imrad.myVerificationSubmissions);
-  const review = useMutation(api.imrad.reviewFinalVerification);
-  const cancelProcessing = useMutation(api.imrad.cancelProcessing);
+  const submissions = useQuery(api.imrad.myInstructorReviewSubmissions);
+  const review = useMutation(api.imrad.reviewInstructorSubmission);
   const [activePreview, setActivePreview] = useState<{
     url: string;
     name: string;
@@ -34,41 +33,6 @@ export default function InstructorVerificationPage() {
   const [comment, setComment] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [cancelingSubmissionId, setCancelingSubmissionId] =
-    useState<Id<"imradSubmissions"> | null>(null);
-  const [cancelError, setCancelError] = useState("");
-
-  const cancelVerification = async (
-    submissionId: Id<"imradSubmissions">,
-    teamName: string
-  ) => {
-    if (
-      !window.confirm(
-        `Cancel final verification for "${teamName}"? This permanently deletes the IMRaD PDF, its progress, the panel evaluation PDFs, and the submission record. The accepted team remains so the instructor can submit again.`
-      )
-    ) {
-      return;
-    }
-
-    setCancelError("");
-    setCancelingSubmissionId(submissionId);
-    try {
-      await cancelProcessing({ submissionId });
-      setActiveSubmissionId(null);
-      setActivePreview(null);
-      setComment("");
-    } catch (cancelError) {
-      console.error("Failed to cancel final IMRaD verification:", cancelError);
-      setCancelError(
-        cancelError instanceof Error
-          ? cancelError.message
-          : "Couldn't cancel final verification."
-      );
-    } finally {
-      setCancelingSubmissionId(null);
-    }
-  };
-
   const submitReview = async (decision: "approve" | "request_changes") => {
     if (!activeSubmissionId) return;
     if (decision === "request_changes" && !comment.trim()) {
@@ -104,27 +68,22 @@ export default function InstructorVerificationPage() {
   return (
     <div className="space-y-6 p-4 font-Poppins sm:p-6">
       <section className="rounded-2xl border border-blue-500/20 bg-linear-to-br from-blue-500/15 via-blue-500/5 to-transparent p-6 md:p-8">
-        <h1 className="text-3xl font-semibold text-foreground">Final Verification</h1>
+        <h1 className="text-3xl font-semibold text-foreground">IMRaD Instructor Review</h1>
         <p className="mt-2 text-muted-foreground">
-          Review the completed IMRaD PDF. Approve it or return it to the admin with a comment.
+          Review the team&apos;s completed IMRaD PDF. Approve it for final admin verification or request changes from the students.
         </p>
       </section>
 
       {submissions === undefined ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          Loading documents awaiting verification...
+          Loading IMRaD documents awaiting review...
         </p>
       ) : submissions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-          No IMRaD documents are waiting for verification.
+          No IMRaD documents are waiting for instructor review.
         </div>
       ) : (
         <div className="space-y-3">
-          {cancelError && (
-            <p role="alert" className="text-sm text-destructive">
-              {cancelError}
-            </p>
-          )}
           {submissions.map((submission) => (
             <article
               key={submission.submissionId}
@@ -154,19 +113,6 @@ export default function InstructorVerificationPage() {
                 >
                   Review PDF
                 </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={cancelingSubmissionId === submission.submissionId}
-                  onClick={() =>
-                    cancelVerification(submission.submissionId, submission.teamName)
-                  }
-                >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  {cancelingSubmissionId === submission.submissionId
-                    ? "Canceling..."
-                    : "Cancel"}
-                </Button>
               </div>
             </article>
           ))}
@@ -181,9 +127,9 @@ export default function InstructorVerificationPage() {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Verify {activeSubmission?.teamName}&apos;s IMRaD PDF</DialogTitle>
+            <DialogTitle>Review {activeSubmission?.teamName}&apos;s IMRaD PDF</DialogTitle>
             <DialogDescription>
-              Preview the final file before approving. If it needs changes, leave a clear comment for the admin.
+              Preview the file. Approving sends it to the admin for final verification; requested changes go back to the students.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2">
@@ -200,7 +146,7 @@ export default function InstructorVerificationPage() {
               }
             >
               <FileText className="mr-2 h-4 w-4" />
-              Preview final PDF
+              Preview IMRaD PDF
             </Button>
           </div>
           <div className="space-y-2">
@@ -211,7 +157,7 @@ export default function InstructorVerificationPage() {
               id="verification-comment"
               value={comment}
               onChange={(event) => setComment(event.target.value)}
-              placeholder="Explain any changes the admin should make..."
+              placeholder="Explain the changes the students should make..."
               rows={4}
             />
           </div>
@@ -228,7 +174,7 @@ export default function InstructorVerificationPage() {
             </Button>
             <Button type="button" disabled={busy} onClick={() => submitReview("approve")}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
-              {busy ? "Saving..." : "Approve"}
+              {busy ? "Saving..." : "Approve and Send to Admin"}
             </Button>
           </div>
         </DialogContent>

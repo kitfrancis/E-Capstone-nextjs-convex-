@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -30,6 +31,30 @@ function isAllowedOnlyOfficeFileUrl(value: string) {
   }
 }
 
+function isValidImradCallbackToken(
+  token: string | null,
+  expiresAtValue: string | null,
+  submissionId: string
+) {
+  const secret = process.env.ONLYOFFICE_SECRET;
+  const expiresAt = Number(expiresAtValue);
+  if (
+    !secret ||
+    !token ||
+    !Number.isSafeInteger(expiresAt) ||
+    expiresAt < Date.now() ||
+    !/^[a-f0-9]{64}$/i.test(token)
+  ) {
+    return false;
+  }
+
+  const expected = createHmac("sha256", secret)
+    .update(`${submissionId}:${expiresAt}`)
+    .digest();
+  const supplied = Buffer.from(token, "hex");
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
 export async function POST(req: Request) {
   let parsedBody: unknown;
   try {
@@ -44,7 +69,62 @@ export async function POST(req: Request) {
   const params = new URL(req.url).searchParams;
   const draftId = params.get("draftId");
   const adminImradSubmissionId = params.get("adminImradSubmissionId");
+  const imradSubmissionId = params.get("imradSubmissionId");
   console.log("OO callback", draftId, body.status);
+
+  if (imradSubmissionId) {
+    if (
+      !isValidImradCallbackToken(
+        params.get("imradToken"),
+        params.get("imradExpires"),
+        imradSubmissionId
+      )
+    ) {
+      return NextResponse.json({ error: 1 }, { status: 401 });
+    }
+    if (body.status === 2 || body.status === 6) {
+      if (
+        typeof body.url !== "string" ||
+        !isAllowedOnlyOfficeFileUrl(body.url) ||
+        !process.env.ONLYOFFICE_SECRET
+      ) {
+        console.error("Student IMRaD callback is missing a valid OnlyOffice file URL or secret.");
+        return NextResponse.json({ error: 1 });
+      }
+      try {
+        const documentResponse = await fetch(body.url, {
+          redirect: "error",
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!documentResponse.ok) throw new Error("OnlyOffice PDF download failed.");
+        const pdf = await documentResponse.arrayBuffer();
+        const secret = process.env.ONLYOFFICE_SECRET;
+        const uploadUrl = await convex.mutation(
+          api.imrad.generateAdminWorkingDocumentUploadUrl,
+          { secret }
+        );
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/pdf" },
+          body: pdf,
+        });
+        if (!uploadResponse.ok) throw new Error("Convex PDF upload failed.");
+        const result: unknown = await uploadResponse.json();
+        if (!isRecord(result) || typeof result.storageId !== "string") {
+          throw new Error("Convex returned an invalid storage ID.");
+        }
+        await convex.mutation(api.imrad.saveAdminWorkingDocumentFile, {
+          secret,
+          submissionId: imradSubmissionId as Id<"imradSubmissions">,
+          storageId: result.storageId as Id<"_storage">,
+        });
+      } catch (error) {
+        console.error("Student IMRaD PDF save failed:", error);
+        return NextResponse.json({ error: 1 });
+      }
+    }
+    return NextResponse.json({ error: 0 });
+  }
 
   if (adminImradSubmissionId) {
     if (body.status === 2 || body.status === 6) {

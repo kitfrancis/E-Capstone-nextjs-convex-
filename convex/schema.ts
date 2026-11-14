@@ -129,6 +129,7 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
     archiveEndorsedAt: v.optional(v.number()),
     defenseRecordedAt: v.optional(v.number()),
+    imradUnlockedAt: v.optional(v.number()),
     evaluationForms: v.optional(
       v.array(
         v.object({
@@ -158,9 +159,15 @@ export default defineSchema({
       v.literal("rejected"),
       v.literal("verification"),
       v.literal("changes_requested"),
+      v.literal("student_editing"),
+      v.literal("instructor_review"),
+      v.literal("admin_review"),
       v.literal("approved"),
       v.literal("completed"),
       v.literal("archived")
+    ),
+    revisionTarget: v.optional(
+      v.union(v.literal("instructor"), v.literal("admin"))
     ),
     submittedAt: v.number(),
     processedAt: v.optional(v.number()),
