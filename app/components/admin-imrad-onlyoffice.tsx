@@ -159,9 +159,15 @@ export default function AdminImradOnlyOffice({
           key: `${audience === "admin" ? "admin-imrad" : "imrad"}-${effectiveFileId}`,
         }),
       });
-      const result: unknown = await response.json();
+      let result: unknown;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        console.error("OnlyOffice force-save API returned invalid JSON:", parseError);
+        throw new Error("Internal server error. Please try again later.");
+      }
       if (!response.ok || !result || typeof result !== "object" || !("ok" in result) || result.ok !== true) {
-        throw new Error("OnlyOffice could not save the final PDF.");
+        throw new Error("Internal server error. Please try again later.");
       }
       if ("waitForCallback" in result && result.waitForCallback === false) {
         if (audience === "admin") {
@@ -183,9 +189,7 @@ export default function AdminImradOnlyOffice({
       }
     } catch (saveError) {
       console.error("Failed to save final IMRaD PDF:", saveError);
-      setSaveMessage(
-        saveError instanceof Error ? saveError.message : "Could not save the final PDF."
-      );
+      setSaveMessage("Internal server error. Please try again later.");
     } finally {
       setSavingFinalPdf(false);
     }
