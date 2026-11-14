@@ -271,16 +271,7 @@ export default function StaffDraftEditor({
       onGetDraftStorageId={async () =>
         (await getCurrentDraft(session.deliverable._id))?.storageId ?? null
       }
-      onClose={async (hasChanges) => {
-        if (hasChanges && session) {
-          await forceSaveDraft(
-            `draft-${session.draftId}-${session.sessionRevision}`,
-            () => getCurrentDraft(session.deliverable._id),
-            session.storageId,
-          );
-        }
-        onClose();
-      }}
+      onClose={onClose}
     />
   );
 }
