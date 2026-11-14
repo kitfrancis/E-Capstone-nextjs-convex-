@@ -34,7 +34,7 @@ import { useSearchParams } from "next/navigation";
 
 const studentLinks = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
-  { label: "Manuscript & Tasks", href: "/dashboard/student?tab=deliverables", icon: Users },
+  { label: "Manuscript & Tasks", href: "/dashboard/student/manuscript", icon: Users },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/student", icon: User },
 ];
