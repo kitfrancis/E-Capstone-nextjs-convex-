@@ -2,13 +2,15 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { computeProgress, CHAPTER_MAX } from "@/lib/progress";
 import { chapterOf } from "@/lib/progress";
 import { ArrowLeft, CalendarDays, CheckSquare, FileText, Mail, UserCheck, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ImradProgressSummary } from "@/app/components/imrad-progress-summary";
 
 const BADGE_BASE =
   "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
@@ -50,6 +52,8 @@ const barColor = (status: string | null) => {
 export default function InstructorTeamPage() {
   const params = useParams<{ teamId: string }>();
   const teamId = params.teamId as Id<"capstoneProjects">;
+  const [unlockingImrad, setUnlockingImrad] = useState(false);
+  const [imradActionError, setImradActionError] = useState("");
 
   const me = useQuery(api.users.getMe);
   const myId = me?._id as string | undefined;
@@ -61,8 +65,28 @@ export default function InstructorTeamPage() {
   const adviser = useQuery(api.dashboard.getProjectAdviser, team ? { capstoneProjectId: teamId } : "skip");
   const deliverables = useQuery(api.dashboard.getDeliverables, team ? { capstoneProjectId: teamId } : "skip");
   const tasks = useQuery(api.dashboard.getTasks, team ? { capstoneProjectId: teamId } : "skip");
+  const imradProgress = useQuery(
+    api.imrad.projectProgress,
+    team ? { projectId: teamId } : "skip"
+  );
+  const unlockStudentImrad = useMutation(api.imrad.unlockStudentImrad);
 
   const progress = useMemo(() => computeProgress(deliverables ?? []), [deliverables]);
+
+  const unlockImrad = async () => {
+    setUnlockingImrad(true);
+    setImradActionError("");
+    try {
+      await unlockStudentImrad({ projectId: teamId });
+    } catch (error) {
+      console.error("Failed to unlock student IMRaD:", error);
+      setImradActionError(
+        error instanceof Error ? error.message : "Could not unlock IMRaD."
+      );
+    } finally {
+      setUnlockingImrad(false);
+    }
+  };
 
   const backLink = (
     <Link
@@ -224,6 +248,56 @@ export default function InstructorTeamPage() {
           })
         )}
       </div>
+
+      {(imradProgress?.unlockedAt || imradProgress?.submission) && (
+        <section className="rounded-2xl border bg-card p-4 lg:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-foreground">IMRaD Conversion</h2>
+              <p className="mt-1 truncate text-sm text-muted-foreground">
+                {imradProgress.submission?.fileName ??
+                  "Waiting for the team to start the IMRaD process"}
+              </p>
+            </div>
+            {imradProgress.submission?.status === "instructor_review" && (
+              <Button asChild size="sm" className="shrink-0">
+                <Link href="/dashboard/instructor/verification">Review IMRaD</Link>
+              </Button>
+            )}
+          </div>
+          <div className="mt-4">
+            <ImradProgressSummary
+              completedParts={imradProgress.submission?.completedParts ?? []}
+            />
+          </div>
+          {imradProgress.submission?.verificationComment && (
+            <p className="mt-3 rounded-lg bg-orange-500/10 px-3 py-2 text-sm text-orange-700 dark:text-orange-300">
+              {imradProgress.submission.verificationComment}
+            </p>
+          )}
+        </section>
+      )}
+
+      {imradProgress?.canUnlock && (
+        <section className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 lg:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-foreground">Start IMRaD process</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Unlock the team&apos;s shared IMRaD guide in My Manuscript.
+              </p>
+            </div>
+            <Button type="button" onClick={unlockImrad} disabled={unlockingImrad}>
+              {unlockingImrad ? "Unlocking..." : "Unlock IMRaD"}
+            </Button>
+          </div>
+          {imradActionError && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              {imradActionError}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Tasks */}
       <div>

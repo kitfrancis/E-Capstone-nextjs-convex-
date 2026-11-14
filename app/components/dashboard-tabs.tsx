@@ -12,6 +12,8 @@ import { SelectDemo } from "@/app/components/select";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { DeleteDeliverable } from "@/app/components/deleteDeliverable";
+import AdminImradOnlyOffice from "@/app/components/admin-imrad-onlyoffice";
+import { ImradProgressSummary } from "@/app/components/imrad-progress-summary";
 import { CHAPTER_PHASES, chapterOf, computeProgress } from "@/lib/progress";
 import {
   MoreVertical,
@@ -77,6 +79,25 @@ const fileStyle = (fileName: string) => {
     return { icon: FileArchive, wrap: "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-300" };
   return { icon: FileIcon, wrap: "bg-muted text-muted-foreground" };
 };
+
+function getImradStatusLabel(status: string, revisionTarget: string | null) {
+  if (status === "student_editing" && revisionTarget === "instructor") {
+    return "Changes requested by instructor";
+  }
+  if (status === "student_editing" && revisionTarget === "admin") {
+    return "Changes requested by admin";
+  }
+  if (status === "student_editing") return "In progress";
+  if (status === "instructor_review" || status === "verification") {
+    return "Under instructor review";
+  }
+  if (status === "admin_review" || status === "approved") {
+    return "Under admin review";
+  }
+  if (status === "completed" || status === "archived") return "Completed";
+  if (status === "rejected") return "Rejected";
+  return "Processing";
+}
 
 const BADGE_BASE =
   "inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
@@ -221,6 +242,15 @@ export function TabsDemo({
       fileSize: string;
     };
   } | null>(null);
+  const [activeImradEditor, setActiveImradEditor] = useState<{
+    submissionId: Id<"imradSubmissions">;
+    storageId: Id<"_storage">;
+    fileName: string;
+    fileUrl: string;
+    status: string;
+    completedParts: number[];
+  } | null>(null);
+  const [startingImrad, setStartingImrad] = useState(false);
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const restoreAttemptStartedRef = useRef(false);
 
@@ -284,6 +314,14 @@ export function TabsDemo({
     api.dashboard.getTasks,
     capstoneProjectId ? { capstoneProjectId } : "skip"
   );
+  const imradProgress = useQuery(
+    api.imrad.projectProgress,
+    capstoneProjectId ? { projectId: capstoneProjectId } : "skip"
+  );
+  const generateStudentGuideUploadUrl = useMutation(
+    api.imrad.generateStudentGuideUploadUrl
+  );
+  const startStudentImrad = useMutation(api.imrad.startStudentImrad);
 
   type Deliverable = NonNullable<typeof deliverables>[number];
 
@@ -342,6 +380,10 @@ export function TabsDemo({
     uploadPhase: `Chapter ${chapter.chapter}`,
     deliverable: deliverables?.find((item) => item._id === chapter.latestId) ?? null,
   }));
+  const imradSubmission = imradProgress?.submission ?? null;
+  const showImradRow = !!imradProgress?.unlockedAt || !!imradSubmission;
+  const canStartImrad =
+    !imradSubmission || imradSubmission.status === "rejected";
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
   const alreadyApproved = chosen?.status === "approved";
@@ -391,6 +433,81 @@ export function TabsDemo({
       console.error(err);
       toast.error("Couldn't update the task. Try again.");
     }
+  };
+
+  const startImradProcess = async () => {
+    if (!capstoneProjectId || !imradProgress?.unlockedAt || startingImrad) return;
+    setStartingImrad(true);
+    try {
+      const templateResponse = await fetch("/imrad/imrad-conversion-guide.pdf");
+      if (!templateResponse.ok) {
+        throw new Error("Could not load the IMRaD sample guide.");
+      }
+      const templateFile = await templateResponse.blob();
+      if (templateFile.type !== "application/pdf") {
+        throw new Error("The IMRaD sample guide is not a PDF.");
+      }
+
+      const uploadUrl = await generateStudentGuideUploadUrl({
+        projectId: capstoneProjectId,
+      });
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/pdf" },
+        body: templateFile,
+      });
+      if (!uploadResponse.ok) {
+        throw new Error("Could not copy the IMRaD guide to team storage.");
+      }
+      const uploadResult: unknown = await uploadResponse.json();
+      if (
+        !uploadResult ||
+        typeof uploadResult !== "object" ||
+        !("storageId" in uploadResult) ||
+        typeof uploadResult.storageId !== "string"
+      ) {
+        throw new Error("The guide upload returned an invalid storage ID.");
+      }
+
+      const document = await startStudentImrad({
+        projectId: capstoneProjectId,
+        storageId: uploadResult.storageId as Id<"_storage">,
+      });
+      if (!document.url) {
+        throw new Error("The team IMRaD file was created, but its URL is unavailable.");
+      }
+      setActiveImradEditor({
+        submissionId: document.submissionId,
+        storageId: document.storageId,
+        fileName: document.fileName,
+        fileUrl: document.url,
+        status: document.status,
+        completedParts: document.completedParts,
+      });
+    } catch (error) {
+      console.error("Failed to start student IMRaD:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Could not start the IMRaD process."
+      );
+    } finally {
+      setStartingImrad(false);
+    }
+  };
+
+  const openImradDocument = () => {
+    const submission = imradProgress?.submission;
+    if (!submission?.storageId || !submission.fileName || !submission.fileUrl) {
+      toast.error("The team IMRaD file is unavailable.");
+      return;
+    }
+    setActiveImradEditor({
+      submissionId: submission.submissionId,
+      storageId: submission.storageId,
+      fileName: submission.fileName,
+      fileUrl: submission.fileUrl,
+      status: submission.status,
+      completedParts: submission.completedParts,
+    });
   };
 
   // Open (or create) the draft and open the editor on it.
@@ -1207,6 +1324,81 @@ export function TabsDemo({
                       </tr>
                     );
                   })}
+                  {showImradRow && (
+                    <>
+                      <tr className="border-t bg-blue-500/5">
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground">
+                                {imradSubmission?.fileName ?? "IMRaD Conversion"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Team IMRaD document
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">—</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                          {imradSubmission?.savedAt
+                            ? new Date(imradSubmission.savedAt).toLocaleString()
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`${BADGE_BASE} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`}>
+                            {imradSubmission
+                              ? getImradStatusLabel(
+                                  imradSubmission.status,
+                                  imradSubmission.revisionTarget
+                                )
+                              : "Ready to start"}
+                          </span>
+                          {imradSubmission?.verificationComment &&
+                            imradSubmission.status === "student_editing" && (
+                              <p className="mt-1 max-w-64 text-xs text-orange-700 dark:text-orange-300">
+                                {imradSubmission.verificationComment}
+                              </p>
+                            )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            size="sm"
+                            variant={canStartImrad ? "default" : "outline"}
+                            className={canStartImrad ? "rounded-lg bg-blue-600 text-white hover:bg-blue-700" : "rounded-lg"}
+                            disabled={
+                              startingImrad ||
+                              (canStartImrad && !imradProgress?.unlockedAt) ||
+                              (!canStartImrad && !imradSubmission?.fileUrl)
+                            }
+                            onClick={
+                              canStartImrad
+                                ? () => void startImradProcess()
+                                : openImradDocument
+                            }
+                          >
+                            {startingImrad
+                              ? "Creating..."
+                              : !canStartImrad
+                                ? imradSubmission?.status === "student_editing"
+                                  ? "Open/Edit"
+                                  : "View"
+                                : "Start Process"}
+                          </Button>
+                        </td>
+                      </tr>
+                      <tr className="border-t">
+                        <td colSpan={5} className="px-4 py-3">
+                          <ImradProgressSummary
+                            completedParts={imradSubmission?.completedParts ?? []}
+                          />
+                        </td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1366,6 +1558,28 @@ export function TabsDemo({
           onEditorError={() => setIsRestoringEditor(false)}
           onClose={closeEditor}
         />
+      )}
+      {activeImradEditor && (
+        <div className="fixed inset-0 z-[100] flex h-[100dvh] w-screen bg-background">
+          <AdminImradOnlyOffice
+            audience="student"
+            canEdit={
+              (imradProgress?.submission?.status ??
+                activeImradEditor.status) === "student_editing"
+            }
+            teamName={imradProgress?.teamName ?? "Capstone team"}
+            projectTitle={imradProgress?.projectTitle ?? "IMRaD"}
+            submissionId={activeImradEditor.submissionId}
+            completedParts={
+              imradProgress?.submission?.completedParts ??
+              activeImradEditor.completedParts
+            }
+            fileId={activeImradEditor.storageId}
+            fileName={activeImradEditor.fileName}
+            fileUrl={activeImradEditor.fileUrl}
+            onClose={() => setActiveImradEditor(null)}
+          />
+        </div>
       )}
       {isRestoringEditor && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/80 text-white">

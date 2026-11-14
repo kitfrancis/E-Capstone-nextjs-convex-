@@ -58,6 +58,8 @@ function loadOnlyOfficeApi(serverUrl: string) {
 }
 
 type AdminImradOnlyOfficeProps = {
+  audience?: "admin" | "student";
+  canEdit?: boolean;
   teamName: string;
   projectTitle: string;
   submissionId: Id<"imradSubmissions">;
@@ -69,6 +71,8 @@ type AdminImradOnlyOfficeProps = {
 };
 
 export default function AdminImradOnlyOffice({
+  audience = "admin",
+  canEdit = true,
   teamName,
   projectTitle,
   submissionId,
@@ -96,13 +100,31 @@ export default function AdminImradOnlyOffice({
   const completeWorkingDocumentPart = useMutation(
     api.imrad.completeWorkingDocumentPart
   );
+  const completeStudentWorkingDocumentPart = useMutation(
+    api.imrad.completeStudentWorkingDocumentPart
+  );
+  const submitStudentImrad = useMutation(api.imrad.submitStudentImrad);
   const confirmWorkingDocumentHasNoPendingChanges = useMutation(
     api.imrad.confirmAdminWorkingDocumentHasNoPendingChanges
   );
-  const workingDocumentStatus = useQuery(
-    api.imrad.adminWorkingDocumentStatus,
-    { submissionId }
+  const confirmStudentWorkingDocumentHasNoPendingChanges = useMutation(
+    api.imrad.confirmStudentWorkingDocumentHasNoPendingChanges
   );
+  const createStudentImradCallbackToken = useMutation(
+    api.imrad.createStudentImradCallbackToken
+  );
+  const adminWorkingDocumentStatus = useQuery(
+    api.imrad.adminWorkingDocumentStatus,
+    audience === "admin" ? { submissionId } : "skip"
+  );
+  const studentWorkingDocumentStatus = useQuery(
+    api.imrad.studentWorkingDocumentStatus,
+    audience === "student" ? { submissionId } : "skip"
+  );
+  const workingDocumentStatus =
+    audience === "admin"
+      ? adminWorkingDocumentStatus
+      : studentWorkingDocumentStatus;
   const serverUrl = (process.env.NEXT_PUBLIC_ONLYOFFICE_URL || "http://localhost:8080")
     .replace(/\/+$/, "");
   const effectiveFileId = fileId ?? workingDocument?.storageId ?? null;
@@ -118,6 +140,12 @@ export default function AdminImradOnlyOffice({
         workingDocumentStatus.requiredSaveRevision);
   const [savingFinalPdf, setSavingFinalPdf] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [submittingForReview, setSubmittingForReview] = useState(false);
+  const needsSaveForReview =
+    localCompletedParts.length === 4 &&
+    (!workingDocumentStatus?.savedAt ||
+      workingDocumentStatus.revision <
+        workingDocumentStatus.requiredSaveRevision);
 
   const saveFinalPdf = async () => {
     if (!effectiveFileId || savingFinalPdf) return;
@@ -127,18 +155,30 @@ export default function AdminImradOnlyOffice({
       const response = await fetch("/api/onlyoffice/forcesave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: `admin-imrad-${effectiveFileId}` }),
+        body: JSON.stringify({
+          key: `${audience === "admin" ? "admin-imrad" : "imrad"}-${effectiveFileId}`,
+        }),
       });
       const result: unknown = await response.json();
       if (!response.ok || !result || typeof result !== "object" || !("ok" in result) || result.ok !== true) {
         throw new Error("OnlyOffice could not save the final PDF.");
       }
       if ("waitForCallback" in result && result.waitForCallback === false) {
-        await confirmWorkingDocumentHasNoPendingChanges({ submissionId });
-        setSaveMessage("The latest saved PDF has no pending edits and is ready for verification.");
+        if (audience === "admin") {
+          await confirmWorkingDocumentHasNoPendingChanges({ submissionId });
+        } else {
+          await confirmStudentWorkingDocumentHasNoPendingChanges({ submissionId });
+        }
+        setSaveMessage(
+          audience === "admin"
+            ? "The latest saved PDF has no pending edits and is ready for verification."
+            : "The latest saved PDF is ready to submit to your instructor."
+        );
       } else {
         setSaveMessage(
-          "Save requested. The Final Verification action will be enabled once the saved PDF is confirmed."
+          audience === "admin"
+            ? "Save requested. The Final Verification action will be enabled once the saved PDF is confirmed."
+            : "Save requested. Submit to your instructor once the saved PDF is confirmed."
         );
       }
     } catch (saveError) {
@@ -156,14 +196,21 @@ export default function AdminImradOnlyOffice({
   }, [completedParts]);
 
   const markPartDone = async () => {
-    if (!effectiveFileId || !nextPartName || updatingPart) return;
+    if (!effectiveFileId || !nextPartName || updatingPart || !canEdit) return;
     setUpdatingPart(true);
     setPartUpdateError("");
     try {
-      await completeWorkingDocumentPart({
-        submissionId,
-        partNumber: nextPartNumber as 1 | 2 | 3 | 4,
-      });
+      if (audience === "admin") {
+        await completeWorkingDocumentPart({
+          submissionId,
+          partNumber: nextPartNumber as 1 | 2 | 3 | 4,
+        });
+      } else {
+        await completeStudentWorkingDocumentPart({
+          submissionId,
+          partNumber: nextPartNumber as 1 | 2 | 3 | 4,
+        });
+      }
       setLocalCompletedParts((current) =>
         current.includes(nextPartNumber) ? current : [...current, nextPartNumber]
       );
@@ -180,6 +227,7 @@ export default function AdminImradOnlyOffice({
   };
 
   useEffect(() => {
+    if (audience === "student") return;
     if (fileId && fileName && fileUrl) return;
     if (workingDocument || creatingDocumentRef.current) return;
     creatingDocumentRef.current = true;
@@ -242,6 +290,7 @@ export default function AdminImradOnlyOffice({
     saveWorkingDocument,
     submissionId,
     workingDocument,
+    audience,
   ]);
 
   useEffect(() => {
@@ -266,18 +315,31 @@ export default function AdminImradOnlyOffice({
         const callbackBase =
           process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL ||
           `${window.location.origin}/api/onlyoffice/callback`;
-        const callbackUrl = new URL(callbackBase);
-        callbackUrl.searchParams.set("adminImradSubmissionId", submissionId);
+        let callbackUrl: string | undefined;
+        if (audience === "admin") {
+          const url = new URL(callbackBase);
+          url.searchParams.set("adminImradSubmissionId", submissionId);
+          callbackUrl = url.toString();
+        } else if (canEdit) {
+          const callbackToken = await createStudentImradCallbackToken({
+            submissionId,
+          });
+          const url = new URL(callbackBase);
+          url.searchParams.set("imradSubmissionId", submissionId);
+          url.searchParams.set("imradExpires", String(callbackToken.expiresAt));
+          url.searchParams.set("imradToken", callbackToken.token);
+          callbackUrl = url.toString();
+        }
 
         editorRef.current = new window.DocsAPI.DocEditor(editorElementId, {
           document: {
             fileType: "pdf",
-            key: `admin-imrad-${effectiveFileId}`,
+            key: `${audience === "admin" ? "admin-imrad" : "imrad"}-${effectiveFileId}`,
             permissions: {
-              edit: true,
+              edit: audience === "admin" || canEdit,
               comment: false,
               review: false,
-              fillForms: true,
+              fillForms: audience === "admin" || canEdit,
               print: true,
             },
             title: effectiveFileName,
@@ -285,10 +347,13 @@ export default function AdminImradOnlyOffice({
           },
           documentType: "pdf",
           editorConfig: {
-            callbackUrl: callbackUrl.toString(),
+            ...(callbackUrl ? { callbackUrl } : {}),
             customization: { autosave: false, forcesave: false },
-            mode: "edit",
-            user: { id: "admin-imrad", name: "Administrator" },
+            mode: audience === "admin" || canEdit ? "edit" : "view",
+            user:
+              audience === "admin"
+                ? { id: "admin-imrad", name: "Administrator" }
+                : { id: "student-imrad", name: "Student" },
           },
           events: {
             onAppReady: () => {
@@ -328,6 +393,9 @@ export default function AdminImradOnlyOffice({
       editorRef.current = null;
     };
   }, [
+    audience,
+    canEdit,
+    createStudentImradCallbackToken,
     editorElementId,
     effectiveFileId,
     effectiveFileName,
@@ -335,6 +403,25 @@ export default function AdminImradOnlyOffice({
     serverUrl,
     submissionId,
   ]);
+
+  const submitToInstructor = async () => {
+    if (audience !== "student" || submittingForReview || needsSaveForReview) return;
+    setSubmittingForReview(true);
+    setSaveMessage("");
+    try {
+      await submitStudentImrad({ submissionId });
+      onClose();
+    } catch (submitError) {
+      console.error("Failed to submit student IMRaD:", submitError);
+      setSaveMessage(
+        submitError instanceof Error
+          ? submitError.message
+          : "Could not submit the IMRaD for instructor review."
+      );
+    } finally {
+      setSubmittingForReview(false);
+    }
+  };
 
   return (
     <div
@@ -352,7 +439,7 @@ export default function AdminImradOnlyOffice({
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {nextPartName ? (
+          {nextPartName && canEdit ? (
             <Button
               type="button"
               onClick={markPartDone}
@@ -365,14 +452,16 @@ export default function AdminImradOnlyOffice({
               )}
               {updatingPart
                 ? "Updating..."
-                : `Update Instructor: Part ${nextPartNumber} Done`}
+                : audience === "admin"
+                  ? `Update Instructor: Part ${nextPartNumber} Done`
+                  : `Mark Part ${nextPartNumber} Done`}
             </Button>
-          ) : (
+          ) : !nextPartName && audience === "admin" ? (
             <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
               All 4 IMRAD parts complete
             </span>
-          )}
-          {localCompletedParts.length === 4 && (
+          ) : null}
+          {audience === "admin" && localCompletedParts.length === 4 && (
             <Button
               type="button"
               variant="outline"
@@ -386,6 +475,31 @@ export default function AdminImradOnlyOffice({
                   : "Final PDF saved"}
             </Button>
           )}
+          {audience === "student" &&
+            canEdit &&
+            localCompletedParts.length === 4 && (
+              <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={saveFinalPdf}
+                    disabled={!effectiveFileId || savingFinalPdf || !needsSaveForReview}
+                  >
+                    {savingFinalPdf
+                      ? "Saving PDF..."
+                      : needsSaveForReview
+                        ? "Save PDF for submission"
+                        : "PDF saved"}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={submitToInstructor}
+                    disabled={needsSaveForReview || savingFinalPdf || submittingForReview}
+                  >
+                    {submittingForReview ? "Submitting..." : "Submit to Instructor"}
+                  </Button>
+              </>
+            )}
           <Button type="button" variant="outline" onClick={onClose}>
             <X className="mr-2 h-4 w-4" />
             Close
