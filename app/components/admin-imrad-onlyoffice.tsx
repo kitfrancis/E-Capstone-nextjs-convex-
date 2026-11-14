@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Check, LoaderCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 type AdminDocsApi = {
   DocEditor: new (elementId: string, config: Record<string, unknown>) => {
@@ -175,13 +176,13 @@ export default function AdminImradOnlyOffice({
         } else {
           await confirmStudentWorkingDocumentHasNoPendingChanges({ submissionId });
         }
-        setSaveMessage(
+        toast.success(
           audience === "admin"
             ? "The latest saved PDF has no pending edits and is ready for verification."
             : "The latest saved PDF is ready to submit to your instructor."
         );
       } else {
-        setSaveMessage(
+        toast.success(
           audience === "admin"
             ? "Save requested. The Final Verification action will be enabled once the saved PDF is confirmed."
             : "Save requested. Submit to your instructor once the saved PDF is confirmed."
