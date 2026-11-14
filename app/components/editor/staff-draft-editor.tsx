@@ -48,6 +48,11 @@ export default function StaffDraftEditor({
   const startDraft = useMutation(api.drafts.startDraft);
   const [session, setSession] = useState<DraftSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openedFile, setOpenedFile] = useState<{
+    draftId: Id<"deliverableDrafts">;
+    sessionRevision: number;
+    url: string;
+  } | null>(null);
   const initializedDeliverableId = useRef<Id<"deliverables"> | null>(null);
   const initialDeliverable = deliverables?.find((item) => item._id === deliverableId);
   const projectDeliverables = (deliverables ?? []).filter(
@@ -100,10 +105,36 @@ export default function StaffDraftEditor({
     };
   }, [deliverableId, initialDeliverable, startDraft]);
 
+  const workingDraft = useQuery(
+    api.drafts.getWorkingDraft,
+    session ? { deliverableId: session.deliverable._id } : "skip",
+  );
   const fileUrl = useQuery(
     api.dashboard.getFileUrl,
-    session ? { storageId: session.storageId } : "skip",
+    session && workingDraft !== undefined
+      ? {
+          storageId:
+            workingDraft?._id === session.draftId
+              ? workingDraft.storageId
+              : session.storageId,
+        }
+      : "skip",
   );
+  const openedFileUrl =
+    session &&
+    openedFile?.draftId === session.draftId &&
+    openedFile.sessionRevision === session.sessionRevision
+      ? openedFile.url
+      : null;
+
+  useEffect(() => {
+    if (!session || openedFileUrl || typeof fileUrl !== "string") return;
+    setOpenedFile({
+      draftId: session.draftId,
+      sessionRevision: session.sessionRevision,
+      url: fileUrl,
+    });
+  }, [session, openedFileUrl, fileUrl]);
 
   const getCurrentDraft = (id = session?.deliverable._id ?? deliverableId) =>
     convex.query(api.drafts.getWorkingDraft, { deliverableId: id });
@@ -179,7 +210,9 @@ export default function StaffDraftEditor({
     (deliverables && !initialDeliverable
       ? "This submitted version is no longer available."
       : null) ??
-    (session && fileUrl === null ? "The shared draft file is unavailable." : null);
+    (session && !openedFileUrl && fileUrl === null
+      ? "The shared draft file is unavailable."
+      : null);
   const latestForCurrentPhase = session
     ? projectDeliverables
         .filter((item) => item.phase === session.deliverable.phase && item.storageId)
@@ -210,7 +243,7 @@ export default function StaffDraftEditor({
     );
   }
 
-  if (!deliverables || !session || typeof fileUrl !== "string") {
+  if (!deliverables || !session || !openedFileUrl) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center gap-3 bg-slate-950/80 text-white">
         <Loader2 className="h-5 w-5 animate-spin" />
@@ -225,7 +258,7 @@ export default function StaffDraftEditor({
       fileId={`${session.deliverable._id}-${session.draftId}`}
       deliverableId={session.deliverable._id}
       fileName={session.deliverable.fileName}
-      fileUrl={fileUrl}
+      fileUrl={openedFileUrl}
       phase={session.deliverable.phase}
       capstoneProjectId={capstoneProjectId}
       deliverables={projectDeliverables}
@@ -271,6 +304,19 @@ export default function StaffDraftEditor({
       onGetDraftStorageId={async () =>
         (await getCurrentDraft(session.deliverable._id))?.storageId ?? null
       }
+      onGetDraftFileUrl={async () => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const draft = await getCurrentDraft(session.deliverable._id);
+          if (!draft || draft._id !== session.draftId) {
+            throw new Error("The shared draft is no longer available.");
+          }
+          const url = await convex.query(api.dashboard.getFileUrl, {
+            storageId: draft.storageId,
+          });
+          if (url) return url;
+        }
+        throw new Error("The shared draft file is unavailable.");
+      }}
       onClose={onClose}
     />
   );
