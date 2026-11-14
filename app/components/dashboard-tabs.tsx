@@ -1560,7 +1560,7 @@ export function TabsDemo({
         />
       )}
       {activeImradEditor && (
-        <div className="fixed inset-100  flex h-dvh w-screen bg-background">
+        <div className="fixed inset-0 z-100 flex h-dvh w-screen bg-background">
           <AdminImradOnlyOffice
             audience="student"
             canEdit={
