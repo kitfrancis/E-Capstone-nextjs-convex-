@@ -104,7 +104,7 @@ export function DefenseStatusCard({ project, progress }: { project: Project; pro
       text = "Your instructor forwarded your record and documents to the Super Admin for final verification.";
     } else {
       title = "Final revisions approved.";
-      text = "Upload your IMRaD file. Your instructor will verify it and endorse the project for archiving.";
+      text = "Your instructor will unlock the shared IMRaD process. Start it from My Manuscript when it is available.";
     }
   } else if (project.stage === "final_revisions") {
     if ((project.evaluationForms?.length ?? 0) < 3) {

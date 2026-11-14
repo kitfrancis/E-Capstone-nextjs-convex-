@@ -473,7 +473,7 @@ export const finalRevisionInfo = query({
   },
 });
 
-// When every chapter has been resubmitted and approved, unlock the IMRaD upload.
+// When every chapter has been resubmitted and approved, mark the team ready for an instructor to unlock IMRaD.
 // Safe to call repeatedly; the server recomputes everything.
 export const syncFinalRevisions = mutation({
   args: { projectId: v.id("capstoneProjects") },
@@ -491,7 +491,7 @@ export const syncFinalRevisions = mutation({
     const s = await revisionState(ctx, project);
     if (s.revised < s.total || s.approved < s.total) return;
 
-        await ctx.db.patch(project._id, { stage: "ready_to_archive" });
+    await ctx.db.patch(project._id, { stage: "ready_to_archive" });
     await logAction(ctx, user, "Final revisions approved", project.teamName);
 
     for (const m of project.members ?? []) {
@@ -500,7 +500,7 @@ export const syncFinalRevisions = mutation({
       if (member) {
         await ctx.db.insert("notifications", {
           userId: member.clerkId,
-          message: "Your final revisions were approved. You can now upload your IMRaD file.",
+          message: "Your final revisions were approved. Your instructor can now unlock the shared IMRaD process from My Manuscript.",
           read: false,
           type: "deliverable_approved",
           relatedId: project._id,
