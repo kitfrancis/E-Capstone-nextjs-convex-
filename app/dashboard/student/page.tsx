@@ -991,7 +991,7 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
       toast.success("Uploaded successfully!");
       setFile(null);
       setPhase("");
-      router.push("/dashboard/student?tab=deliverables", { scroll: false });
+      router.push("/dashboard/student/manuscript", { scroll: false });
     } catch (err) {
       console.error(err);
       toast.error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -1828,7 +1828,7 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
                     </p>
                   </div>
                   <Button asChild variant="outline" size="sm" className="rounded-lg self-start sm:self-auto">
-                    <Link href="/dashboard/student?tab=deliverables" scroll={false}>
+                    <Link href="/dashboard/student/manuscript" scroll={false}>
                       View My Manuscript
                     </Link>
                   </Button>
