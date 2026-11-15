@@ -187,6 +187,8 @@ export default defineSchema({
     completedParts: v.optional(v.array(v.number())),
     revision: v.optional(v.number()),
     savedAt: v.optional(v.number()),
+    activeSessionId: v.optional(v.string()),
+    activeSessionClosing: v.optional(v.boolean()),
     createdBy: v.id("users"),
     createdAt: v.number(),
   })

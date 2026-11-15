@@ -68,6 +68,8 @@ type AdminImradOnlyOfficeProps = {
   fileId: string | null;
   fileName: string | null;
   fileUrl: string | null;
+  userId?: string;
+  userName?: string;
   onClose: () => void;
 };
 
@@ -81,9 +83,12 @@ export default function AdminImradOnlyOffice({
   fileId,
   fileName,
   fileUrl,
+  userId,
+  userName,
   onClose,
 }: AdminImradOnlyOfficeProps) {
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
+  const editorDocumentKeyRef = useRef<string | null>(null);
   const creatingDocumentRef = useRef(false);
   const editorElementId = `admin-imrad-editor-${useId().replace(/:/g, "")}`;
   const [loading, setLoading] = useState(true);
@@ -113,6 +118,9 @@ export default function AdminImradOnlyOffice({
   );
   const createStudentImradCallbackToken = useMutation(
     api.imrad.createStudentImradCallbackToken
+  );
+  const openStudentImradEditorSession = useMutation(
+    api.imrad.openStudentImradEditorSession
   );
   const adminWorkingDocumentStatus = useQuery(
     api.imrad.adminWorkingDocumentStatus,
@@ -150,6 +158,11 @@ export default function AdminImradOnlyOffice({
 
   const saveFinalPdf = async () => {
     if (!effectiveFileId || savingFinalPdf) return;
+    const documentKey = editorDocumentKeyRef.current;
+    if (!documentKey) {
+      setSaveMessage("Wait for OnlyOffice to finish opening before saving the PDF.");
+      return;
+    }
     setSavingFinalPdf(true);
     setSaveMessage("");
     try {
@@ -157,7 +170,7 @@ export default function AdminImradOnlyOffice({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          key: `${audience === "admin" ? "admin-imrad" : "imrad"}-${effectiveFileId}`,
+          key: documentKey,
         }),
       });
       let result: unknown;
@@ -317,6 +330,23 @@ export default function AdminImradOnlyOffice({
           return;
         }
 
+        let sessionId: string | null = null;
+        let editorFileName = effectiveFileName;
+        let editorFileUrl = effectiveFileUrl;
+        if (audience === "student" && canEdit) {
+          if (!userId) {
+            throw new Error("Unable to identify your student account. Sign in again and reopen the editor.");
+          }
+          const session = await openStudentImradEditorSession({ submissionId });
+          if (cancelled) return;
+          if (!session.fileUrl) {
+            throw new Error("The team IMRaD file URL is unavailable.");
+          }
+          sessionId = session.sessionId;
+          editorFileName = session.fileName;
+          editorFileUrl = session.fileUrl;
+        }
+
         const callbackBase =
           process.env.NEXT_PUBLIC_ONLYOFFICE_CALLBACK_URL ||
           `${window.location.origin}/api/onlyoffice/callback`;
@@ -326,20 +356,36 @@ export default function AdminImradOnlyOffice({
           url.searchParams.set("adminImradSubmissionId", submissionId);
           callbackUrl = url.toString();
         } else if (canEdit) {
+          if (!sessionId) {
+            throw new Error("The student IMRaD editing session could not be started.");
+          }
           const callbackToken = await createStudentImradCallbackToken({
             submissionId,
+            sessionId,
           });
           const url = new URL(callbackBase);
           url.searchParams.set("imradSubmissionId", submissionId);
+          url.searchParams.set("imradSessionId", sessionId);
           url.searchParams.set("imradExpires", String(callbackToken.expiresAt));
           url.searchParams.set("imradToken", callbackToken.token);
           callbackUrl = url.toString();
         }
 
+        if (!editorFileName || !editorFileUrl) {
+          throw new Error("The team IMRaD document is unavailable.");
+        }
+        const documentKey =
+          audience === "admin"
+            ? `admin-imrad-${effectiveFileId}`
+            : sessionId
+              ? `imrad-${submissionId}-${sessionId}`
+              : `imrad-view-${effectiveFileId}`;
+        editorDocumentKeyRef.current = documentKey;
+
         editorRef.current = new window.DocsAPI.DocEditor(editorElementId, {
           document: {
             fileType: "pdf",
-            key: `${audience === "admin" ? "admin-imrad" : "imrad"}-${effectiveFileId}`,
+            key: documentKey,
             permissions: {
               edit: audience === "admin" || canEdit,
               comment: false,
@@ -347,18 +393,24 @@ export default function AdminImradOnlyOffice({
               fillForms: audience === "admin" || canEdit,
               print: true,
             },
-            title: effectiveFileName,
-            url: effectiveFileUrl,
+            title: editorFileName,
+            url: editorFileUrl,
           },
           documentType: "pdf",
           editorConfig: {
             ...(callbackUrl ? { callbackUrl } : {}),
-            customization: { autosave: false, forcesave: false },
+            ...(audience === "student" && canEdit
+              ? { coEditing: { mode: "fast", change: true } }
+              : {}),
+            customization: {
+              autosave: audience === "student" && canEdit,
+              forcesave: false,
+            },
             mode: audience === "admin" || canEdit ? "edit" : "view",
             user:
               audience === "admin"
                 ? { id: "admin-imrad", name: "Administrator" }
-                : { id: "student-imrad", name: "Student" },
+                : { id: userId ?? "student-imrad", name: userName ?? "Student" },
           },
           events: {
             onAppReady: () => {
@@ -381,6 +433,7 @@ export default function AdminImradOnlyOffice({
         });
       } catch (loadError) {
         if (cancelled) return;
+        editorDocumentKeyRef.current = null;
         setLoading(false);
         setError(
           loadError instanceof Error
@@ -396,6 +449,7 @@ export default function AdminImradOnlyOffice({
       cancelled = true;
       editorRef.current?.destroyEditor();
       editorRef.current = null;
+      editorDocumentKeyRef.current = null;
     };
   }, [
     audience,
@@ -405,8 +459,11 @@ export default function AdminImradOnlyOffice({
     effectiveFileId,
     effectiveFileName,
     effectiveFileUrl,
+    openStudentImradEditorSession,
     serverUrl,
     submissionId,
+    userId,
+    userName,
   ]);
 
   const submitToInstructor = async () => {
@@ -440,7 +497,7 @@ export default function AdminImradOnlyOffice({
             {projectTitle} · {effectiveFileName ?? "Preparing IMRAD draft PDF"}
           </p>
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Changes are saved to the team&apos;s Convex working copy when OnlyOffice saves.
+            Changes sync live through OnlyOffice. Convex stores the latest copy when the last editor closes or you explicitly save the final PDF.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">

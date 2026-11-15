@@ -1577,6 +1577,8 @@ export function TabsDemo({
             fileId={activeImradEditor.storageId}
             fileName={activeImradEditor.fileName}
             fileUrl={activeImradEditor.fileUrl}
+            userId={user?.id}
+            userName={user?.fullName ?? undefined}
             onClose={() => setActiveImradEditor(null)}
           />
         </div>

@@ -527,20 +527,80 @@ export const generateStudentGuideUploadUrl = mutation({
   },
 });
 
-export const createStudentImradCallbackToken = mutation({
+export const openStudentImradEditorSession = mutation({
   args: { submissionId: v.id("imradSubmissions") },
-  returns: v.object({ token: v.string(), expiresAt: v.number() }),
+  returns: v.object({
+    sessionId: v.string(),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileUrl: v.union(v.string(), v.null()),
+  }),
   handler: async (ctx, { submissionId }) => {
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
       throw new Error("This IMRaD document is not open for student editing.");
     }
+    const { project } = await requireProjectTeamMember(
+      ctx,
+      submission.capstoneProjectId
+    );
+    if (project.stage === "archived") {
+      throw new Error("Archived projects are read-only.");
+    }
+
+    const workingDocument = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
+      .unique();
+    if (!workingDocument) throw new Error("The team IMRaD document was not found.");
+    if (workingDocument.activeSessionClosing) {
+      throw new Error("The previous IMRaD editing session is still saving. Please reopen it shortly.");
+    }
+
+    const fileUrl = await ctx.storage.getUrl(workingDocument.storageId);
+    if (!fileUrl) throw new Error("The team IMRaD file URL is unavailable.");
+
+    const sessionId = workingDocument.activeSessionId ?? crypto.randomUUID();
+    if (!workingDocument.activeSessionId) {
+      await ctx.db.patch(workingDocument._id, {
+        activeSessionId: sessionId,
+        activeSessionClosing: undefined,
+      });
+    }
+
+    return {
+      sessionId,
+      storageId: workingDocument.storageId,
+      fileName: workingDocument.fileName,
+      fileUrl,
+    };
+  },
+});
+
+export const createStudentImradCallbackToken = mutation({
+  args: {
+    submissionId: v.id("imradSubmissions"),
+    sessionId: v.string(),
+  },
+  returns: v.object({ token: v.string(), expiresAt: v.number() }),
+  handler: async (ctx, { submissionId, sessionId }) => {
+    const submission = await ctx.db.get(submissionId);
+    if (!submission || submission.status !== "student_editing") {
+      throw new Error("This IMRaD document is not open for student editing.");
+    }
     await requireProjectTeamMember(ctx, submission.capstoneProjectId);
+    const workingDocument = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
+      .unique();
+    if (!workingDocument || workingDocument.activeSessionId !== sessionId) {
+      throw new Error("This IMRaD editing session is no longer active.");
+    }
     const secret = process.env.ONLYOFFICE_SECRET;
     if (!secret) throw new Error("OnlyOffice callback signing is not configured.");
 
     const expiresAt = Date.now() + 60 * 60 * 1000;
-    const payload = `${submissionId}:${expiresAt}`;
+    const payload = `${submissionId}:${sessionId}:${expiresAt}`;
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(secret),
@@ -880,23 +940,23 @@ export const saveAdminWorkingDocumentFile = mutation({
     secret: v.string(),
     submissionId: v.id("imradSubmissions"),
     storageId: v.id("_storage"),
+    sessionId: v.optional(v.string()),
+    sessionClosed: v.optional(v.boolean()),
   },
-  returns: v.number(),
-  handler: async (ctx, { secret, submissionId, storageId }) => {
+  returns: v.union(v.number(), v.null()),
+  handler: async (
+    ctx,
+    { secret, submissionId, storageId, sessionId, sessionClosed = false }
+  ) => {
     if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
     const submission = await ctx.db.get(submissionId);
-    if (
-      !submission ||
-      !["processing", "changes_requested", "student_editing"].includes(
-        submission.status
-      )
-    ) {
+    if (!submission) {
       throw new Error("This IMRaD document cannot be saved in its current state.");
     }
-
-    const metadata = await ctx.db.system.get("_storage", storageId);
-    if (metadata?.contentType !== "application/pdf") {
-      throw new Error("The saved IMRaD document must be a PDF.");
+    const allowedStatuses = ["processing", "changes_requested", "student_editing"];
+    if (sessionId) allowedStatuses.push("instructor_review", "admin_review");
+    if (!allowedStatuses.includes(submission.status)) {
+      throw new Error("This IMRaD document cannot be saved in its current state.");
     }
 
     const workingDocument = await ctx.db
@@ -905,16 +965,71 @@ export const saveAdminWorkingDocumentFile = mutation({
       .unique();
     if (!workingDocument) throw new Error("The team IMRaD document was not found.");
 
+    if (submission.status === "student_editing" || sessionId) {
+      const isCurrentSession = sessionId
+        ? workingDocument.activeSessionId === sessionId
+        : workingDocument.activeSessionId === undefined;
+      if (!isCurrentSession) {
+        if (workingDocument.storageId !== storageId) {
+          await ctx.storage.delete(storageId);
+        }
+        return null;
+      }
+    }
+
+    const metadata = await ctx.db.system.get("_storage", storageId);
+    if (metadata?.contentType !== "application/pdf") {
+      throw new Error("The saved IMRaD document must be a PDF.");
+    }
+
     const revision = (workingDocument.revision ?? 0) + 1;
     await ctx.db.patch(workingDocument._id, {
       storageId,
       revision,
       savedAt: Date.now(),
+      ...(sessionClosed && sessionId === workingDocument.activeSessionId
+        ? { activeSessionId: undefined, activeSessionClosing: undefined }
+        : {}),
     });
     if (workingDocument.storageId !== storageId) {
       await ctx.storage.delete(workingDocument.storageId);
     }
     return revision;
+  },
+});
+
+export const updateStudentImradEditorSession = mutation({
+  args: {
+    secret: v.string(),
+    submissionId: v.id("imradSubmissions"),
+    sessionId: v.string(),
+    state: v.union(
+      v.literal("closing"),
+      v.literal("open"),
+      v.literal("closed")
+    ),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { secret, submissionId, sessionId, state }) => {
+    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    const workingDocument = await ctx.db
+      .query("imradWorkingDocuments")
+      .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
+      .unique();
+    if (!workingDocument || workingDocument.activeSessionId !== sessionId) {
+      return false;
+    }
+    if (state === "closed") {
+      await ctx.db.patch(workingDocument._id, {
+        activeSessionId: undefined,
+        activeSessionClosing: undefined,
+      });
+    } else {
+      await ctx.db.patch(workingDocument._id, {
+        activeSessionClosing: state === "closing",
+      });
+    }
+    return true;
   },
 });
 

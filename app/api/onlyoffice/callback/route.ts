@@ -34,7 +34,8 @@ function isAllowedOnlyOfficeFileUrl(value: string) {
 function isValidImradCallbackToken(
   token: string | null,
   expiresAtValue: string | null,
-  submissionId: string
+  submissionId: string,
+  sessionId: string | null
 ) {
   const secret = process.env.ONLYOFFICE_SECRET;
   const expiresAt = Number(expiresAtValue);
@@ -49,7 +50,11 @@ function isValidImradCallbackToken(
   }
 
   const expected = createHmac("sha256", secret)
-    .update(`${submissionId}:${expiresAt}`)
+    .update(
+      sessionId === null
+        ? `${submissionId}:${expiresAt}`
+        : `${submissionId}:${sessionId}:${expiresAt}`
+    )
     .digest();
   const supplied = Buffer.from(token, "hex");
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
   const draftId = params.get("draftId");
   const adminImradSubmissionId = params.get("adminImradSubmissionId");
   const imradSubmissionId = params.get("imradSubmissionId");
+  const imradSessionId = params.get("imradSessionId");
   console.log("OO callback", draftId, body.status);
 
   if (imradSubmissionId) {
@@ -77,10 +83,28 @@ export async function POST(req: Request) {
       !isValidImradCallbackToken(
         params.get("imradToken"),
         params.get("imradExpires"),
-        imradSubmissionId
+        imradSubmissionId,
+        imradSessionId
       )
     ) {
       return NextResponse.json({ error: 1 }, { status: 401 });
+    }
+    if (body.status === 4 && imradSessionId) {
+      if (!process.env.ONLYOFFICE_SECRET) {
+        console.error("Student IMRaD session close is missing the OnlyOffice secret.");
+        return NextResponse.json({ error: 1 });
+      }
+      try {
+        await convex.mutation(api.imrad.updateStudentImradEditorSession, {
+          secret: process.env.ONLYOFFICE_SECRET,
+          submissionId: imradSubmissionId as Id<"imradSubmissions">,
+          sessionId: imradSessionId,
+          state: "closed",
+        });
+      } catch (error) {
+        console.error("Student IMRaD session close failed:", error);
+        return NextResponse.json({ error: 1 });
+      }
     }
     if (body.status === 2 || body.status === 6) {
       if (
@@ -92,13 +116,25 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 1 });
       }
       try {
+        const secret = process.env.ONLYOFFICE_SECRET;
+        if (body.status === 2 && imradSessionId) {
+          const claimed = await convex.mutation(
+            api.imrad.updateStudentImradEditorSession,
+            {
+              secret,
+              submissionId: imradSubmissionId as Id<"imradSubmissions">,
+              sessionId: imradSessionId,
+              state: "closing",
+            }
+          );
+          if (!claimed) return NextResponse.json({ error: 0 });
+        }
         const documentResponse = await fetch(body.url, {
           redirect: "error",
           signal: AbortSignal.timeout(30_000),
         });
         if (!documentResponse.ok) throw new Error("OnlyOffice PDF download failed.");
         const pdf = await documentResponse.arrayBuffer();
-        const secret = process.env.ONLYOFFICE_SECRET;
         const uploadUrl = await convex.mutation(
           api.imrad.generateAdminWorkingDocumentUploadUrl,
           { secret }
@@ -113,12 +149,32 @@ export async function POST(req: Request) {
         if (!isRecord(result) || typeof result.storageId !== "string") {
           throw new Error("Convex returned an invalid storage ID.");
         }
-        await convex.mutation(api.imrad.saveAdminWorkingDocumentFile, {
+        const savedRevision = await convex.mutation(api.imrad.saveAdminWorkingDocumentFile, {
           secret,
           submissionId: imradSubmissionId as Id<"imradSubmissions">,
           storageId: result.storageId as Id<"_storage">,
+          ...(imradSessionId ? { sessionId: imradSessionId } : {}),
+          sessionClosed: body.status === 2,
         });
+        if (savedRevision === null) {
+          console.warn("Ignored a stale student IMRaD save callback.");
+        }
       } catch (error) {
+        if (body.status === 2 && imradSessionId && process.env.ONLYOFFICE_SECRET) {
+          try {
+            await convex.mutation(api.imrad.updateStudentImradEditorSession, {
+              secret: process.env.ONLYOFFICE_SECRET,
+              submissionId: imradSubmissionId as Id<"imradSubmissions">,
+              sessionId: imradSessionId,
+              state: "open",
+            });
+          } catch (resumeError) {
+            console.error(
+              "Student IMRaD session could not be reopened after save failure:",
+              resumeError
+            );
+          }
+        }
         console.error("Student IMRaD PDF save failed:", error);
         return NextResponse.json({ error: 1 });
       }
