@@ -87,3 +87,13 @@ export const listAdminActivityLogs = query({
     return logs.filter((l) => adminIds.has(l.userId));
   },
 });
+
+// Number shown on the admin sidebar "Approvals" badge
+export const pendingApprovalsCount = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const users = await ctx.db.query("users").collect();
+    return users.filter((u) => u.status === "pending").length;
+  },
+});

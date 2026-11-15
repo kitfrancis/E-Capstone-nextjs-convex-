@@ -84,6 +84,10 @@ function AppSidebarContent() {
     api.imrad.sidebarReviewCounts,
     me?.role === "instructor" || me?.role === "admin" ? {} : "skip"
   );
+  const pendingApprovals = useQuery(
+    api.admin.pendingApprovalsCount,
+    me?.role === "admin" ? {} : "skip"
+  );
   const { signOut } = useClerk();
   const router = useRouter();
   const pathname = usePathname();
@@ -205,11 +209,15 @@ function AppSidebarContent() {
       ? reviewCounts?.instructorReviewCount ?? 0
       : me?.role === "admin" && link.href === "/dashboard/admin/imrad-processing"
         ? reviewCounts?.adminVerificationCount ?? 0
-        : 0;
+        : me?.role === "admin" && link.href === "/dashboard/admin/approvals"
+          ? pendingApprovals ?? 0
+          : 0;
   const badgeLabel =
     link.href === "/dashboard/instructor/verification"
       ? "teams waiting for IMRaD review"
-      : "teams ready for final verification";
+      : link.href === "/dashboard/admin/approvals"
+        ? "pending approvals"
+        : "teams ready for final verification";
 
   return (
     <SidebarMenuItem key={link.href}>
