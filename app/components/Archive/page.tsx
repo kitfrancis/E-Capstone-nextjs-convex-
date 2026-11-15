@@ -87,12 +87,12 @@ function StatCard({
   tone: keyof typeof TONES;
 }) {
   return (
-    <div className={`flex items-center gap-4 rounded-2xl border p-5 ${TONES[tone].card}`}>
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${TONES[tone].icon}`}>
+    <div className={`flex min-w-0 items-center gap-3 rounded-2xl border p-4 sm:gap-4 sm:p-5 ${TONES[tone].card}`}>
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12 ${TONES[tone].icon}`}>
         {icon}
       </div>
-      <div>
-        <p className="text-3xl font-semibold leading-none text-foreground">{value}</p>
+      <div className="min-w-0">
+        <p className="text-2xl font-semibold leading-none text-foreground sm:text-3xl">{value}</p>
         <p className="mt-1.5 text-sm text-muted-foreground">{label}</p>
       </div>
     </div>
@@ -174,77 +174,77 @@ export default function Archive() {
     if (!isDesktop) setDetailOpen(true);
   };
 
-const downloadFile = async (storageId: string, downloadName: string) => {
-  const url = await convex.query(api.archive.getFileUrl, {
-    storageId: storageId as Id<"_storage">,
-  });
-  if (!url) return;
+  const downloadFile = async (storageId: string, downloadName: string) => {
+    const url = await convex.query(api.archive.getFileUrl, {
+      storageId: storageId as Id<"_storage">,
+    });
+    if (!url) return;
 
-  try {
-    // Fetch as a blob so the browser saves it instead of navigating,
-    // since the `download` attribute is ignored on cross-origin URLs
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Download failed");
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = downloadName;
-    a.click();
-    URL.revokeObjectURL(objectUrl);
-  } catch {
-    window.open(url, "_blank"); // fallback
-  }
-};
+    try {
+      // Fetch as a blob so the browser saves it instead of navigating,
+      // since the `download` attribute is ignored on cross-origin URLs
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = downloadName;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, "_blank"); // fallback
+    }
+  };
 
-const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: string }) => {
-  const busy = downloadingId === storageId;
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      className="shrink-0"
-      title="Download"
-      aria-label={`Download ${fileName}`}
-      disabled={busy}
-      onClick={async () => {
-        setDownloadingId(storageId);
-        try {
-          await downloadFile(storageId, fileName);
-        } finally {
-          setDownloadingId(null);
-        }
-      }}
-    >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-    </Button>
-  );
-};
+  const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: string }) => {
+    const busy = downloadingId === storageId;
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="shrink-0"
+        title="Download"
+        aria-label={`Download ${fileName}`}
+        disabled={busy}
+        onClick={async () => {
+          setDownloadingId(storageId);
+          try {
+            await downloadFile(storageId, fileName);
+          } finally {
+            setDownloadingId(null);
+          }
+        }}
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+      </Button>
+    );
+  };
 
   // Detail content shared by the desktop side panel and the mobile/tablet modal.
   const detailBody = selectedProject && (
     <div className="mt-5 space-y-6 pb-2">
       {/* Quick facts */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           { icon: GraduationCap, label: "Course", value: selectedProject.course },
           { icon: User, label: "Adviser", value: selectedProject.adviser },
           { icon: CalendarDays, label: "Archived", value: selectedProject.archivedDate },
         ].map(({ icon: Icon, label, value }) => (
-          <div key={label} className="rounded-xl bg-muted p-3">
+          <div key={label} className="min-w-0 rounded-xl bg-muted p-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Icon className="h-3.5 w-3.5" />
+              <Icon className="h-3.5 w-3.5 shrink-0" />
               {label}
             </div>
-            <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+            <p className="mt-1 wrap-break-word text-sm font-medium text-foreground">{value}</p>
           </div>
         ))}
       </div>
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-foreground">Abstract</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">{selectedProject.abstract}</p>
+        <p className="wrap-break-word text-sm leading-relaxed text-muted-foreground">{selectedProject.abstract}</p>
       </section>
 
       <section>
@@ -258,7 +258,7 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
                 setQuery(keyword);
                 setDetailOpen(false);
               }}
-              className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="max-w-full wrap-break-word rounded-full bg-muted px-3 py-1 text-left text-xs font-medium text-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
               title={`Search for "${keyword}"`}
             >
               {keyword}
@@ -274,77 +274,75 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
         <ul className="space-y-2">
           {selectedProject.members.map((member: string, i: number) => (
             <li key={i} className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
                 {initials(member)}
               </span>
-              <span className="text-sm text-foreground">{member}</span>
+              <span className="min-w-0 wrap-break-word text-sm text-foreground">{member}</span>
             </li>
           ))}
         </ul>
       </section>
 
-<div className="flex flex-col gap-2 border-t border-border pt-5">
-  <h2 className="text-sm font-semibold text-foreground">Project files</h2>
+      <div className="flex flex-col gap-2 border-t border-border pt-5">
+        <h2 className="text-sm font-semibold text-foreground">Project files</h2>
 
-  {selectedProject.storageId && (
-    <div className="flex items-center gap-2">
-      <Button
-        className="min-w-0 flex-1"
-        onClick={() => {
-          setDetailOpen(false);
-          setViewingFile({
-            storageId: selectedProject.storageId!,
-            fileName: selectedProject.title,
-          });
-        }}
-      >
-        <File className="mr-2 h-4 w-4" />
-        View original project PDF
-      </Button>
-      <DownloadButton
-        storageId={selectedProject.storageId}
-        fileName={`${selectedProject.title.replace(/[^\w\-]+/g, "_").slice(0, 80)}.pdf`}
-      />
-    </div>
-  )}
+        {selectedProject.storageId && (
+          <div className="flex items-center gap-2">
+            <Button
+              className="min-w-0 flex-1"
+              onClick={() => {
+                setDetailOpen(false);
+                setViewingFile({
+                  storageId: selectedProject.storageId!,
+                  fileName: selectedProject.title,
+                });
+              }}
+            >
+              <File className="mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">View original project PDF</span>
+            </Button>
+            <DownloadButton
+              storageId={selectedProject.storageId}
+              fileName={`${selectedProject.title.replace(/[^\w\-]+/g, "_").slice(0, 80)}.pdf`}
+            />
+          </div>
+        )}
 
-  {selectedProject.additionalFiles?.map((file) => (
-    <div key={file.storageId} className="flex items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        className="min-w-0 flex-1 justify-start"
-        onClick={() => {
-          setDetailOpen(false);
-          setViewingFile({ storageId: file.storageId, fileName: file.fileName });
-        }}
-      >
-        <FileText className="mr-2 h-4 w-4 shrink-0" />
-        <span className="truncate">{file.fileName}</span>
-      </Button>
-      <DownloadButton storageId={file.storageId} fileName={file.fileName} />
-    </div>
-  ))}
-</div>
+        {selectedProject.additionalFiles?.map((file) => (
+          <div key={file.storageId} className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-w-0 flex-1 justify-start"
+              onClick={() => {
+                setDetailOpen(false);
+                setViewingFile({ storageId: file.storageId, fileName: file.fileName });
+              }}
+            >
+              <FileText className="mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">{file.fileName}</span>
+            </Button>
+            <DownloadButton storageId={file.storageId} fileName={file.fileName} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 
   return (
     <>
       <div className="scroll-smooth font-Poppins">
-        <div className="lg:ml-1 space-y-6 pb-10">
+        <div className="min-w-0 space-y-6 pb-10 lg:ml-1">
           {/* Hero */}
           <div className="mt-6 rounded-2xl border border-blue-500/20 bg-linear-to-br from-blue-500/15 via-blue-500/5 to-transparent p-6 md:p-8">
-            <h1 className="text-3xl font-semibold text-foreground">Project Archive</h1>
+            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Project Archive</h1>
             <p className="mt-2 max-w-xl text-muted-foreground">
               Browse completed thesis and capstone projects. Search by title, keyword, adviser, or team member.
             </p>
           </div>
 
-          
-
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-4">
             <StatCard tone="blue" value={projects.length} label="Total projects" icon={<FileText className="h-5 w-5" />} />
             <StatCard tone="green" value={uniqueYears.length} label="Academic years" icon={<CalendarDays className="h-5 w-5" />} />
             <StatCard tone="purple" value={uniqueKeywords.length} label="Unique keywords" icon={<Tag className="h-5 w-5" />} />
@@ -422,7 +420,7 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
 
           {/* Projects + Detail */}
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-            <div>
+            <div className="min-w-0">
               <h2 className="mb-1 text-xl font-semibold text-foreground">Projects</h2>
               <p className="mb-4 text-sm text-muted-foreground">Select a project to see its full details.</p>
 
@@ -457,31 +455,35 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
                           isSelected ? "border-blue-500 bg-blue-500/5" : "border-border"
                         }`}
                       >
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-3 sm:gap-4">
                           <div
-                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${courseTone(project.course)}`}
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full sm:h-11 sm:w-11 ${courseTone(project.course)}`}
                           >
                             <BookOpen className="h-5 w-5" />
                           </div>
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
-                              <h3 className="text-base font-semibold text-foreground">{project.title}</h3>
+                              <h3 className="min-w-0 wrap-break-word text-base font-semibold leading-snug text-foreground">
+                                {project.title}
+                              </h3>
                               <span className="inline-flex h-6 shrink-0 items-center rounded-md border border-border px-2 text-xs font-medium text-foreground">
                                 {project.grade}
                               </span>
                             </div>
-                            <p className="mt-0.5 text-sm text-muted-foreground">
+                            <p className="mt-0.5 wrap-break-word text-sm text-muted-foreground">
                               {project.team} • {project.year}
                             </p>
 
-                            <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{project.abstract}</p>
+                            <p className="mt-3 line-clamp-2 wrap-break-word text-sm text-muted-foreground">
+                              {project.abstract}
+                            </p>
 
                             <div className="mt-3 flex flex-wrap gap-1.5">
                               {project.keywords.slice(0, 4).map((keyword: string, i: number) => (
                                 <span
                                   key={i}
-                                  className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
+                                  className="max-w-full truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
                                 >
                                   {keyword}
                                 </span>
@@ -493,7 +495,7 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
                               )}
                             </div>
 
-                            <p className="mt-3 text-xs text-muted-foreground">
+                            <p className="mt-3 wrap-break-word text-xs text-muted-foreground">
                               {project.course} • Archived {project.archivedDate}
                             </p>
                           </div>
@@ -506,14 +508,16 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
             </div>
 
             {/* Detail panel (desktop only: hidden below lg, where the modal is used instead) */}
-            <div className="hidden lg:block lg:sticky lg:top-24 min-w-0">
+            <div className="hidden min-w-0 lg:sticky lg:top-24 lg:block">
               <div className="max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-6">
                 {selectedProject ? (
                   <>
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <h2 className="text-lg font-semibold text-foreground">{selectedProject.title}</h2>
-                        <p className="mt-0.5 text-sm text-muted-foreground">
+                        <h2 className="wrap-break-word text-lg font-semibold text-foreground">
+                          {selectedProject.title}
+                        </h2>
+                        <p className="mt-0.5 wrap-break-word text-sm text-muted-foreground">
                           {selectedProject.team} • {selectedProject.year}
                         </p>
                       </div>
@@ -540,17 +544,26 @@ const DownloadButton = ({ storageId, fileName }: { storageId: string; fileName: 
         </div>
       </div>
 
+      {/*
+        Mobile / tablet modal.
+        The dialog itself never scrolls: the header stays put and only the body scrolls,
+        so the close (X) button is always visible and the box stays centered on screen.
+      */}
       <Dialog open={detailOpen && !!selectedProject} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-h-[95vh] overflow-y-auto lg:hidden">
+        <DialogContent className="flex max-h-[85dvh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl lg:hidden">
           {selectedProject && (
             <>
-              <DialogHeader className="pr-6 text-left">
-                <DialogTitle className="text-lg font-semibold">{selectedProject.title}</DialogTitle>
-                <DialogDescription>
+              <DialogHeader className="shrink-0 gap-1 border-b border-border px-5 py-4 pr-12 text-left">
+                <DialogTitle className="wrap-break-word text-lg font-semibold leading-snug">
+                  {selectedProject.title}
+                </DialogTitle>
+                <DialogDescription className="wrap-break-word">
                   {selectedProject.team} • {selectedProject.year} • Grade {selectedProject.grade}
                 </DialogDescription>
               </DialogHeader>
-              {detailBody}
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+                {detailBody}
+              </div>
             </>
           )}
         </DialogContent>
