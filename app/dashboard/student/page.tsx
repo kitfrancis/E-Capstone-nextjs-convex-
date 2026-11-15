@@ -277,7 +277,7 @@ function DashboardContent() {
   const me = mounted ? meQuery : undefined;
   const joinTeam = useMutation(api.dashboard.joinTeam);
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
-    const syncFinalRevisions = useMutation(api.defense.syncFinalRevisions);
+  const syncFinalRevisions = useMutation(api.defense.syncFinalRevisions);
   const setMyTeamRole = useMutation(api.dashboard.setMyTeamRole);
   const [selectedTeamRole, setSelectedTeamRole] = useState<TeamRole | "">("");
   const [savingTeamRole, setSavingTeamRole] = useState(false);
@@ -547,7 +547,7 @@ function DashboardContent() {
   }));
 
   // IMRaD: available once the instructor approves the final revisions
-const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
+  const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
   // Chapter checks + proposal state (used by the readiness sync and the stepper)
   const ch13Done = progress.chapters.slice(0, 3).every((c) => c.status === "approved");
   const ch45Done = progress.chapters.slice(3, 5).every((c) => c.status === "approved");
@@ -562,7 +562,7 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
     }
   }, [project?._id, project?.stage, needsSync, syncReadiness]);
 
-    // Final revisions: unlock IMRaD once every chapter was resubmitted and approved
+  // Final revisions: unlock IMRaD once every chapter was resubmitted and approved
   useEffect(() => {
     if (project?.stage === "final_revisions" && progress.total >= 100) {
       syncFinalRevisions({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
@@ -918,7 +918,7 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
   // Upload handler
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
-    // Approved chapters can be resubmitted during final revisions (after the forms are up)
+  // Approved chapters can be resubmitted during final revisions (after the forms are up)
   const revisionsOpen =
     project?.stage === "final_revisions" && (project.evaluationForms?.length ?? 0) >= 3;
   const alreadyApproved = chosen?.status === "approved" && !revisionsOpen;
@@ -1052,6 +1052,7 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
     if (status === "in_progress") return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
     if (status === "under_review") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
     if (status === "needs_revision") return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
+    if (status === "failed") return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
     return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
   };
 
@@ -1117,11 +1118,11 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
 
   if (isLegacyImradUrl) {
     return (
-          <div className="flex min-h-[50vh] items-center justify-center">
-            <p className="text-sm text-muted-foreground">
-              IMRaD is now started from My Manuscript. Redirecting...
-            </p>
-          </div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          IMRaD is now started from My Manuscript. Redirecting...
+        </p>
+      </div>
     );
   }
 
@@ -1239,6 +1240,10 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
                       const state =
                         i < currentStep ? "completed" : i === currentStep ? "in_progress" : "pending";
                       const Icon = step.icon;
+                      const isRedefense =
+                        state === "in_progress" &&
+                        ((i === 1 && project?.proposalResult === "failed") ||
+                          (i === 3 && project?.defenseResult === "failed"));
                       return (
                         <Fragment key={step.label}>
                           {i > 0 && (
@@ -1263,9 +1268,11 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
                               className={`mt-1 inline-flex items-center gap-1 text-sm ${
                                 state === "completed"
                                   ? "text-green-600 dark:text-green-400"
-                                  : state === "in_progress"
-                                    ? "text-blue-600 dark:text-blue-400"
-                                    : "text-muted-foreground"
+                                  : isRedefense
+                                    ? "text-red-600 dark:text-red-400"
+                                    : state === "in_progress"
+                                      ? "text-blue-600 dark:text-blue-400"
+                                      : "text-muted-foreground"
                               }`}
                             >
                               {state === "completed" ? (
@@ -1276,7 +1283,9 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
                               {state === "completed"
                                 ? "Completed"
                                 : state === "in_progress"
-                                  ? "In Progress"
+                                  ? isRedefense
+                                    ? "Re-defense"
+                                    : "In Progress"
                                   : "Pending"}
                             </p>
                           </div>
@@ -1346,7 +1355,7 @@ const readyToArchive = String(project?.stage ?? "") === "ready_to_archive";
                         ` ${progress.superseded} older ${progress.superseded === 1 ? "version is" : "versions are"} superseded.`}
                     </p>
                   </div>
-{/* 
+                  {/*
                   <DefenseStatusCard project={project} progress={progress.total} />
                   <ProposalScheduleCard project={project} />
                   <FinalRevisionsCard projectId={project._id as Id<"capstoneProjects">} /> */}

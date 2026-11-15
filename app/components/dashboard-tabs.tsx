@@ -1136,20 +1136,20 @@ export function TabsDemo({
       )}
 
       {/* MY MANUSCRIPT */}
-      <div className={`${CARD} p-5 lg:p-6`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className={`${CARD} p-5 lg:p-6`}>`
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-ce`nter sm:justify-between">
           <div className="flex items-center gap-3">
             <FileText className="h-7 w-7 text-blue-600" />
             <h2 className="text-xl font-semibold text-foreground">My Manuscript</h2>
           </div>
-          <Button
+          {/* <Button
             className="rounded-lg gap-2 bg-blue-600 text-white hover:bg-blue-700 self-start sm:self-auto"
             onClick={() => setShowUpload(true)}
             disabled={showUpload}
           >
             <Plus className="h-4 w-4" />
             Upload New Document
-          </Button>
+          </Button> */}
         </div>
 
         <div className="mt-5">
@@ -1560,7 +1560,7 @@ export function TabsDemo({
         />
       )}
       {activeImradEditor && (
-        <div className="fixed inset-0 z-[100] flex h-[100dvh] w-screen bg-background">
+        <div className="fixed inset-0 z-100 flex h-dvh w-screen bg-background">
           <AdminImradOnlyOffice
             audience="student"
             canEdit={
