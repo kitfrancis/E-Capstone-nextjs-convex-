@@ -389,6 +389,56 @@ export const myInstructorReviewSubmissions = query({
   },
 });
 
+export const sidebarReviewCounts = query({
+  args: {},
+  returns: v.object({
+    instructorReviewCount: v.number(),
+    adminVerificationCount: v.number(),
+  }),
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
+      return { instructorReviewCount: 0, adminVerificationCount: 0 };
+    }
+
+    if (
+      user.role === "instructor" &&
+      user.status !== "pending" &&
+      user.status !== "rejected"
+    ) {
+      const submissions = await ctx.db
+        .query("imradSubmissions")
+        .withIndex("by_instructor_status", (q) =>
+          q
+            .eq("instructorId", user._id)
+            .eq("status", "instructor_review")
+        )
+        .take(100);
+
+      return {
+        instructorReviewCount: submissions.length,
+        adminVerificationCount: 0,
+      };
+    }
+
+    if (user.role === "admin") {
+      const submissions = await ctx.db
+        .query("imradSubmissions")
+        .withIndex("by_status_submitted_at", (q) =>
+          q.eq("status", "admin_review")
+        )
+        .take(100);
+
+      return {
+        instructorReviewCount: 0,
+        adminVerificationCount: submissions.length,
+      };
+    }
+
+    return { instructorReviewCount: 0, adminVerificationCount: 0 };
+  },
+});
+
 export const projectProgress = query({
   args: { projectId: v.id("capstoneProjects") },
   returns: v.union(

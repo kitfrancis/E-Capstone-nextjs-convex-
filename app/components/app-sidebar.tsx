@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem,
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -43,6 +43,7 @@ const instructorLinks = [
   { label: "Dashboard", href: "/dashboard/instructor", icon: LayoutDashboard },
   { label: "Team Management", href: "/team-management/instructor", icon: Users },
   { label: "IMRaD Review", href: "/dashboard/instructor/verification", icon: CheckCircle2 },
+  { label: "Admin logs", href: "/dashboard/instructor/admin-logs", icon: FileText },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/instructor", icon: User },
 ];
@@ -79,6 +80,10 @@ const ACTIVE =
 
 function AppSidebarContent() {
   const me = useQuery(api.users.getMe);
+  const reviewCounts = useQuery(
+    api.imrad.sidebarReviewCounts,
+    me?.role === "instructor" || me?.role === "admin" ? {} : "skip"
+  );
   const { signOut } = useClerk();
   const router = useRouter();
   const pathname = usePathname();
@@ -194,18 +199,41 @@ function AppSidebarContent() {
                       </SidebarGroupContent>
                     </SidebarGroup>
                   ) : (
-                    <SidebarMenuItem key={link.href}>
-                      <SidebarMenuButton
-                        className={`h-11 rounded-xl text-[15px] ${ACTIVE}`}
-                        asChild
-                        isActive={isLinkActive(link.href!)}
-                      >
-                        <button onClick={() => router.push(link.href!)}>
-                          <link.icon className="h-5 w-5" />
-                          <span>{link.label}</span>
-                        </button>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                    (() => {
+  const reviewCount =
+    me?.role === "instructor" && link.href === "/dashboard/instructor/verification"
+      ? reviewCounts?.instructorReviewCount ?? 0
+      : me?.role === "admin" && link.href === "/dashboard/admin/imrad-processing"
+        ? reviewCounts?.adminVerificationCount ?? 0
+        : 0;
+  const badgeLabel =
+    link.href === "/dashboard/instructor/verification"
+      ? "teams waiting for IMRaD review"
+      : "teams ready for final verification";
+
+  return (
+    <SidebarMenuItem key={link.href}>
+      <SidebarMenuButton
+        className={`group/nav h-11 rounded-xl text-[15px] ${ACTIVE}`}
+        asChild
+        isActive={isLinkActive(link.href!)}
+      >
+        <button onClick={() => router.push(link.href!)} title={link.label}>
+          <link.icon className="h-5 w-5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">{link.label}</span>
+          {reviewCount > 0 && (
+            <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white group-data-[active=true]/nav:bg-white group-data-[active=true]/nav:text-blue-600">
+              <span aria-hidden>{reviewCount >= 100 ? "99+" : reviewCount}</span>
+              <span className="sr-only">
+                {reviewCount >= 100 ? "At least 100" : reviewCount} {badgeLabel}
+              </span>
+            </span>
+          )}
+        </button>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+})()
                   )
                 )
               )}
