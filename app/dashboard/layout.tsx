@@ -31,7 +31,7 @@ export default function DashboardLayout({
     <NotificationProvider>
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="min-w-0 overflow-x-clip">
         <header className="sticky top-0 z-10 flex h-16 w-full items-center gap-2 border-b bg-background px-4">
           <SidebarTrigger className="-ml-1 scale-150" />
           <Separator orientation="vertical" className="mr-2 h-4" />

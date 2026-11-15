@@ -78,6 +78,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { FinalRevisionsCard } from "@/app/components/final-revisions-card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const TEAM_ROLES = [
   "Project Manager",
@@ -1729,97 +1730,99 @@ function DashboardContent() {
                     <h2 className="text-xl font-semibold text-foreground">My Tasks</h2>
                   </div>
 
-                  {/* Filter pills */}
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {taskFilterOptions.map((opt) => (
-                      <button
-                        key={opt.key}
-                        onClick={() => setTaskFilter(opt.key)}
-                        className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                          taskFilter === opt.key
-                            ? "bg-blue-100 text-blue-700 shadow-[inset_0_-2px_0_0_var(--color-blue-600)] dark:bg-blue-950 dark:text-blue-300"
-                            : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
-                      >
-                        {opt.label} ({opt.count})
-                      </button>
-                    ))}
-                  </div>
+                  <Tabs value={taskFilter} onValueChange={setTaskFilter} className="mt-4 gap-4">
+                    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                      <TabsList className="w-max justify-start rounded-xl p-1">
+                        {taskFilterOptions.map((opt) => (
+                          <TabsTrigger
+                            key={opt.key}
+                            value={opt.key}
+                            className="flex-none gap-1.5 rounded-lg px-4 text-sm whitespace-nowrap data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-950 dark:data-[state=active]:text-blue-300"
+                          >
+                            {opt.label}
+                            <span className="rounded-full bg-background/70 px-1.5 text-xs tabular-nums">
+                              {opt.count}
+                            </span>
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
 
-                  <div className="mt-4">
-                    {tasks === undefined ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                      </div>
-                    ) : filteredTasks.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
-                        <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                        <p className="font-medium text-foreground">
-                          {taskFilter === "all" ? "No tasks assigned yet" : "No tasks in this category"}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {taskFilter === "all"
-                            ? "Tasks will be assigned by your instructor as the project progresses."
-                            : "Try choosing another filter option above."}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto rounded-xl border">
-                        <table className="w-full min-w-215 text-sm">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className={TH}>Task Title</th>
-                              <th className={TH}>Description</th>
-                              <th className={TH}>Due Date</th>
-                              <th className={TH}>Status</th>
-                              <th className={`${TH} text-right`}>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredTasks.map((task) => (
-                              <tr key={task._id} className="border-t align-middle">
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-3">
-                                    {task.status === "completed" ? (
-                                      <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
-                                    ) : (
-                                      <span className="h-3 w-3 shrink-0 rounded-full bg-blue-600" />
-                                    )}
-                                    <span className="font-medium text-foreground">{task.title}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-muted-foreground">
-                                  <p>{task.description}</p>
-                                  <p className="mt-0.5 text-xs">
-                                    {task.assignedTo} · {task.targetRole ?? "All Roles"}
-                                  </p>
-                                </td>
-                                <td className="px-4 py-3 text-foreground whitespace-nowrap">
-                                  <span className="inline-flex items-center gap-2">
-                                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                                    {formatDate(task.dueDate)}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>
-                                    {getTaskLabel(task.status)}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex justify-end">
-                                    <TaskActions
-                                      status={task.status}
-                                      onChange={(s) => changeTaskStatus(task._id, s)}
-                                    />
-                                  </div>
-                                </td>
+                    <TabsContent value={taskFilter}>
+                      {tasks === undefined ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                        </div>
+                      ) : filteredTasks.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed">
+                          <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                          <p className="font-medium text-foreground">
+                            {taskFilter === "all" ? "No tasks assigned yet" : "No tasks in this category"}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {taskFilter === "all"
+                              ? "Tasks will be assigned by your instructor as the project progresses."
+                              : "Try choosing another filter option above."}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border">
+                          <table className="w-full min-w-215 text-sm">
+                            <thead className="bg-muted/50">
+                              <tr>
+                                <th className={TH}>Task Title</th>
+                                <th className={TH}>Description</th>
+                                <th className={TH}>Due Date</th>
+                                <th className={TH}>Status</th>
+                                <th className={`${TH} text-right`}>Action</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
+                            </thead>
+                            <tbody>
+                              {filteredTasks.map((task) => (
+                                <tr key={task._id} className="border-t align-middle">
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                      {task.status === "completed" ? (
+                                        <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                                      ) : (
+                                        <span className="h-3 w-3 shrink-0 rounded-full bg-blue-600" />
+                                      )}
+                                      <span className="font-medium text-foreground">{task.title}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    <p>{task.description}</p>
+                                    <p className="mt-0.5 text-xs">
+                                      {task.assignedTo} · {task.targetRole ?? "All Roles"}
+                                    </p>
+                                  </td>
+                                  <td className="px-4 py-3 text-foreground whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-2">
+                                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                                      {formatDate(task.dueDate)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={`${BADGE_BASE} ${getTaskBadge(task.status)}`}>
+                                      {getTaskLabel(task.status)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex justify-end">
+                                      <TaskActions
+                                        status={task.status}
+                                        onChange={(s) => changeTaskStatus(task._id, s)}
+                                      />
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
                 </div>
               </>
             )}
