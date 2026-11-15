@@ -415,6 +415,8 @@ export const projectProgress = query({
           savedAt: v.union(v.number(), v.null()),
           revision: v.number(),
           requiredSaveRevision: v.number(),
+          abstract: v.union(v.string(), v.null()),
+          keywords: v.array(v.string()),
         }),
         v.null()
       ),
@@ -476,6 +478,8 @@ export const projectProgress = query({
             savedAt: workingDocument?.savedAt ?? null,
             revision: workingDocument?.revision ?? 0,
             requiredSaveRevision: existing.requiredSaveRevision ?? 1,
+            abstract: existing.abstract ?? null,
+            keywords: existing.keywords ?? [],
           }
         : null,
     };
@@ -1437,6 +1441,14 @@ async function archiveImradDocument(
     }
     if (!archiveEntry) {
       const archiveFileId = project.finalFileId ?? workingDocument.storageId;
+      const abstract =
+        submission.abstract?.trim() ||
+        project.abstract?.trim() ||
+        submission.description;
+      const keywords =
+        submission.keywords?.length
+          ? submission.keywords
+          : project.keywords ?? [];
       const archiveEntryId = await ctx.db.insert("projects", {
         capstoneProjectId: project._id,
         title: project.projectTitle,
@@ -1444,9 +1456,9 @@ async function archiveImradDocument(
         year: new Date(project._creationTime).getFullYear(),
         course,
         grade: project.finalGrade ?? "—",
-        abstract: project.abstract ?? submission.description,
+        abstract,
         archivedDate: new Date().toISOString(),
-        keywords: project.keywords ?? [],
+        keywords,
         members: memberNames,
         adviser: adviserName,
         storageId: archiveFileId,
@@ -1467,6 +1479,17 @@ async function archiveImradDocument(
       }
       await ctx.db.patch(archiveEntry._id, {
         capstoneProjectId: project._id,
+        abstract:
+          submission.abstract?.trim() ||
+          archiveEntry.abstract ||
+          project.abstract?.trim() ||
+          submission.description,
+        keywords:
+          submission.keywords?.length
+            ? submission.keywords
+            : archiveEntry.keywords.length > 0
+              ? archiveEntry.keywords
+              : project.keywords ?? [],
         ...(archiveEntry.storageId !== workingDocument.storageId
           ? {
               additionalFiles: [
@@ -1551,9 +1574,20 @@ export const reviewFinalVerification = mutation({
 });
 
 export const submitStudentImrad = mutation({
-  args: { submissionId: v.id("imradSubmissions") },
+  args: {
+    submissionId: v.id("imradSubmissions"),
+    abstract: v.string(),
+    keywords: v.array(v.string()),
+  },
   returns: v.null(),
-  handler: async (ctx, { submissionId }) => {
+  handler: async (ctx, { submissionId, abstract: abstractInput, keywords: keywordInput }) => {
+    const abstract = abstractInput.trim();
+    const keywords = keywordInput.map((keyword) => keyword.trim()).filter(Boolean);
+    if (!abstract) throw new Error("Enter the IMRaD abstract before submitting.");
+    if (keywords.length < 3) {
+      throw new Error("Enter at least 3 keywords, separated by commas.");
+    }
+
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
       throw new Error("This IMRaD document is not ready to submit.");
@@ -1579,6 +1613,8 @@ export const submitStudentImrad = mutation({
     const target = submission.revisionTarget ?? "instructor";
     const status = target === "admin" ? "admin_review" : "instructor_review";
     await ctx.db.patch(submissionId, {
+      abstract,
+      keywords,
       status,
       revisionTarget: undefined,
       verificationComment: undefined,

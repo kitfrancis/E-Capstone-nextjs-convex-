@@ -8,6 +8,16 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SelectDemo } from "@/app/components/select";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -257,6 +267,11 @@ export function TabsDemo({
     status: string;
     completedParts: number[];
   } | null>(null);
+  const [showImradSubmitDialog, setShowImradSubmitDialog] = useState(false);
+  const [imradAbstract, setImradAbstract] = useState("");
+  const [imradKeywordsText, setImradKeywordsText] = useState("");
+  const [imradSubmitError, setImradSubmitError] = useState("");
+  const [submittingImrad, setSubmittingImrad] = useState(false);
   const [startingImrad, setStartingImrad] = useState(false);
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const restoreAttemptStartedRef = useRef(false);
@@ -329,6 +344,7 @@ export function TabsDemo({
     api.imrad.generateStudentGuideUploadUrl
   );
   const startStudentImrad = useMutation(api.imrad.startStudentImrad);
+  const submitStudentImrad = useMutation(api.imrad.submitStudentImrad);
 
   type Deliverable = NonNullable<typeof deliverables>[number];
 
@@ -391,6 +407,13 @@ export function TabsDemo({
   const showImradRow = !!imradProgress?.unlockedAt || !!imradSubmission;
   const canStartImrad =
     !imradSubmission || imradSubmission.status === "rejected";
+  const canSubmitImrad =
+    imradSubmission?.status === "student_editing" &&
+    imradSubmission.completedParts.length === 4 &&
+    imradSubmission.savedAt !== null &&
+    imradSubmission.revision >= imradSubmission.requiredSaveRevision;
+  const imradSubmitTarget =
+    imradSubmission?.revisionTarget === "admin" ? "admin" : "instructor";
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
   const alreadyApproved = chosen?.status === "approved";
@@ -515,6 +538,51 @@ export function TabsDemo({
       status: submission.status,
       completedParts: submission.completedParts,
     });
+  };
+
+  const openImradSubmitDialog = () => {
+    if (!imradSubmission) return;
+    setImradAbstract(imradSubmission.abstract ?? "");
+    setImradKeywordsText(imradSubmission.keywords.join(", "));
+    setImradSubmitError("");
+    setShowImradSubmitDialog(true);
+  };
+
+  const submitImradForInstructor = async () => {
+    if (!imradSubmission || submittingImrad) return;
+    const abstract = imradAbstract.trim();
+    const keywords = imradKeywordsText
+      .split(",")
+      .map((keyword) => keyword.trim())
+      .filter(Boolean);
+    if (!abstract) {
+      setImradSubmitError("Enter the IMRaD abstract.");
+      return;
+    }
+    if (keywords.length < 3) {
+      setImradSubmitError("Enter at least 3 keywords, separated by commas.");
+      return;
+    }
+
+    setSubmittingImrad(true);
+    setImradSubmitError("");
+    try {
+      await submitStudentImrad({
+        submissionId: imradSubmission.submissionId,
+        abstract,
+        keywords,
+      });
+      setShowImradSubmitDialog(false);
+      toast.success(`Your IMRaD was submitted to your ${imradSubmitTarget}.`);
+    } catch (submitError) {
+      setImradSubmitError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Could not submit the IMRaD to your instructor."
+      );
+    } finally {
+      setSubmittingImrad(false);
+    }
   };
 
   // Open (or create) the draft and open the editor on it.
@@ -1362,6 +1430,15 @@ export function TabsDemo({
                     >
                       {imradButtonLabel}
                     </Button>
+                    {canSubmitImrad && (
+                      <Button
+                        size="sm"
+                        className="mt-2 w-full"
+                        onClick={openImradSubmitDialog}
+                      >
+                        Submit to {imradSubmitTarget}
+                      </Button>
+                    )}
                     <div className="mt-3 border-t pt-3">
                       <ImradProgressSummary completedParts={imradSubmission?.completedParts ?? []} />
                     </div>
@@ -1513,18 +1590,22 @@ export function TabsDemo({
                             )}
                           </td>
                           <td className="px-4 py-3">
-  <div className="flex items-center justify-end gap-1">
-    <Button
-      size="sm"
-      variant={canStartImrad ? "default" : "outline"}
-      className={imradButtonClass}
-      disabled={imradButtonDisabled}
-      onClick={canStartImrad ? () => void startImradProcess() : openImradDocument}
-    >
-      {imradButtonLabel}
-    </Button>
-    <span className="w-8 shrink-0" aria-hidden />
-  </div>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant={canStartImrad ? "default" : "outline"}
+                                className={imradButtonClass}
+                                disabled={imradButtonDisabled}
+                                onClick={canStartImrad ? () => void startImradProcess() : openImradDocument}
+                              >
+                                {imradButtonLabel}
+                              </Button>
+                              {canSubmitImrad && (
+                                <Button size="sm" onClick={openImradSubmitDialog}>
+                                  Submit to {imradSubmitTarget}
+                                </Button>
+                              )}
+                            </div>
 </td>
                         </tr>
                         <tr className="border-t">
@@ -1724,6 +1805,81 @@ export function TabsDemo({
           />
         </div>
       )}
+      <Dialog
+        open={showImradSubmitDialog}
+        onOpenChange={(open) => {
+          if (!submittingImrad) setShowImradSubmitDialog(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Submit IMRaD to {imradSubmitTarget}</DialogTitle>
+            <DialogDescription>
+            Add the abstract and at least three keywords from your completed IMRaD document.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="imrad-abstract" className="text-sm font-medium">
+                Abstract
+              </label>
+              <Textarea
+                id="imrad-abstract"
+                rows={6}
+                value={imradAbstract}
+                onChange={(event) => {
+                  setImradAbstract(event.target.value);
+                  setImradSubmitError("");
+                }}
+                aria-invalid={!!imradSubmitError && !imradAbstract.trim()}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="imrad-keywords" className="text-sm font-medium">
+                Keywords
+              </label>
+              <Input
+                id="imrad-keywords"
+                value={imradKeywordsText}
+                onChange={(event) => {
+                  setImradKeywordsText(event.target.value);
+                  setImradSubmitError("");
+                }}
+                placeholder="e.g. data privacy, mobile application, analytics"
+                aria-invalid={
+                  !!imradSubmitError &&
+                  imradKeywordsText.split(",").filter((keyword) => keyword.trim()).length < 3
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate keywords with commas. At least 3 are required.
+              </p>
+            </div>
+          </div>
+          {imradSubmitError && (
+            <p role="alert" className="text-sm text-destructive">
+              {imradSubmitError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submittingImrad}
+              onClick={() => setShowImradSubmitDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={submittingImrad}
+              onClick={() => void submitImradForInstructor()}
+            >
+              {submittingImrad ? "Submitting..." : `Submit to ${imradSubmitTarget}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isRestoringEditor && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/80 text-white">
           <div className="text-center">
