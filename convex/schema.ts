@@ -153,6 +153,8 @@ export default defineSchema({
       })
     ),
     description: v.string(),
+    abstract: v.optional(v.string()),
+    keywords: v.optional(v.array(v.string())),
     status: v.union(
       v.literal("submitted"),
       v.literal("processing"),

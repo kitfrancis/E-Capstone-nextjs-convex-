@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Check, LoaderCircle, X } from "lucide-react";
@@ -87,6 +87,7 @@ export default function AdminImradOnlyOffice({
   userName,
   onClose,
 }: AdminImradOnlyOfficeProps) {
+  const convex = useConvex();
   const editorRef = useRef<{ destroyEditor: () => void } | null>(null);
   const editorDocumentKeyRef = useRef<string | null>(null);
   const creatingDocumentRef = useRef(false);
@@ -109,7 +110,6 @@ export default function AdminImradOnlyOffice({
   const completeStudentWorkingDocumentPart = useMutation(
     api.imrad.completeStudentWorkingDocumentPart
   );
-  const submitStudentImrad = useMutation(api.imrad.submitStudentImrad);
   const confirmWorkingDocumentHasNoPendingChanges = useMutation(
     api.imrad.confirmAdminWorkingDocumentHasNoPendingChanges
   );
@@ -149,7 +149,6 @@ export default function AdminImradOnlyOffice({
         workingDocumentStatus.requiredSaveRevision);
   const [savingFinalPdf, setSavingFinalPdf] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [submittingForReview, setSubmittingForReview] = useState(false);
   const needsSaveForReview =
     localCompletedParts.length === 4 &&
     (!workingDocumentStatus?.savedAt ||
@@ -163,6 +162,8 @@ export default function AdminImradOnlyOffice({
       setSaveMessage("Wait for OnlyOffice to finish opening before saving the PDF.");
       return;
     }
+    const previousRevision = workingDocumentStatus?.revision ?? 0;
+    let closeEditorAfterSave = false;
     setSavingFinalPdf(true);
     setSaveMessage("");
     try {
@@ -183,7 +184,11 @@ export default function AdminImradOnlyOffice({
       if (!response.ok || !result || typeof result !== "object" || !("ok" in result) || result.ok !== true) {
         throw new Error("Internal server error. Please try again later.");
       }
-      if ("waitForCallback" in result && result.waitForCallback === false) {
+      if (!("waitForCallback" in result) || typeof result.waitForCallback !== "boolean") {
+        throw new Error("OnlyOffice returned an invalid save confirmation.");
+      }
+
+      if (result.waitForCallback === false) {
         if (audience === "admin") {
           await confirmWorkingDocumentHasNoPendingChanges({ submissionId });
         } else {
@@ -192,20 +197,47 @@ export default function AdminImradOnlyOffice({
         toast.success(
           audience === "admin"
             ? "The latest saved PDF has no pending edits and is ready for verification."
-            : "The latest saved PDF is ready to submit to your instructor."
+            : "The PDF is saved to Convex. You can submit it from My Manuscript."
         );
+        closeEditorAfterSave = audience === "student";
+      } else if (audience === "student") {
+        setSaveMessage("Waiting for Convex to confirm the saved PDF...");
+        const deadline = Date.now() + 30_000;
+        let saved = false;
+        while (Date.now() < deadline) {
+          const status = await convex.query(
+            api.imrad.studentWorkingDocumentStatus,
+            { submissionId }
+          );
+          if (
+            status &&
+            status.savedAt !== null &&
+            status.revision > previousRevision &&
+            status.revision >= status.requiredSaveRevision
+          ) {
+            saved = true;
+            break;
+          }
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 300));
+        }
+        if (!saved) {
+          throw new Error("Convex did not confirm the saved PDF in time. Keep the editor open and try again.");
+        }
+        toast.success("The PDF is saved to Convex. You can submit it from My Manuscript.");
+        closeEditorAfterSave = true;
       } else {
-        toast.success(
-          audience === "admin"
-            ? "Save requested. The Final Verification action will be enabled once the saved PDF is confirmed."
-            : "Save requested. Submit to your instructor once the saved PDF is confirmed."
-        );
+        toast.success("Save requested. The Final Verification action will be enabled once the saved PDF is confirmed.");
       }
     } catch (saveError) {
       console.error("Failed to save final IMRaD PDF:", saveError);
-      setSaveMessage("Internal server error. Please try again later.");
+      setSaveMessage(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save the final IMRaD PDF."
+      );
     } finally {
       setSavingFinalPdf(false);
+      if (closeEditorAfterSave) onClose();
     }
   };
 
@@ -466,25 +498,6 @@ export default function AdminImradOnlyOffice({
     userName,
   ]);
 
-  const submitToInstructor = async () => {
-    if (audience !== "student" || submittingForReview || needsSaveForReview) return;
-    setSubmittingForReview(true);
-    setSaveMessage("");
-    try {
-      await submitStudentImrad({ submissionId });
-      onClose();
-    } catch (submitError) {
-      console.error("Failed to submit student IMRaD:", submitError);
-      setSaveMessage(
-        submitError instanceof Error
-          ? submitError.message
-          : "Could not submit the IMRaD for instructor review."
-      );
-    } finally {
-      setSubmittingForReview(false);
-    }
-  };
-
   return (
     <div
       aria-label={`OnlyOffice PDF editor for ${teamName}`}
@@ -540,27 +553,18 @@ export default function AdminImradOnlyOffice({
           {audience === "student" &&
             canEdit &&
             localCompletedParts.length === 4 && (
-              <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={saveFinalPdf}
-                    disabled={!effectiveFileId || savingFinalPdf || !needsSaveForReview}
-                  >
-                    {savingFinalPdf
-                      ? "Saving PDF..."
-                      : needsSaveForReview
-                        ? "Save PDF for submission"
-                        : "PDF saved"}
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={submitToInstructor}
-                    disabled={needsSaveForReview || savingFinalPdf || submittingForReview}
-                  >
-                    {submittingForReview ? "Submitting..." : "Submit to Instructor"}
-                  </Button>
-              </>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={saveFinalPdf}
+                disabled={!effectiveFileId || savingFinalPdf || !needsSaveForReview}
+              >
+                {savingFinalPdf
+                  ? "Saving PDF..."
+                  : needsSaveForReview
+                    ? "Save PDF for submission"
+                    : "PDF saved"}
+              </Button>
             )}
           <Button type="button" variant="outline" onClick={onClose}>
             <X className="mr-2 h-4 w-4" />
