@@ -43,6 +43,7 @@ const instructorLinks = [
   { label: "Dashboard", href: "/dashboard/instructor", icon: LayoutDashboard },
   { label: "Team Management", href: "/team-management/instructor", icon: Users },
   { label: "IMRaD Review", href: "/dashboard/instructor/verification", icon: CheckCircle2 },
+  { label: "Admin logs", href: "/dashboard/instructor/admin-logs", icon: FileText },
   { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Profile", href: "/profile/instructor", icon: User },
 ];
