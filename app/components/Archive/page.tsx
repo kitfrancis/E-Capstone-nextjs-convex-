@@ -467,9 +467,6 @@ export default function Archive() {
                               <h3 className="min-w-0 wrap-break-word text-base font-semibold leading-snug text-foreground">
                                 {project.title}
                               </h3>
-                              <span className="inline-flex h-6 shrink-0 items-center rounded-md border border-border px-2 text-xs font-medium text-foreground">
-                                {project.grade}
-                              </span>
                             </div>
                             <p className="mt-0.5 wrap-break-word text-sm text-muted-foreground">
                               {project.team} • {project.year}
@@ -521,9 +518,6 @@ export default function Archive() {
                           {selectedProject.team} • {selectedProject.year}
                         </p>
                       </div>
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
-                        {selectedProject.grade}
-                      </span>
                     </div>
                     {detailBody}
                   </>

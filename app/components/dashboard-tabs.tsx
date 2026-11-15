@@ -37,6 +37,7 @@ import {
   Eye,
   Plus,
   X,
+   Lock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -103,6 +104,9 @@ function getImradStatusLabel(status: string, revisionTarget: string | null) {
 
 const BADGE_BASE =
   "inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
+// Version pill: slightly stronger contrast than before (bg-blue-100 instead of bg-blue-50)
+const VERSION_PILL =
+  "inline-flex rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
 // min-w-0 lets cards shrink inside flex/grid parents so wide tables scroll inside the card
 const CARD = "min-w-0 max-w-full rounded-2xl border bg-card shadow-xs";
 const TH = "px-4 py-3 text-left text-sm font-semibold text-foreground whitespace-nowrap";
@@ -1076,6 +1080,18 @@ export function TabsDemo({
     ? getImradStatusLabel(imradSubmission.status, imradSubmission.revisionTarget)
     : "Ready to start";
 
+  // "Changes requested" needs attention, so it uses amber instead of the neutral blue.
+  // It also explains why 4/4 parts can be complete while the document is still open for edits.
+  const imradNeedsChanges =
+    imradSubmission?.status === "student_editing" && !!imradSubmission.revisionTarget;
+  const imradBadgeClass = imradNeedsChanges
+    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+    : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+  const imradHint = imradNeedsChanges
+    ? imradSubmission?.verificationComment ??
+      "All parts are written. Apply the requested changes, then resubmit."
+    : null;
+
   return (
     <div className="w-full min-w-0 max-w-full space-y-6">
       {/* Banner */}
@@ -1268,6 +1284,8 @@ export function TabsDemo({
                   const cp = chNum ? progress.chapters[chNum - 1] : null;
                   const isLatest = !!cp && cp.latestId === d._id;
                   const StatusIcon = getStatusIcon(d.status);
+                  const canView = isPdf(d.fileName) || isOffice(d.fileName);
+                  
                   return (
                     <div
                       key={d._id}
@@ -1278,13 +1296,13 @@ export function TabsDemo({
                           <FileTypeIcon className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{d.fileName}</p>
-                          <p className="truncate text-xs text-muted-foreground">{phase}</p>
+                          <p className="truncate text-sm font-medium text-foreground">{phase}</p>
+                          <p className="truncate text-xs text-muted-foreground">{d.fileName}</p>
                         </div>
                         {renderManuscriptMenu(d)}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                        <span className={VERSION_PILL}>
                           v{d.version}
                           {d.versionLabel && ` (${d.versionLabel})`}
                         </span>
@@ -1297,6 +1315,15 @@ export function TabsDemo({
                         <CalendarDays className="h-3.5 w-3.5" />
                         {formatDateTime(d.uploadedAt)}
                       </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 w-full rounded-lg"
+                        disabled={!canView}
+                        onClick={() => viewDocument(d)}
+                      >
+                        View
+                      </Button>
                     </div>
                   );
                 })}
@@ -1309,21 +1336,22 @@ export function TabsDemo({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
+                          Team IMRaD document
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
                           {imradSubmission?.fileName ?? "IMRaD Conversion"}
                         </p>
-                        <p className="text-xs text-muted-foreground">Team IMRaD document</p>
                       </div>
                     </div>
                     <div className="mt-3">
-                      <span className={`${BADGE_BASE} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`}>
+                      <span className={`${BADGE_BASE} ${imradBadgeClass}`}>
                         {imradStatusText}
                       </span>
-                      {imradSubmission?.verificationComment &&
-                        imradSubmission.status === "student_editing" && (
-                          <p className="mt-2 text-xs text-orange-700 dark:text-orange-300">
-                            {imradSubmission.verificationComment}
-                          </p>
-                        )}
+                      {imradHint && (
+                        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                          {imradHint}
+                        </p>
+                      )}
                     </div>
                     <Button
                       size="sm"
@@ -1341,7 +1369,7 @@ export function TabsDemo({
                 )}
               </div>
 
-              {/* Tablets and desktops: table with a single actions menu */}
+              {/* Tablets and desktops: table with a visible primary action + a menu for the rest */}
               <div className="hidden max-w-full overflow-x-auto rounded-xl border md:block">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
@@ -1356,6 +1384,7 @@ export function TabsDemo({
                   <tbody>
                     {manuscriptChapterRows.map(({ phase, uploadPhase, deliverable: d }) => {
                       if (!d) {
+                         const locked = (chapterOf(uploadPhase) ?? 0) >= 4 && !proposalDone;
                         return (
                           <tr key={phase} className="border-t">
                             <td className="px-4 py-3">
@@ -1373,19 +1402,25 @@ export function TabsDemo({
                             <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">-</td>
                             <td className="px-4 py-3 text-muted-foreground">-</td>
                             <td className="px-4 py-3 text-right">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-lg"
-                                onClick={() => {
-                                  setPhase(uploadPhase);
-                                  setShowUpload(true);
-                                }}
-                                disabled={showUpload}
-                              >
-                                Upload
-                              </Button>
-                            </td>
+  {locked ? (
+    <Button size="sm" variant="outline" className="rounded-lg gap-1.5" disabled>
+      <Lock className="h-3.5 w-3.5" /> Locked
+    </Button>
+  ) : (
+    <Button
+      size="sm"
+      variant="outline"
+      className="rounded-lg"
+      onClick={() => {
+        setPhase(uploadPhase);
+        setShowUpload(true);
+      }}
+      disabled={showUpload || isArchived}
+    >
+      Upload
+    </Button>
+  )}
+</td>
                           </tr>
                         );
                       }
@@ -1396,6 +1431,7 @@ export function TabsDemo({
                       const cp = chNum ? progress.chapters[chNum - 1] : null;
                       const isLatest = !!cp && cp.latestId === d._id;
                       const StatusIcon = getStatusIcon(d.status);
+                      const canView = isPdf(d.fileName) || isOffice(d.fileName);
                       return (
                         <tr key={d._id} className={`border-t ${chNum && !isLatest ? "opacity-60" : ""}`}>
                           <td className="px-4 py-3">
@@ -1404,13 +1440,15 @@ export function TabsDemo({
                                 <FileTypeIcon className="h-5 w-5" />
                               </div>
                               <div className="min-w-0">
-                                <p className="font-medium text-foreground truncate max-w-48 lg:max-w-64">{d.fileName}</p>
-                                <p className="text-xs text-muted-foreground">{phase}</p>
+                                <p className="font-medium text-foreground">{phase}</p>
+                                <p className="truncate max-w-48 text-xs text-muted-foreground lg:max-w-64">
+                                  {d.fileName}
+                                </p>
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            <span className={VERSION_PILL}>
                               v{d.version}
                               {d.versionLabel && ` (${d.versionLabel})`}
                             </span>
@@ -1428,7 +1466,9 @@ export function TabsDemo({
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex justify-end">{renderManuscriptMenu(d)}</div>
+                            <div className="flex items-center justify-end gap-1">
+                              {renderManuscriptMenu(d)}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1442,41 +1482,50 @@ export function TabsDemo({
                                 <FileText className="h-5 w-5" />
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate font-medium text-foreground max-w-48 lg:max-w-64">
+                                <p className="font-medium text-foreground">Team IMRaD document</p>
+                                <p className="truncate max-w-48 text-xs text-muted-foreground lg:max-w-64">
                                   {imradSubmission?.fileName ?? "IMRaD Conversion"}
                                 </p>
-                                <p className="text-xs text-muted-foreground">Team IMRaD document</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">—</td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs text-muted-foreground">Combined</span>
+                          </td>
                           <td className="hidden px-4 py-3 whitespace-nowrap text-foreground lg:table-cell">
-                            {imradSubmission?.savedAt
-                              ? new Date(imradSubmission.savedAt).toLocaleString()
-                              : "—"}
+                            {imradSubmission?.savedAt ? (
+                              <span className="inline-flex items-center gap-2">
+                                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                                {formatDateTime(new Date(imradSubmission.savedAt).toISOString())}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`${BADGE_BASE} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`}>
+                            <span className={`${BADGE_BASE} ${imradBadgeClass}`}>
                               {imradStatusText}
                             </span>
-                            {imradSubmission?.verificationComment &&
-                              imradSubmission.status === "student_editing" && (
-                                <p className="mt-1 max-w-64 text-xs text-orange-700 dark:text-orange-300">
-                                  {imradSubmission.verificationComment}
-                                </p>
-                              )}
+                            {imradHint && (
+                              <p className="mt-1 max-w-64 text-xs text-amber-700 dark:text-amber-300">
+                                {imradHint}
+                              </p>
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              size="sm"
-                              variant={canStartImrad ? "default" : "outline"}
-                              className={imradButtonClass}
-                              disabled={imradButtonDisabled}
-                              onClick={canStartImrad ? () => void startImradProcess() : openImradDocument}
-                            >
-                              {imradButtonLabel}
-                            </Button>
-                          </td>
+                          <td className="px-4 py-3">
+  <div className="flex items-center justify-end gap-1">
+    <Button
+      size="sm"
+      variant={canStartImrad ? "default" : "outline"}
+      className={imradButtonClass}
+      disabled={imradButtonDisabled}
+      onClick={canStartImrad ? () => void startImradProcess() : openImradDocument}
+    >
+      {imradButtonLabel}
+    </Button>
+    <span className="w-8 shrink-0" aria-hidden />
+  </div>
+</td>
                         </tr>
                         <tr className="border-t">
                           <td colSpan={5} className="px-4 py-3">
