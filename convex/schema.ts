@@ -218,7 +218,12 @@ export default defineSchema({
     submissionDraftId: v.optional(v.id("deliverableDrafts")),
   })
     .index("by_submission_draft", ["submissionDraftId"])
-    .index("by_capstone_project", ["capstoneProjectId"]),
+    .index("by_capstone_project", ["capstoneProjectId"])
+    .index("by_capstone_project_phase_version", [
+      "capstoneProjectId",
+      "phase",
+      "version",
+    ]),
 
   deliverableDrafts: defineTable({
     deliverableId: v.id("deliverables"),
