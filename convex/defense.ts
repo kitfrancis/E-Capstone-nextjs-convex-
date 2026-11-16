@@ -7,7 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
 // Relative import: the "@/" alias may not resolve inside the convex/ folder.
 // If lib/progress.ts imports anything with "@/", copy computeProgress into convex/ instead.
-import { CHAPTER_PHASES, computeProgress } from "../lib/progress";
+import { computeProgress } from "../lib/progress";
 
 async function currentUser(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -19,6 +19,26 @@ async function currentUser(ctx: QueryCtx | MutationCtx) {
 }
 
 const IMRAD_PHASE = "IMRaD Final";
+
+async function setLatestChapterStatuses(
+  ctx: MutationCtx,
+  projectId: Id<"capstoneProjects">,
+  chapterCount: number,
+  status: Doc<"deliverables">["status"],
+) {
+  const deliverables = await ctx.db
+    .query("deliverables")
+    .withIndex("by_capstone_project", (q) => q.eq("capstoneProjectId", projectId))
+    .collect();
+
+  for (const chapter of computeProgress(deliverables).chapters.slice(0, chapterCount)) {
+    if (!chapter.latestId) continue;
+    const latest = deliverables.find((deliverable) => deliverable._id === chapter.latestId);
+    if (latest && latest.status !== status) {
+      await ctx.db.patch(latest._id, { status });
+    }
+  }
+}
 
 function defenseResultLabel(
   result: "passed" | "passed_with_revisions" | "failed"
@@ -327,6 +347,9 @@ export const scheduleProposalDefense = mutation({
     }
 
     const wasScheduled = project.stage === "proposal_scheduled";
+    if (project.proposalResult === "failed") {
+      await setLatestChapterStatuses(ctx, project._id, 3, "needs_revision");
+    }
     await ctx.db.patch(project._id, {
       stage: "proposal_scheduled",
       proposalDate: args.date,
@@ -363,17 +386,29 @@ export const recordProposalResult = mutation({
       throwUserError("There's no scheduled proposal defense to record a result for.");
     }
 
+    const projectDeliverables = await ctx.db
+      .query("deliverables")
+      .withIndex("by_capstone_project", (q) =>
+        q.eq("capstoneProjectId", project._id),
+      )
+      .collect();
+    const chapterProgress = computeProgress(projectDeliverables).chapters.slice(0, 3);
+    const latestChapters = chapterProgress.map((chapter) => {
+      const latest = projectDeliverables.find(
+        (deliverable) => deliverable._id === chapter.latestId,
+      );
+      if (!latest) {
+        throwUserError(
+          `Can't record the result because Chapter ${chapter.chapter} has no submitted version.`,
+        );
+      }
+      return latest;
+    });
+
     const chapterStatus = args.result === "passed" ? "approved" : "needs_revision";
-    for (const phase of CHAPTER_PHASES.slice(0, 3)) {
-      const latestChapter = await ctx.db
-        .query("deliverables")
-        .withIndex("by_capstone_project_phase_version", (q) =>
-          q.eq("capstoneProjectId", project._id).eq("phase", phase),
-        )
-        .order("desc")
-        .first();
-      if (latestChapter && latestChapter.status !== chapterStatus) {
-        await ctx.db.patch(latestChapter._id, { status: chapterStatus });
+    for (const chapter of latestChapters) {
+      if (chapter.status !== chapterStatus) {
+        await ctx.db.patch(chapter._id, { status: chapterStatus });
       }
     }
 
@@ -476,6 +511,7 @@ export const recordDefenseResult = mutation({
     }
 
     if (args.result === "failed") {
+      await setLatestChapterStatuses(ctx, project._id, 5, "needs_revision");
       // Back to "endorsed" so the instructor can schedule a re-defense
       await ctx.db.patch(project._id, {
         stage: "endorsed",
@@ -487,6 +523,9 @@ export const recordDefenseResult = mutation({
         defenseRecordedAt: undefined,
       });
     } else {
+      if (args.result === "passed_with_revisions") {
+        await setLatestChapterStatuses(ctx, project._id, 5, "needs_revision");
+      }
       await ctx.db.patch(project._id, {
         // Pass: straight to IMRaD. Pass with revisions: evaluation forms, then revisions.
         stage: args.result === "passed" ? "ready_to_archive" : "final_revisions",
