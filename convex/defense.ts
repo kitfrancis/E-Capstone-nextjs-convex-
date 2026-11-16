@@ -528,7 +528,7 @@ export const recordDefenseResult = mutation({
       });
     } else {
       await ctx.db.patch(project._id, {
-        // Pass: straight to IMRaD. Pass with revisions: evaluation forms, then revisions.
+        // Pass: straight to IMRaD. Pass with revisions: the team resubmits every chapter.
         stage: args.result === "passed" ? "ready_to_archive" : "final_revisions",
         defenseResult: args.result,
         finalGrade: args.result === "passed" ? "Passed" : "Passed with revisions",
@@ -540,7 +540,7 @@ export const recordDefenseResult = mutation({
       args.result === "passed"
         ? "The project is ready for archiving."
         : args.result === "passed_with_revisions"
-          ? "The team should review the panel evaluation forms and complete final revisions."
+          ? "The team should update and resubmit every chapter as final revisions."
           : "A final re-defense needs to be scheduled.";
     await notifyDefenseContacts(
       ctx,
@@ -554,42 +554,9 @@ export const recordDefenseResult = mutation({
   },
 });
 
-// ───────────── Evaluation forms + final revisions ─────────────
+// ───────────── Final revisions ─────────────
 
-// Instructor uploads the 3 panel evaluation forms. Students see them once saved.
-export const uploadEvaluationForms = mutation({
-  args: {
-    projectId: v.id("capstoneProjects"),
-    files: v.array(v.object({ storageId: v.id("_storage"), fileName: v.string() })),
-  },
-  handler: async (ctx, args) => {
-    const { user, project } = await requireSupervisor(ctx, args.projectId);
-    if (project.stage !== "final_revisions") {
-      throwUserError("Evaluation forms are only needed for a 'passed with revisions' result.");
-    }
-    if (args.files.length !== 3) throwUserError("Upload exactly 3 evaluation forms.");
-
-    await ctx.db.patch(project._id, { evaluationForms: args.files });
-
-    for (const m of project.members ?? []) {
-      const id = ctx.db.normalizeId("users", m);
-      const member = id ? await ctx.db.get(id) : null;
-      if (member) {
-        await ctx.db.insert("notifications", {
-          userId: member.clerkId,
-          message: "The panel evaluation forms are ready. Review them before submitting your final revisions.",
-          read: false,
-          type: "evaluation_forms",
-          relatedId: project._id,
-          link: "/dashboard/student",
-        });
-      }
-    }
-    await logAction(ctx, user, "Uploaded evaluation forms", project.teamName);
-  },
-});
-
-// Forms (with download links) and revision progress for the student dashboard card
+// Revision progress for the student dashboard card
 export const finalRevisionInfo = query({
   args: { projectId: v.id("capstoneProjects") },
   handler: async (ctx, args) => {
@@ -601,10 +568,6 @@ export const finalRevisionInfo = query({
     const isOwner = user.role === "instructor" && project.instructorId === user._id;
     if (!isMember && !isOwner && user.role !== "admin") return null;
 
-    const forms: { fileName: string; url: string | null }[] = [];
-    for (const f of project.evaluationForms ?? []) {
-      forms.push({ fileName: f.fileName, url: await ctx.storage.getUrl(f.storageId) });
-    }
     const rev =
       project.stage === "final_revisions" || project.stage === "chapter_revisions"
         ? await revisionState(ctx, project)
@@ -612,7 +575,6 @@ export const finalRevisionInfo = query({
 
     return {
       stage: project.stage ?? null,
-      forms,
       revised: rev?.revised ?? 0,
       approved: rev?.approved ?? 0,
       total: rev?.total ?? 0,
@@ -634,7 +596,6 @@ export const syncFinalRevisions = mutation({
     const isOwner = user.role === "instructor" && project.instructorId === user._id;
     if (!isMember && !isOwner && user.role !== "admin") return;
 
-    if ((project.evaluationForms ?? []).length < 3) return;
     const s = await revisionState(ctx, project);
     if (s.revised < s.total || s.approved < s.total) return;
 

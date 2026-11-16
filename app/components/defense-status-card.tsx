@@ -39,7 +39,7 @@ export function DefenseBadge({ project, progress }: { project: Project; progress
     label = project.defenseResult === "failed" ? "Re-defense needed" : "Ready for defense";
     if (project.defenseResult === "failed") cls = AMBER;
   } else if (project.stage === "final_revisions") {
-    label = (project.evaluationForms?.length ?? 0) < 3 ? "Awaiting evaluation forms" : "Final revisions";
+    label = "Final revisions";
     cls = AMBER;
   } else if (project.stage === "chapter_revisions") {
     label = "Chapter review";
@@ -107,13 +107,8 @@ export function DefenseStatusCard({ project, progress }: { project: Project; pro
       text = "Your instructor will unlock the shared IMRaD process. Start it from My Manuscript when it is available.";
     }
   } else if (project.stage === "final_revisions") {
-    if ((project.evaluationForms?.length ?? 0) < 3) {
-      title = "Passed with revisions.";
-      text = "Your instructor will upload the 3 panel evaluation forms. You'll see them here before you start revising.";
-    } else {
-      title = "Revise your chapters.";
-      text = "Read the panel evaluation forms, then resubmit every chapter. Your instructor will check each one.";
-    }
+    title = "Passed with revisions.";
+    text = "Update and resubmit every chapter. Your instructor will check each one.";
   } else if (project.stage === "chapter_revisions") {
     title = "Updated chapters are under review.";
     text = "Your instructor must approve the latest version of every chapter again before IMRaD submission is unlocked.";

@@ -132,15 +132,6 @@ export default defineSchema({
     archiveEndorsedAt: v.optional(v.number()),
     defenseRecordedAt: v.optional(v.number()),
     imradUnlockedAt: v.optional(v.number()),
-    evaluationForms: v.optional(
-      v.array(
-        v.object({
-          storageId: v.id("_storage"),
-          fileName: v.string(),
-        })
-      )
-    ),
-    
   })
     .index("by_inviteCode", ["inviteCode"])
     .index("by_instructor_stage_result", ["instructorId", "stage", "defenseResult"]),
