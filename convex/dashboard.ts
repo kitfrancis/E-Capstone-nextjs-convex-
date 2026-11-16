@@ -626,15 +626,7 @@ export const saveDeliverable = mutation({
       }
     }
 
-    // Final revisions only open once the instructor uploaded the 3 evaluation forms
-    const inFinalRevisions = project.stage === "final_revisions";
-    const formsReady = (project.evaluationForms ?? []).length >= 3;
-    if (inFinalRevisions && !formsReady) {
-      throwUserError(
-        "Wait for your instructor to upload the panel evaluation forms before submitting revisions."
-      );
-    }
-    const revisionsOpen = inFinalRevisions && formsReady;
+    const revisionsOpen = project.stage === "final_revisions";
 
     let storageId = args.storageId;
     let draft: Doc<"deliverableDrafts"> | null = null;

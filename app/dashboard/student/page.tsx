@@ -924,9 +924,8 @@ function DashboardContent() {
   // Upload handler
   const chosenChapter = chapterOf(phase);
   const chosen = chosenChapter ? progress.chapters[chosenChapter - 1] : null;
-  // Approved chapters can be resubmitted during final revisions (after the forms are up)
-  const revisionsOpen =
-    project?.stage === "final_revisions" && (project.evaluationForms?.length ?? 0) >= 3;
+  // Approved chapters can be resubmitted during final revisions
+  const revisionsOpen = project?.stage === "final_revisions";
   const alreadyApproved = chosen?.status === "approved" && !revisionsOpen;
 
   // Chapters 4-5 stay locked until the proposal defense is passed

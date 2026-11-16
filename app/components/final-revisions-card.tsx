@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { ClipboardList, Clock, FileText } from "lucide-react";
+import { ClipboardList, Clock } from "lucide-react";
 
 export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProjects"> }) {
   const info = useQuery(api.defense.finalRevisionInfo, { projectId });
@@ -11,7 +11,7 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
 
   const revising = info.stage === "final_revisions";
   const reviewingChapterEdits = info.stage === "chapter_revisions";
-  if (!revising && !reviewingChapterEdits && info.forms.length === 0) return null;
+  if (!revising && !reviewingChapterEdits) return null;
 
   const allRevised = info.total > 0 && info.revised === info.total;
   const underReview =
@@ -32,9 +32,7 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
             <p className="text-xs text-muted-foreground">
               {reviewingChapterEdits
                 ? "A chapter was updated after approval. Your instructor must approve the latest versions before IMRaD is unlocked."
-                : info.forms.length === 0
-                ? "Waiting for your instructor to upload the panel evaluation forms."
-                : "Read the evaluation forms, then resubmit every chapter with your revisions."}
+                : "Resubmit every chapter with your revisions. Your instructor will check each one."}
             </p>
           </div>
         </div>
@@ -43,7 +41,7 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
             <Clock className="h-3.5 w-3.5" />
             {info.approved}/{info.total} chapters approved
           </span>
-        ) : revising && info.forms.length > 0 ? (
+        ) : revising ? (
           <span
             className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
               underReview
@@ -58,24 +56,6 @@ export function FinalRevisionsCard({ projectId }: { projectId: Id<"capstoneProje
           </span>
         ) : null}
       </div>
-
-      {info.forms.length > 0 && (
-        <ul className="mt-3 grid gap-2 sm:grid-cols-3">
-          {info.forms.map((f, i) => (
-            <li key={i}>
-              <a
-                href={f.url ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50"
-              >
-                <FileText className="h-4 w-4 shrink-0 text-blue-600" />
-                <span className="truncate">Panel {i + 1}: {f.fileName}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
