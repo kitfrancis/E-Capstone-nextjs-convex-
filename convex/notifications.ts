@@ -16,6 +16,10 @@ export const NOTIFICATION_TYPES = [
   "chat_message",
   "deliverable_needs_revision",
   "deliverable_approved",
+  "proposal_defense_scheduled",
+  "proposal_defense_result",
+  "final_defense_scheduled",
+  "final_defense_result",
 ] as const;
 
 const MAX_LIST = 50;
