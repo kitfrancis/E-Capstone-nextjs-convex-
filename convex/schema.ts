@@ -244,7 +244,7 @@ export default defineSchema({
 
   workspaceChatMessages: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),
-    phase: v.string(),
+    phase: v.optional(v.string()),
     authorId: v.id("users"),
     authorName: v.string(),
     authorRole: v.union(
@@ -255,7 +255,9 @@ export default defineSchema({
     ),
     message: v.string(),
     createdAt: v.number(),
-  }).index("by_project_phase", ["capstoneProjectId", "phase"]),
+  })
+    .index("by_project", ["capstoneProjectId"])
+    .index("by_project_phase", ["capstoneProjectId", "phase"]),
 
   tasks: defineTable({
     capstoneProjectId: v.id("capstoneProjects"),

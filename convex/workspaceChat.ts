@@ -9,7 +9,7 @@ const messageValidator = v.object({
   _id: v.id("workspaceChatMessages"),
   _creationTime: v.number(),
   capstoneProjectId: v.id("capstoneProjects"),
-  phase: v.string(),
+  phase: v.optional(v.string()),
   authorId: v.id("users"),
   authorName: v.string(),
   authorRole: v.union(
@@ -56,7 +56,6 @@ async function requireProjectAccess(
 export const list = query({
   args: {
     capstoneProjectId: v.id("capstoneProjects"),
-    phase: v.string(),
     paginationOpts: paginationOptsValidator,
   },
   returns: paginationResultValidator(messageValidator),
@@ -66,8 +65,8 @@ export const list = query({
 
     return await ctx.db
       .query("workspaceChatMessages")
-      .withIndex("by_project_phase", (q) =>
-        q.eq("capstoneProjectId", args.capstoneProjectId).eq("phase", args.phase),
+      .withIndex("by_project", (q) =>
+        q.eq("capstoneProjectId", args.capstoneProjectId),
       )
       .order("desc")
       .paginate(args.paginationOpts);
@@ -77,7 +76,6 @@ export const list = query({
 export const send = mutation({
   args: {
     capstoneProjectId: v.id("capstoneProjects"),
-    phase: v.string(),
     message: v.string(),
   },
   returns: v.id("workspaceChatMessages"),
@@ -88,13 +86,9 @@ export const send = mutation({
     const message = args.message.trim();
     if (!message) throwUserError("Message cannot be empty");
     if (message.length > 2000) throwUserError("Message must be 2000 characters or fewer");
-    if (!args.phase.trim() || args.phase.length > 100) {
-      throwUserError("Invalid chapter or phase");
-    }
 
     return await ctx.db.insert("workspaceChatMessages", {
       capstoneProjectId: args.capstoneProjectId,
-      phase: args.phase,
       authorId: caller._id,
       authorName: caller.name,
       authorRole: caller.role,

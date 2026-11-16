@@ -19,14 +19,12 @@ const roleLabels = {
 
 export default function WorkspaceChat({
   capstoneProjectId,
-  phase,
 }: {
   capstoneProjectId: Id<"capstoneProjects">;
-  phase: string;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.workspaceChat.list,
-    { capstoneProjectId, phase },
+    { capstoneProjectId },
     { initialNumItems: 40 },
   );
   const currentUser = useQuery(api.users.getMe);
@@ -49,7 +47,7 @@ export default function WorkspaceChat({
     setSending(true);
     setError(null);
     try {
-      await sendMessage({ capstoneProjectId, phase, message: trimmedMessage });
+      await sendMessage({ capstoneProjectId, message: trimmedMessage });
       setMessage("");
     } catch (sendError) {
       setError(getConvexErrorMessage(sendError, "Couldn't send your message."));
@@ -67,7 +65,7 @@ export default function WorkspaceChat({
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold">Team chat</h2>
           <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-            {phase} · shared with your project
+            Shared with your project
           </p>
         </div>
       </header>
