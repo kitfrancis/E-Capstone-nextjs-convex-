@@ -5,7 +5,7 @@ import { throwUserError } from "./errors";
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
-import { computeProgress } from "../lib/progress";
+import { chapterOf, computeProgress } from "../lib/progress";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
 
@@ -616,7 +616,7 @@ export const saveDeliverable = mutation({
     }
 
     // Chapters 4-5 stay locked until the proposal defense is passed
-    const chapterNum = Number(args.phase.match(/\d+/)?.[0]);
+    const chapterNum = chapterOf(args.phase) ?? Number.NaN;
     if (chapterNum >= 4) {
       const proposalPassed =
         project.proposalResult === "passed" ||
@@ -663,17 +663,28 @@ export const saveDeliverable = mutation({
     }
 
     // Next version = highest existing version for this chapter in this project, plus 1
-    const existing = await ctx.db
+    const projectDeliverables = await ctx.db
       .query("deliverables")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("capstoneProjectId"), args.capstoneProjectId),
-          q.eq(q.field("phase"), args.phase)
-        )
+      .withIndex("by_capstone_project", (q) =>
+        q.eq("capstoneProjectId", args.capstoneProjectId),
       )
-      .collect();
+      .take(500);
+    if (projectDeliverables.length === 500) {
+      throwUserError("This team has too many deliverable versions to safely submit another.");
+    }
+
+    const existing = projectDeliverables.filter((deliverable) =>
+      chapterNum
+        ? chapterOf(deliverable.phase) === chapterNum
+        : deliverable.phase === args.phase,
+    );
     const latest = existing.reduce<Doc<"deliverables"> | null>(
-      (a, d) => (!a || d.version > a.version ? d : a),
+      (a, d) =>
+        !a ||
+        d.version > a.version ||
+        (d.version === a.version && d.uploadedAt > a.uploadedAt)
+          ? d
+          : a,
       null
     );
 
