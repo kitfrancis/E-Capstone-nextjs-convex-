@@ -5,6 +5,15 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -384,6 +393,8 @@ export default function InstructorTeamManagementPage() {
   // Invite code
   const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
   const [viewingTeam, setViewingTeam] = useState<Doc<"capstoneProjects"> | null>(null);
+  const [teamToApprove, setTeamToApprove] = useState<Doc<"capstoneProjects"> | null>(null);
+  const [isApprovingFinal, setIsApprovingFinal] = useState(false);
 
   const copyInviteCode = (code: string, teamId: string) => {
     navigator.clipboard.writeText(code);
@@ -420,17 +431,20 @@ export default function InstructorTeamManagementPage() {
 
   // Approve final revisions: moves the project to "ready_to_archive"
   const approveFinalRevisions = useMutation(api.dashboard.approveFinalRevisions);
-  const handleApproveFinal = async (team: Doc<"capstoneProjects">) => {
-    const ok = window.confirm(
-      `Approve the final revisions of ${team.teamName}? You can then unlock the IMRaD process for the team.`
-    );
-    if (!ok) return;
+  const handleApproveFinal = async () => {
+    if (!teamToApprove || isApprovingFinal) return;
+
+    const team = teamToApprove;
+    setIsApprovingFinal(true);
     try {
       await approveFinalRevisions({ projectId: team._id });
       toast.success(`${team.teamName} is now eligible for the IMRaD unlock.`);
+      setTeamToApprove(null);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Couldn't approve the final revisions.");
+    } finally {
+      setIsApprovingFinal(false);
     }
   };
 
@@ -704,7 +718,7 @@ export default function InstructorTeamManagementPage() {
                         {awaitingFinalApproval ? (
                           <Button
                             size="sm"
-                            onClick={() => handleApproveFinal(team)}
+                            onClick={() => setTeamToApprove(team)}
                             className="flex-1 rounded-full bg-emerald-600 px-4 text-white hover:bg-emerald-700 sm:flex-none"
                           >
                             <Check className="h-3.5 w-3.5" /> Approve Final Revisions
@@ -1207,6 +1221,33 @@ export default function InstructorTeamManagementPage() {
           onClose={() => setViewingTeam(null)}
         />
       )}
+
+      <AlertDialog
+        open={teamToApprove !== null}
+        onOpenChange={(open) => {
+          if (!open && !isApprovingFinal) setTeamToApprove(null);
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Approve final revisions?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Approving <span className="font-medium text-foreground">{teamToApprove?.teamName}</span>
+              &apos;s final revisions makes the team eligible for the IMRaD unlock.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isApprovingFinal}>Cancel</AlertDialogCancel>
+            <Button
+              onClick={handleApproveFinal}
+              disabled={isApprovingFinal || !teamToApprove}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {isApprovingFinal ? "Approving..." : "Approve Final Revisions"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* PDF viewer: its Comment button hands the file over to OnlyOffice */}
       <PDFViewer
