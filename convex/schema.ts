@@ -24,6 +24,8 @@ export default defineSchema({
       )
     ),
     inviteCode: v.optional(v.string()),
+    privacyConsentAt: v.optional(v.number()),
+    privacyConsentVersion: v.optional(v.string()),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_studentno", ["studentNo"])

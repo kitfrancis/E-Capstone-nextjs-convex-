@@ -2,6 +2,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { throwUserError } from "./errors";
+import { PRIVACY_NOTICE_VERSION } from "../lib/privacy-consent";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,6 +70,7 @@ export const registerStudent = mutation({
     program: v.string(),
     section: v.string(),
     inviteCode: v.string(),
+    privacyConsentVersion: v.literal(PRIVACY_NOTICE_VERSION),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -109,6 +111,8 @@ export const registerStudent = mutation({
       studentNo,
       program: args.program,
       section: args.section,
+      privacyConsentAt: Date.now(),
+      privacyConsentVersion: args.privacyConsentVersion,
     });
 
     await ctx.db.patch(team._id, {
@@ -133,6 +137,7 @@ export const registerStaff = mutation({
     name: v.string(),
     email: v.string(),
     role: v.union(v.literal("instructor"), v.literal("adviser")),
+    privacyConsentVersion: v.literal(PRIVACY_NOTICE_VERSION),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -150,6 +155,8 @@ export const registerStaff = mutation({
       email: identity.email ?? args.email,
       role: args.role,
       status: "pending",
+      privacyConsentAt: Date.now(),
+      privacyConsentVersion: args.privacyConsentVersion,
     });
 
     await logAction(

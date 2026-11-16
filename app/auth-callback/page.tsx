@@ -6,6 +6,10 @@ import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
+import {
+  PRIVACY_CONSENT_SESSION_KEY,
+  PRIVACY_NOTICE_VERSION,
+} from "@/lib/privacy-consent";
 
 const ROLES = ["student", "instructor", "adviser", "admin"] as const;
 type Role = (typeof ROLES)[number];
@@ -74,11 +78,21 @@ export default function AuthCallback() {
         }
 
         // Instructor / adviser: registered as "pending" until an admin approves.
+        const privacyConsentVersion = sessionStorage.getItem(
+          PRIVACY_CONSENT_SESSION_KEY
+        );
+        if (privacyConsentVersion !== PRIVACY_NOTICE_VERSION) {
+          router.replace(`/sign-up/clerk-signup?role=${intendedRole}`);
+          handled.current = false;
+          return;
+        }
+
         try {
           await registerStaff({
             name: user.fullName ?? "Unknown",
             email: user.primaryEmailAddress?.emailAddress ?? "",
             role: intendedRole, // "instructor" | "adviser"
+            privacyConsentVersion,
           });
         } catch (err) {
           console.error("registerStaff failed:", err);
@@ -93,6 +107,7 @@ export default function AuthCallback() {
         }
 
         sessionStorage.removeItem("intendedRole");
+        sessionStorage.removeItem(PRIVACY_CONSENT_SESSION_KEY);
         router.replace("/pending-approval");
         return;
       }
