@@ -347,9 +347,6 @@ export const scheduleProposalDefense = mutation({
     }
 
     const wasScheduled = project.stage === "proposal_scheduled";
-    if (project.proposalResult === "failed") {
-      await setLatestChapterStatuses(ctx, project._id, 3, "needs_revision");
-    }
     await ctx.db.patch(project._id, {
       stage: "proposal_scheduled",
       proposalDate: args.date,
@@ -510,8 +507,15 @@ export const recordDefenseResult = mutation({
       throwUserError("There's no scheduled defense to record a result for.");
     }
 
+    // Same rule as the proposal result: a pass approves the chapters, anything else reopens them
+    await setLatestChapterStatuses(
+      ctx,
+      project._id,
+      5,
+      args.result === "passed" ? "approved" : "needs_revision",
+    );
+
     if (args.result === "failed") {
-      await setLatestChapterStatuses(ctx, project._id, 5, "needs_revision");
       // Back to "endorsed" so the instructor can schedule a re-defense
       await ctx.db.patch(project._id, {
         stage: "endorsed",
@@ -523,9 +527,6 @@ export const recordDefenseResult = mutation({
         defenseRecordedAt: undefined,
       });
     } else {
-      if (args.result === "passed_with_revisions") {
-        await setLatestChapterStatuses(ctx, project._id, 5, "needs_revision");
-      }
       await ctx.db.patch(project._id, {
         // Pass: straight to IMRaD. Pass with revisions: evaluation forms, then revisions.
         stage: args.result === "passed" ? "ready_to_archive" : "final_revisions",
