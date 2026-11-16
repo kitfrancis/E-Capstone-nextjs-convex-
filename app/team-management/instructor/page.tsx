@@ -67,9 +67,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 
 const PDFViewer = dynamic(
@@ -558,7 +555,6 @@ export default function InstructorTeamManagementPage() {
           teamName: team.teamName,
           phase,
           deliverable: versions[0] ?? null,
-          olderVersions: versions.slice(1),
         };
       })
     )
@@ -985,7 +981,7 @@ export default function InstructorTeamManagementPage() {
                   ) : (
                     <div className="space-y-3">
                       {shownDeliverables?.map(
-                        ({ capstoneProjectId, teamName, phase, deliverable: d, olderVersions }) => (
+                        ({ capstoneProjectId, teamName, phase, deliverable: d }) => (
                           <div key={`${capstoneProjectId}-${phase}`} className={rowClass}>
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-600 sm:h-11 sm:w-11 dark:bg-green-900/50 dark:text-green-300">
@@ -1053,24 +1049,6 @@ export default function InstructorTeamManagementPage() {
                                     >
                                       View File
                                     </DropdownMenuItem>
-                                    {olderVersions.length > 0 && (
-                                      <DropdownMenuSub>
-                                        <DropdownMenuSubTrigger>
-                                          Previous versions ({olderVersions.length})
-                                        </DropdownMenuSubTrigger>
-                                        <DropdownMenuSubContent className="w-52">
-                                          {olderVersions.map((version) => (
-                                            <DropdownMenuItem
-                                              key={version._id}
-                                              disabled={!version.storageId}
-                                                onClick={() => openDeliverable(version)}
-                                            >
-                                              Version {version.version} • {formatDate(version.uploadedAt)}
-                                            </DropdownMenuItem>
-                                          ))}
-                                        </DropdownMenuSubContent>
-                                      </DropdownMenuSub>
-                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </div>
