@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
+import Link from "next/link";
 import {
   User,
   GraduationCap,
@@ -256,6 +257,14 @@ export default function LandingPage() {
               <p>
                 Developed by Kit Francis Besa, Carl Andrei Diomon, Stephen
                 Gabarda and Kyle Steven Morillo.
+              </p>
+              <p className="mt-3 flex justify-center gap-4">
+                <Link href="/privacy-policy" className="underline underline-offset-2 hover:text-white">
+                  Privacy Policy
+                </Link>
+                <Link href="/terms-of-service" className="underline underline-offset-2 hover:text-white">
+                  Terms of Service
+                </Link>
               </p>
             </div>
           </div>
