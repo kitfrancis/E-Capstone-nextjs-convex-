@@ -20,6 +20,44 @@ async function currentUser(ctx: QueryCtx | MutationCtx) {
 
 const IMRAD_PHASE = "IMRaD Final";
 
+function defenseResultLabel(
+  result: "passed" | "passed_with_revisions" | "failed"
+) {
+  if (result === "passed_with_revisions") return "Passed with revisions";
+  return result === "passed" ? "Passed" : "Failed";
+}
+
+async function notifyDefenseContacts(
+  ctx: MutationCtx,
+  project: Doc<"capstoneProjects">,
+  message: string,
+  type: string
+) {
+  const recipientIds = new Set([
+    ...(project.members ?? []),
+    ...(project.adviserId ? [project.adviserId] : []),
+  ]);
+
+  for (const recipientId of recipientIds) {
+    const userId = ctx.db.normalizeId("users", recipientId);
+    if (!userId) continue;
+    const recipient = await ctx.db.get(userId);
+    if (!recipient) continue;
+
+    const isAdviser = project.adviserId === recipient._id;
+    await ctx.db.insert("notifications", {
+      userId: recipient._id,
+      message,
+      read: false,
+      type,
+      relatedId: project._id,
+      link: isAdviser
+        ? `/dashboard/adviser?projectId=${project._id}`
+        : "/dashboard/student",
+    });
+  }
+}
+
 async function latestImrad(ctx: QueryCtx | MutationCtx, projectId: Id<"capstoneProjects">) {
   const docs = await ctx.db
     .query("deliverables")
@@ -278,6 +316,7 @@ export const scheduleProposalDefense = mutation({
     venue: v.string(),
     panel: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "proposal_endorsed" && project.stage !== "proposal_scheduled") {
@@ -287,6 +326,7 @@ export const scheduleProposalDefense = mutation({
       throwUserError("Date, venue and panel are required.");
     }
 
+    const wasScheduled = project.stage === "proposal_scheduled";
     await ctx.db.patch(project._id, {
       stage: "proposal_scheduled",
       proposalDate: args.date,
@@ -294,7 +334,16 @@ export const scheduleProposalDefense = mutation({
       proposalPanel: args.panel.trim(),
       proposalResult: undefined, // clears a previous "failed" result on re-defense
     });
+    await notifyDefenseContacts(
+      ctx,
+      project,
+      `The Pre-Oral/Proposal Defense for ${project.teamName} has been ${
+        wasScheduled ? "rescheduled" : "scheduled"
+      }.\nDate and time: ${args.date.replace("T", " ")}\nVenue: ${args.venue.trim()}\nPanel: ${args.panel.trim()}`,
+      "proposal_defense_scheduled"
+    );
     await logAction(ctx, user, "Scheduled proposal defense", `${project.teamName}: ${args.date}`);
+    return null;
   },
 });
 
@@ -350,6 +399,20 @@ export const recordProposalResult = mutation({
       "Recorded proposal defense result",
       `${project.teamName}: ${args.result}`
     );
+    const nextStep =
+      args.result === "passed"
+        ? "Chapters 1–3 are approved. The team can continue with Chapters 4–5."
+        : args.result === "passed_with_revisions"
+          ? "Chapters 1–3 need revision. The team can continue with Chapters 4–5."
+          : "Chapters 1–3 need revision. A re-defense needs to be scheduled.";
+    await notifyDefenseContacts(
+      ctx,
+      project,
+      `Pre-Oral/Proposal Defense result for ${project.teamName}: ${defenseResultLabel(
+        args.result
+      )}. ${nextStep}`,
+      "proposal_defense_result"
+    );
     return null;
   },
 });
@@ -363,6 +426,7 @@ export const scheduleDefense = mutation({
     venue: v.string(),
     panel: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "endorsed" && project.stage !== "defense_scheduled") {
@@ -372,6 +436,7 @@ export const scheduleDefense = mutation({
       throwUserError("Date, venue and panel are required.");
     }
 
+    const wasScheduled = project.stage === "defense_scheduled";
     await ctx.db.patch(project._id, {
       stage: "defense_scheduled",
       defenseDate: args.date,
@@ -379,7 +444,16 @@ export const scheduleDefense = mutation({
       defensePanel: args.panel.trim(),
       defenseResult: undefined, // clears a previous "failed" result on re-defense
     });
+    await notifyDefenseContacts(
+      ctx,
+      project,
+      `The Final Defense for ${project.teamName} has been ${
+        wasScheduled ? "rescheduled" : "scheduled"
+      }.\nDate and time: ${args.date.replace("T", " ")}\nVenue: ${args.venue.trim()}\nPanel: ${args.panel.trim()}`,
+      "final_defense_scheduled"
+    );
     await logAction(ctx, user, "Scheduled defense", `${project.teamName}: ${args.date}`);
+    return null;
   },
 });
 
@@ -394,6 +468,7 @@ export const recordDefenseResult = mutation({
     ),
     grade: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "defense_scheduled") {
@@ -421,6 +496,21 @@ export const recordDefenseResult = mutation({
       });
     }
     await logAction(ctx, user, "Recorded defense result", `${project.teamName}: ${args.result}`);
+    const nextStep =
+      args.result === "passed"
+        ? "The project is ready for archiving."
+        : args.result === "passed_with_revisions"
+          ? "The team should review the panel evaluation forms and complete final revisions."
+          : "A final re-defense needs to be scheduled.";
+    await notifyDefenseContacts(
+      ctx,
+      project,
+      `Final Defense result for ${project.teamName}: ${defenseResultLabel(
+        args.result
+      )}. ${nextStep}`,
+      "final_defense_result"
+    );
+    return null;
   },
 });
 
