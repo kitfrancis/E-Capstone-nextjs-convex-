@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import { computeProgress, CHAPTER_MAX } from "@/lib/progress";
 import { chapterOf } from "@/lib/progress";
@@ -81,7 +82,7 @@ export default function InstructorTeamPage() {
     } catch (error) {
       console.error("Failed to unlock student IMRaD:", error);
       setImradActionError(
-        error instanceof Error ? error.message : "Could not unlock IMRaD."
+        getConvexErrorMessage(error, "Could not unlock IMRaD.")
       );
     } finally {
       setUnlockingImrad(false);

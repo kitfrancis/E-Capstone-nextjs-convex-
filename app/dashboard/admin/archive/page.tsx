@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,7 +170,7 @@ export default function AdminArchivePage() {
       setShowUpload(false);
       resetUpload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
+      setError(getConvexErrorMessage(err, "Upload failed."));
     } finally {
       setUploading(false);
     }
@@ -181,7 +182,7 @@ export default function AdminArchivePage() {
     try {
       await deleteProject({ projectId: id });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Delete failed.");
+      alert(getConvexErrorMessage(err, "Delete failed."));
     }
   };
 
@@ -203,7 +204,7 @@ export default function AdminArchivePage() {
       await resetPrajikProjectProcess({ projectId });
     } catch (err) {
       console.error("Failed to cancel the Prajik archive:", err);
-      alert(err instanceof Error ? err.message : "Could not reset the archived project.");
+      alert(getConvexErrorMessage(err, "Could not reset the archived project."));
     } finally {
       setRestartingArchiveId(null);
     }

@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
@@ -73,15 +74,15 @@ function canManage(user: Doc<"users">, project: Doc<"capstoneProjects">) {
 // Signed-in, approved user for MUTATIONS. Throws.
 async function requireCaller(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Not signed in");
+  if (!identity) throwUserError("Not signed in");
 
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .first();
-  if (!user) throw new Error("User not found");
+  if (!user) throwUserError("User not found");
   if (user.status === "pending" || user.status === "rejected") {
-    throw new Error("Your account is awaiting admin approval");
+    throwUserError("Your account is awaiting admin approval");
   }
   return user;
 }
@@ -89,7 +90,7 @@ async function requireCaller(ctx: MutationCtx) {
 // Signed in AND one of the given roles
 async function requireRole(ctx: MutationCtx, roles: Role[]) {
   const user = await requireCaller(ctx);
-  if (!roles.includes(user.role)) throw new Error("Not authorized");
+  if (!roles.includes(user.role)) throwUserError("Not authorized");
   return user;
 }
 
@@ -110,17 +111,15 @@ async function deleteDeliverableCascade(
     .collect();
 
   // Each file is deleted once; a file that's already gone is ignored
-  const files = new Set<string>();
+  const files = new Set<Id<"_storage">>();
   if (d.storageId) files.add(d.storageId);
   for (const draft of drafts) {
     files.add(draft.storageId);
     await ctx.db.delete(draft._id);
   }
   for (const id of files) {
-    try {
-      await ctx.storage.delete(id as Id<"_storage">);
-    } catch {
-      // already deleted
+    if (await ctx.db.system.get("_storage", id)) {
+      await ctx.storage.delete(id);
     }
   }
 
@@ -362,7 +361,7 @@ export const setMyTeamRole = mutation({
     const caller = await requireRole(ctx, ["student"]);
     const project = await ctx.db.get(args.capstoneProjectId);
     if (!project || !(project.members ?? []).includes(caller._id)) {
-      throw new Error("You are not a member of this team.");
+      throwUserError("You are not a member of this team.");
     }
 
     const existingRoles = project.teamRoles ?? [];
@@ -603,15 +602,15 @@ export const saveDeliverable = mutation({
     const caller = await requireCaller(ctx);
 
     const project = await ctx.db.get(args.capstoneProjectId);
-    if (!project) throw new Error("Team not found");
+    if (!project) throwUserError("Team not found");
     if (caller.role !== "admin" && !(project.members ?? []).includes(caller._id)) {
-      throw new Error("Not authorized");
+      throwUserError("Not authorized");
     }
     if (project.stage === "archived") {
-      throw new Error("This project is archived and read-only.");
+      throwUserError("This project is archived and read-only.");
     }
     if (args.phase === IMRAD_PHASE) {
-      throw new Error(
+      throwUserError(
         "IMRaD documents must be created through the instructor-unlocked workflow."
       );
     }
@@ -623,7 +622,7 @@ export const saveDeliverable = mutation({
         project.proposalResult === "passed" ||
         project.proposalResult === "passed_with_revisions";
       if (!proposalPassed) {
-        throw new Error("Chapters 4–5 unlock after the proposal defense is passed.");
+        throwUserError("Chapters 4–5 unlock after the proposal defense is passed.");
       }
     }
 
@@ -631,7 +630,7 @@ export const saveDeliverable = mutation({
     const inFinalRevisions = project.stage === "final_revisions";
     const formsReady = (project.evaluationForms ?? []).length >= 3;
     if (inFinalRevisions && !formsReady) {
-      throw new Error(
+      throwUserError(
         "Wait for your instructor to upload the panel evaluation forms before submitting revisions."
       );
     }
@@ -649,7 +648,7 @@ export const saveDeliverable = mutation({
           )
           .first();
         if (submitted) return submitted.version;
-        throw new Error("This draft was already submitted or is no longer available.");
+        throwUserError("This draft was already submitted or is no longer available.");
       }
 
       const original = await ctx.db.get(draft.deliverableId);
@@ -658,7 +657,7 @@ export const saveDeliverable = mutation({
         original.capstoneProjectId !== args.capstoneProjectId ||
         original.phase !== args.phase
       ) {
-        throw new Error("Draft does not match this project and chapter.");
+        throwUserError("Draft does not match this project and chapter.");
       }
       storageId = draft.storageId;
     }
@@ -687,7 +686,7 @@ export const saveDeliverable = mutation({
       const alreadyRevised =
         revisionsOpen && Date.parse(latest.uploadedAt) > (project.defenseRecordedAt ?? 0);
       if (!revisionsOpen || alreadyRevised) {
-        throw new Error("This chapter is already approved.");
+        throwUserError("This chapter is already approved.");
       }
     }
 
@@ -768,10 +767,10 @@ export const approveFinalRevisions = mutation({
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Team not found");
-    if (!canManage(caller, project)) throw new Error("Not authorized");
+    if (!project) throwUserError("Team not found");
+    if (!canManage(caller, project)) throwUserError("Not authorized");
     if (project.stage !== "final_revisions") {
-      throw new Error("This team isn't in the final revisions stage.");
+      throwUserError("This team isn't in the final revisions stage.");
     }
 
     await ctx.db.patch(args.projectId, { stage: "ready_to_archive" });
@@ -811,7 +810,7 @@ export const deleteDeliverable = mutation({
 
     const project = await ctx.db.get(deliverable.capstoneProjectId);
     if (!project || !canAccess(caller, project)) {
-      throw new Error("Not authorized");
+      throwUserError("Not authorized");
     }
 
     await deleteDeliverableCascade(ctx, deliverable);
@@ -834,11 +833,11 @@ export const adviserDeliverableStatus = mutation({
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const deliverable = await ctx.db.get(args.deliverableId);
-    if (!deliverable) throw new Error("Deliverable not found");
+    if (!deliverable) throwUserError("Deliverable not found");
 
     const project = await ctx.db.get(deliverable.capstoneProjectId);
     if (!project || !canManage(caller, project)) {
-      throw new Error("Only this team's instructor can change the status.");
+      throwUserError("Only this team's instructor can change the status.");
     }
 
     const changed = deliverable.status !== args.status;
@@ -938,7 +937,7 @@ export const createCapstoneProject = mutation({
       adviser.status === "pending" ||
       adviser.status === "rejected"
     ) {
-      throw new Error("Please choose a valid, approved adviser.");
+      throwUserError("Please choose a valid, approved adviser.");
     }
 
     // Generate a unique invite code
@@ -1002,8 +1001,8 @@ export const updateTeam = mutation({
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const team = await ctx.db.get(args.teamId);
-    if (!team) throw new Error("Team not found");
-    if (!canManage(caller, team)) throw new Error("Not authorized");
+    if (!team) throwUserError("Team not found");
+    if (!canManage(caller, team)) throwUserError("Not authorized");
 
     const updates: Partial<Doc<"capstoneProjects">> = {
       teamName: args.teamName,
@@ -1023,7 +1022,7 @@ export const updateTeam = mutation({
           adviser.status === "pending" ||
           adviser.status === "rejected"
         ) {
-          throw new Error("Please choose a valid, approved adviser.");
+          throwUserError("Please choose a valid, approved adviser.");
         }
         updates.adviserId = adviser._id;
       }
@@ -1045,8 +1044,8 @@ export const updateTeamMembers = mutation({
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const team = await ctx.db.get(args.teamId);
-    if (!team) throw new Error("Team not found");
-    if (!canManage(caller, team)) throw new Error("Not authorized");
+    if (!team) throwUserError("Team not found");
+    if (!canManage(caller, team)) throwUserError("Not authorized");
 
     // Every member must be a real student; drop duplicates
     const unique = Array.from(new Set(args.members));
@@ -1054,7 +1053,7 @@ export const updateTeamMembers = mutation({
       const id = ctx.db.normalizeId("users", m);
       const u = id ? await ctx.db.get(id) : null;
       if (!u || u.role !== "student") {
-        throw new Error("Team members must be existing students.");
+        throwUserError("Team members must be existing students.");
       }
     }
 
@@ -1071,7 +1070,7 @@ export const deleteTeam = mutation({
 
     const team = await ctx.db.get(args.teamId);
     if (!team) return;
-    if (!canManage(caller, team)) throw new Error("Not authorized");
+    if (!canManage(caller, team)) throwUserError("Not authorized");
 
     const tasks = await ctx.db
       .query("tasks")
@@ -1100,10 +1099,8 @@ export const deleteTeam = mutation({
         ...(wd ? [wd.storageId] : []),
       ]);
       for (const id of files) {
-        try {
+        if (await ctx.db.system.get("_storage", id)) {
           await ctx.storage.delete(id);
-        } catch {
-          // already deleted
         }
       }
       if (wd) await ctx.db.delete(wd._id);
@@ -1141,8 +1138,8 @@ export const createTask = mutation({
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const project = await ctx.db.get(args.capstoneProjectId);
-    if (!project) throw new Error("Team not found");
-    if (!canManage(caller, project)) throw new Error("Not authorized");
+    if (!project) throwUserError("Team not found");
+    if (!canManage(caller, project)) throwUserError("Not authorized");
 
     const taskId = await ctx.db.insert("tasks", {
       capstoneProjectId: args.capstoneProjectId,
@@ -1210,7 +1207,7 @@ export const createTaskForAllTeams = mutation({
         q.eq("instructorId", caller._id)
       )
       .collect();
-    if (teams.length === 0) throw new Error("You have no teams to assign this task to.");
+    if (teams.length === 0) throwUserError("You have no teams to assign this task to.");
 
     let teamsWithoutRoleCount = 0;
     for (const project of teams) {
@@ -1276,14 +1273,14 @@ export const updateTask = mutation({
     const caller = await requireRole(ctx, ["instructor", "admin"]);
 
     const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
+    if (!task) throwUserError("Task not found");
 
     // You must manage BOTH the team it's in now and the team you move it to
     const currentProject = await ctx.db.get(task.capstoneProjectId);
     const newProject = await ctx.db.get(args.capstoneProjectId);
-    if (!currentProject || !newProject) throw new Error("Team not found");
+    if (!currentProject || !newProject) throwUserError("Team not found");
     if (!canManage(caller, currentProject) || !canManage(caller, newProject)) {
-      throw new Error("Not authorized");
+      throwUserError("Not authorized");
     }
 
     await ctx.db.patch(args.taskId, {
@@ -1309,7 +1306,7 @@ export const deleteTask = mutation({
     if (!task) return;
 
     const project = await ctx.db.get(task.capstoneProjectId);
-    if (!project || !canManage(caller, project)) throw new Error("Not authorized");
+    if (!project || !canManage(caller, project)) throwUserError("Not authorized");
 
     await ctx.db.delete(args.taskId);
     await logAction(ctx, caller, "Deleted task", `${task.title} (team "${project.teamName}")`);
@@ -1335,11 +1332,11 @@ export const studentUpdateTask = mutation({
     const caller = await requireCaller(ctx);
 
     const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
+    if (!task) throwUserError("Task not found");
 
     const project = await ctx.db.get(task.capstoneProjectId);
     if (!project || !(project.members ?? []).includes(caller._id)) {
-      throw new Error("You are not on this team");
+      throwUserError("You are not on this team");
     }
     if (
       task.targetRole &&
@@ -1349,7 +1346,7 @@ export const studentUpdateTask = mutation({
           assignment.role === task.targetRole
       )
     ) {
-      throw new Error("This task is assigned to a different team role.");
+      throwUserError("This task is assigned to a different team role.");
     }
 
     const allowed =
@@ -1358,7 +1355,7 @@ export const studentUpdateTask = mutation({
       (args.status === "under_review" &&
         (task.status === "in_progress" || task.status === "needs_revision"));
     if (!allowed) {
-      throw new Error(`A ${task.status} task can't move to ${args.status}`);
+      throwUserError(`A ${task.status} task can't move to ${args.status}`);
     }
 
     await ctx.db.patch(args.taskId, { status: args.status });
@@ -1395,15 +1392,15 @@ export const reviewTask = mutation({
     const caller = await requireCaller(ctx);
 
     const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
+    if (!task) throwUserError("Task not found");
 
     const project = await ctx.db.get(task.capstoneProjectId);
-    if (!project) throw new Error("Team not found");
+    if (!project) throwUserError("Team not found");
     if (project.instructorId !== caller._id) {
-      throw new Error("Only this team's instructor can review tasks");
+      throwUserError("Only this team's instructor can review tasks");
     }
     if (task.status !== "under_review") {
-      throw new Error("This task isn't waiting for review");
+      throwUserError("This task isn't waiting for review");
     }
 
     const status = args.decision === "confirm" ? "completed" : "needs_revision";
@@ -1451,10 +1448,10 @@ export const addPdfComment = mutation({
     const caller = await requireCaller(ctx);
 
     const deliverable = await ctx.db.get(args.deliverableId);
-    if (!deliverable) throw new Error("Deliverable not found");
+    if (!deliverable) throwUserError("Deliverable not found");
     const project = await ctx.db.get(deliverable.capstoneProjectId);
     if (!project || !canAccess(caller, project)) {
-      throw new Error("Not authorized");
+      throwUserError("Not authorized");
     }
 
     const commentId = await ctx.db.insert("pdfComments", {
@@ -1513,7 +1510,7 @@ export const deletePdfComment = mutation({
     const isAuthor =
       comment.userId === caller._id || comment.userId === caller.clerkId;
     if (!isAuthor && caller.role !== "admin") {
-      throw new Error("You can only delete your own comments");
+      throwUserError("You can only delete your own comments");
     }
 
     await ctx.db.delete(args.commentId);
@@ -1561,14 +1558,14 @@ export const joinTeam = mutation({
         q.eq(q.field("inviteCode"), args.inviteCode.trim().toUpperCase())
       )
       .first();
-    if (!team) throw new Error("Invalid or expired invite code.");
+    if (!team) throwUserError("Invalid or expired invite code.");
 
     // One team per student
     const allTeams = await ctx.db.query("capstoneProjects").collect();
     const current = allTeams.find((t) => (t.members ?? []).includes(caller._id));
     if (current) {
       if (current._id === team._id) return { teamName: team.teamName };
-      throw new Error("You're already in a team.");
+      throwUserError("You're already in a team.");
     }
 
     await ctx.db.patch(team._id, {
@@ -1595,7 +1592,7 @@ export const notifyOfficeComment = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    if (args.secret !== process.env.ONLYOFFICE_SECRET) throwUserError("Forbidden");
 
     const deliverable = await ctx.db.get(args.deliverableId);
     if (!deliverable) return null;

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { CalendarDays, ClipboardCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import {
   Dialog,
   DialogContent,
@@ -106,7 +107,7 @@ export function ProposalDefenseButton({ project }: { project: Project }) {
       toast.success("Proposal defense scheduled.");
       setMode(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't schedule the defense.");
+      toast.error(getConvexErrorMessage(err, "Couldn't schedule the defense."));
     } finally {
       setBusy(false);
     }
@@ -127,7 +128,7 @@ export function ProposalDefenseButton({ project }: { project: Project }) {
       );
       setMode(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't record the result.");
+      toast.error(getConvexErrorMessage(err, "Couldn't record the result."));
     } finally {
       setBusy(false);
     }

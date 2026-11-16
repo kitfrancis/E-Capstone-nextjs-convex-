@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
 // Relative import: the "@/" alias may not resolve inside the convex/ folder.
@@ -85,16 +86,16 @@ export const endorseForArchiving = mutation({
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (user.role !== "instructor") {
-      throw new Error("Only the project's instructor can endorse it for archiving.");
+      throwUserError("Only the project's instructor can endorse it for archiving.");
     }
     if (project.stage !== "ready_to_archive") {
-      throw new Error("This project isn't ready to be endorsed.");
+      throwUserError("This project isn't ready to be endorsed.");
     }
-    if (project.archiveEndorsedAt) throw new Error("Already endorsed for archiving.");
+    if (project.archiveEndorsedAt) throwUserError("Already endorsed for archiving.");
 
     const imrad = await latestImrad(ctx, project._id);
     if (!imrad || imrad.status !== "approved") {
-      throw new Error("Approve the team's IMRaD file before endorsing.");
+      throwUserError("Approve the team's IMRaD file before endorsing.");
     }
 
     await ctx.db.patch(project._id, { archiveEndorsedAt: Date.now() });
@@ -120,15 +121,15 @@ export const endorseForArchiving = mutation({
 // Only the project's own instructor (or the admin) can move it through defense.
 async function requireSupervisor(ctx: MutationCtx, projectId: Id<"capstoneProjects">) {
   const user = await currentUser(ctx);
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throwUserError("Not authenticated");
   if (user.status === "pending" || user.status === "rejected") {
-    throw new Error("Your account isn't approved.");
+    throwUserError("Your account isn't approved.");
   }
   const project = await ctx.db.get(projectId);
-  if (!project) throw new Error("Project not found");
+  if (!project) throwUserError("Project not found");
   const isOwner = user.role === "instructor" && project.instructorId === user._id;
   if (user.role !== "admin" && !isOwner) {
-    throw new Error("Only this project's instructor can do this.");
+    throwUserError("Only this project's instructor can do this.");
   }
   return { user, project };
 }
@@ -200,7 +201,7 @@ export const myImradReadyProjects = query({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    if (!(await ctx.auth.getUserIdentity())) throw new Error("Not authenticated");
+    if (!(await ctx.auth.getUserIdentity())) throwUserError("Not authenticated");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -261,7 +262,7 @@ export const endorseForDefense = mutation({
   args: { projectId: v.id("capstoneProjects") },
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
-    if (project.stage) throw new Error("This project was already endorsed.");
+    if (project.stage) throwUserError("This project was already endorsed.");
 
     await ctx.db.patch(project._id, { stage: "endorsed", endorsedAt: Date.now() });
     await logAction(ctx, user, "Endorsed for defense", project.teamName);
@@ -280,10 +281,10 @@ export const scheduleProposalDefense = mutation({
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "proposal_endorsed" && project.stage !== "proposal_scheduled") {
-      throw new Error("This project isn't ready for a proposal defense.");
+      throwUserError("This project isn't ready for a proposal defense.");
     }
     if (!args.date.trim() || !args.venue.trim() || !args.panel.trim()) {
-      throw new Error("Date, venue and panel are required.");
+      throwUserError("Date, venue and panel are required.");
     }
 
     await ctx.db.patch(project._id, {
@@ -309,7 +310,7 @@ export const recordProposalResult = mutation({
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "proposal_scheduled") {
-      throw new Error("There's no scheduled proposal defense to record a result for.");
+      throwUserError("There's no scheduled proposal defense to record a result for.");
     }
 
     if (args.result === "failed") {
@@ -349,10 +350,10 @@ export const scheduleDefense = mutation({
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "endorsed" && project.stage !== "defense_scheduled") {
-      throw new Error("Endorse the project before scheduling a defense.");
+      throwUserError("Endorse the project before scheduling a defense.");
     }
     if (!args.date.trim() || !args.venue.trim() || !args.panel.trim()) {
-      throw new Error("Date, venue and panel are required.");
+      throwUserError("Date, venue and panel are required.");
     }
 
     await ctx.db.patch(project._id, {
@@ -380,7 +381,7 @@ export const recordDefenseResult = mutation({
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "defense_scheduled") {
-      throw new Error("There's no scheduled defense to record a result for.");
+      throwUserError("There's no scheduled defense to record a result for.");
     }
 
     if (args.result === "failed") {
@@ -418,9 +419,9 @@ export const uploadEvaluationForms = mutation({
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "final_revisions") {
-      throw new Error("Evaluation forms are only needed for a 'passed with revisions' result.");
+      throwUserError("Evaluation forms are only needed for a 'passed with revisions' result.");
     }
-    if (args.files.length !== 3) throw new Error("Upload exactly 3 evaluation forms.");
+    if (args.files.length !== 3) throwUserError("Upload exactly 3 evaluation forms.");
 
     await ctx.db.patch(project._id, { evaluationForms: args.files });
 
@@ -515,7 +516,7 @@ export const syncFinalRevisions = mutation({
 export const submitFinalManuscript = mutation({
   args: { projectId: v.id("capstoneProjects"), fileId: v.id("_storage") },
   handler: async () => {
-    throw new Error("Final revisions are now submitted chapter by chapter.");
+    throwUserError("Final revisions are now submitted chapter by chapter.");
   },
 });
 
@@ -528,12 +529,12 @@ export const archiveProject = mutation({
   },
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
-    if (user.role !== "admin") throw new Error("Only the admin can verify and archive.");
+    if (user.role !== "admin") throwUserError("Only the admin can verify and archive.");
     if (project.stage !== "ready_to_archive") {
-      throw new Error("This project isn't ready to archive.");
+      throwUserError("This project isn't ready to archive.");
     }
     if (!project.archiveEndorsedAt) {
-      throw new Error("The instructor hasn't endorsed this project for archiving yet.");
+      throwUserError("The instructor hasn't endorsed this project for archiving yet.");
     }
 
     const abstract = args.abstract.trim();
@@ -541,7 +542,7 @@ export const archiveProject = mutation({
     const imrad = await latestImrad(ctx, project._id);
     const finalFileId = args.fileId ?? imrad?.storageId ?? project.finalFileId;
     if (!abstract || keywords.length < 3 || !finalFileId) {
-      throw new Error("Abstract, 3+ keywords and the final file are required.");
+      throwUserError("Abstract, 3+ keywords and the final file are required.");
     }
     const grade = project.finalGrade ?? "Passed";
 

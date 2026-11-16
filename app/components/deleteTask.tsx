@@ -18,6 +18,7 @@ import type { ReactNode } from "react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 interface DeleteTaskProps {
   taskId: Id<"tasks">;
@@ -34,7 +35,7 @@ export function DeleteTask({ taskId, taskTitle, trigger }: DeleteTaskProps) {
       toast.success("Task deleted successfully!");
     } catch (error) {
       console.error("Failed to delete task:", error);
-      toast.error("Failed to delete task");
+      toast.error(getConvexErrorMessage(error, "Failed to delete task."));
     }
   };
 

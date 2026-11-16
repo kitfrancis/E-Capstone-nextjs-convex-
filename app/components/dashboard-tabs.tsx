@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
 import { Button } from "@/components/ui/button";
@@ -413,7 +414,7 @@ export function TabsDemo({
       .catch((error) => {
         sessionStorage.removeItem(EDITOR_SESSION_KEY);
         setIsRestoringEditor(false);
-        toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
+        toast.error(getConvexErrorMessage(error, "Couldn't restore the editor."));
       });
   }, [deliverables, officeDoc, startDraft]);
 
@@ -481,7 +482,7 @@ export function TabsDemo({
       if (status === "under_review") toast.success("Sent to your instructor for review.");
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't update the task. Try again.");
+      toast.error(getConvexErrorMessage(err, "Couldn't update the task. Try again."));
     }
   };
 
@@ -537,7 +538,7 @@ export function TabsDemo({
     } catch (error) {
       console.error("Failed to start student IMRaD:", error);
       toast.error(
-        error instanceof Error ? error.message : "Could not start the IMRaD process."
+        getConvexErrorMessage(error, "Could not start the IMRaD process.")
       );
     } finally {
       setStartingImrad(false);
@@ -602,9 +603,10 @@ export function TabsDemo({
       toast.success(`Your IMRaD was submitted to your ${imradSubmitTarget}.`);
     } catch (submitError) {
       setImradSubmitError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Could not submit the IMRaD to your instructor."
+        getConvexErrorMessage(
+          submitError,
+          "Could not submit the IMRaD to your instructor."
+        )
       );
     } finally {
       setSubmittingImrad(false);
@@ -635,7 +637,7 @@ export function TabsDemo({
         JSON.stringify({ deliverableId: d._id }),
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
+      toast.error(getConvexErrorMessage(err, "Couldn't open the editor."));
     }
   };
 
@@ -998,7 +1000,7 @@ export function TabsDemo({
       closeUpload();
     } catch (err) {
       console.error(err);
-      toast.error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(`Upload failed: ${getConvexErrorMessage(err, "Please try again.")}`);
     } finally {
       setUploading(false);
     }

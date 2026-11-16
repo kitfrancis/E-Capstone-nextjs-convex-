@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -103,7 +104,7 @@ export default function SystemSettingsPage() {
       await save(form);
       toast.success("Settings saved");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save");
+      toast.error(getConvexErrorMessage(err, "Could not save settings."));
     } finally {
       setSaving(false);
     }

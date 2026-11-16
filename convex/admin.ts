@@ -1,12 +1,13 @@
 import { query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import { requireAdmin } from "./users";
 
 // Instructors (and admins) may read admin activity
 async function requireInstructorOrAdmin(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Not authenticated");
+  if (!identity) throwUserError("Not authenticated");
 
   const me = await ctx.db
     .query("users")
@@ -14,7 +15,7 @@ async function requireInstructorOrAdmin(ctx: QueryCtx) {
     .first();
 
   if (!me || (me.role !== "instructor" && me.role !== "admin")) {
-    throw new Error("Not authorized");
+    throwUserError("Not authorized");
   }
   return me;
 }

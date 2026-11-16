@@ -15,6 +15,7 @@ import {
   Save,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import {
   registerEditorWorkspace,
   useAppTheme,
@@ -100,13 +101,12 @@ const SAVE_WITH_SHORTCUT_MESSAGE =
   "OnlyOffice couldn't confirm your latest edits. Press Ctrl+S in the document, wait for it to save, then try again.";
 
 function isSaveConfirmationError(error: unknown) {
+  const message = getConvexErrorMessage(error, "").toLowerCase();
   return (
-    error instanceof Error &&
-    (error.message.includes(CALLBACK_TARGET_ERROR) ||
-      error.message.startsWith("Couldn't save your latest edits") ||
-      error.message.includes("has not confirmed your latest edits") ||
-      (error.message.toLowerCase().includes("onlyoffice") &&
-        error.message.toLowerCase().includes("save")))
+    message.includes(CALLBACK_TARGET_ERROR.toLowerCase()) ||
+    message.startsWith("couldn't save your latest edits") ||
+    message.includes("has not confirmed your latest edits") ||
+    (message.includes("onlyoffice") && message.includes("save"))
   );
 }
 
@@ -346,9 +346,7 @@ export default function OnlyOfficeEditor({
       setSwitchingChapter(null);
       setSubmitError(saveConfirmationFailed
         ? null
-        : error instanceof Error
-          ? error.message
-          : "Couldn't open that chapter.");
+        : getConvexErrorMessage(error, "Couldn't open that chapter."));
     }
   }
 
@@ -374,9 +372,7 @@ export default function OnlyOfficeEditor({
       setComparisonError(
         saveConfirmationFailed
           ? SAVE_WITH_SHORTCUT_MESSAGE
-          : error instanceof Error
-            ? error.message
-            : "Couldn't compare these versions.",
+          : getConvexErrorMessage(error, "Couldn't compare these versions."),
       );
     } finally {
       setComparing(false);
@@ -407,7 +403,7 @@ export default function OnlyOfficeEditor({
         setShowCompareReminder(false);
         setVersionAwaitingCompare(null);
         setComparisonError(
-          error instanceof Error ? error.message : "Couldn't check the current draft.",
+          getConvexErrorMessage(error, "Couldn't check the current draft."),
         );
       } finally {
         setCapturingDraftBaseline(false);
@@ -443,9 +439,10 @@ export default function OnlyOfficeEditor({
           setLoading(false);
           setSwitchingChapter(null);
           setLoadError(
-            error instanceof Error
-              ? error.message
-              : `OnlyOffice could not be reached at ${serverUrl}.`,
+            getConvexErrorMessage(
+              error,
+              `OnlyOffice could not be reached at ${serverUrl}.`
+            ),
           );
         }
         return;
@@ -479,7 +476,7 @@ export default function OnlyOfficeEditor({
             setLoading(false);
             setSwitchingChapter(null);
             setLoadError(
-              error instanceof Error ? error.message : "Couldn't load the shared draft.",
+              getConvexErrorMessage(error, "Couldn't load the shared draft."),
             );
           }
           return;
@@ -569,9 +566,10 @@ export default function OnlyOfficeEditor({
                 onEditorReadyRef.current?.();
               } catch (error) {
                 setLoadError(
-                  error instanceof Error
-                    ? error.message
-                    : "OnlyOffice couldn't start comparing these versions.",
+                  getConvexErrorMessage(
+                    error,
+                    "OnlyOffice couldn't start comparing these versions."
+                  ),
                 );
                 setLoading(false);
                 onEditorErrorRef.current?.();
@@ -613,7 +611,10 @@ export default function OnlyOfficeEditor({
           setLoading(false);
           setSwitchingChapter(null);
           setLoadError(
-            error instanceof Error ? error.message : "OnlyOffice could not open this document.",
+            getConvexErrorMessage(
+              error,
+              "OnlyOffice could not open this document."
+            ),
           );
         }
         return;
@@ -668,9 +669,7 @@ export default function OnlyOfficeEditor({
       if (saveConfirmationFailed) setShowSaveWarning(true);
       setSubmitError(saveConfirmationFailed
         ? null
-        : error instanceof Error
-          ? error.message
-          : "Submit failed. Your draft is still saved.");
+        : getConvexErrorMessage(error, "Submit failed. Your draft is still saved."));
     } finally {
       setSubmitting(false);
     }
@@ -684,7 +683,7 @@ export default function OnlyOfficeEditor({
       await onOpenLatestVersion(hasChangesRef.current);
     } catch (error) {
       setSubmitError(
-        error instanceof Error ? error.message : "Couldn't open the latest version.",
+        getConvexErrorMessage(error, "Couldn't open the latest version."),
       );
     } finally {
       setOpeningLatestVersion(false);
@@ -702,9 +701,10 @@ export default function OnlyOfficeEditor({
       if (saveConfirmationFailed) setShowSaveWarning(true);
       setSubmitError(saveConfirmationFailed
         ? null
-        : error instanceof Error
-          ? error.message
-          : "Couldn't save your latest edits before closing.");
+        : getConvexErrorMessage(
+            error,
+            "Couldn't save your latest edits before closing."
+          ));
     } finally {
       setClosing(false);
     }

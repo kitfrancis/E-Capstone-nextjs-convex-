@@ -2,6 +2,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -225,7 +226,7 @@ export function InstructorTabsDemo({
       toast.success(decision === "confirm" ? "Task confirmed." : "Task sent back to the team.");
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't update the task. Try again.");
+      toast.error(getConvexErrorMessage(err, "Couldn't update the task. Try again."));
     }
   };
 
@@ -241,7 +242,7 @@ const handleStatus = async (
     );
   } catch (err) {
     console.error(err);
-    toast.error(err instanceof Error ? err.message : "Couldn't update the deliverable.");
+    toast.error(getConvexErrorMessage(err, "Couldn't update the deliverable."));
   }
 };
 

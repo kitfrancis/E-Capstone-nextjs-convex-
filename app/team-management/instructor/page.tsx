@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -304,9 +305,7 @@ function InstructorImradWorkflow({
     } catch (unlockError) {
       console.error("Failed to unlock IMRaD:", unlockError);
       setError(
-        unlockError instanceof Error
-          ? unlockError.message
-          : "Could not unlock IMRaD."
+        getConvexErrorMessage(unlockError, "Could not unlock IMRaD.")
       );
     } finally {
       setUnlocking(false);
@@ -409,7 +408,7 @@ export default function InstructorTeamManagementPage() {
       toast.success(decision === "confirm" ? "Task confirmed." : "Task sent back to the team.");
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't update the task. Try again.");
+      toast.error(getConvexErrorMessage(err, "Couldn't update the task. Try again."));
     }
   };
 
@@ -425,7 +424,7 @@ export default function InstructorTeamManagementPage() {
       );
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : "Couldn't update the deliverable.");
+      toast.error(getConvexErrorMessage(err, "Couldn't update the deliverable."));
     }
   };
 
@@ -442,7 +441,7 @@ export default function InstructorTeamManagementPage() {
       setTeamToApprove(null);
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : "Couldn't approve the final revisions.");
+      toast.error(getConvexErrorMessage(err, "Couldn't approve the final revisions."));
     } finally {
       setIsApprovingFinal(false);
     }
@@ -493,7 +492,8 @@ export default function InstructorTeamManagementPage() {
       const key = `${team._id}:${proposalDone ? "final" : "proposal"}`;
       if (needsSync && !syncedRef.current.has(key)) {
         syncedRef.current.add(key);
-        syncReadiness({ projectId: team._id }).catch(() => {
+        syncReadiness({ projectId: team._id }).catch((error) => {
+          console.error("Failed to sync defense readiness:", error);
           syncedRef.current.delete(key);
         });
       }

@@ -10,6 +10,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import {
   Dialog,
   DialogContent,
@@ -75,7 +76,7 @@ function ArchiveDialog({
       onClose();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Couldn't archive the project.");
+      setError(getConvexErrorMessage(err, "Couldn't archive the project."));
     } finally {
       setSaving(false);
     }

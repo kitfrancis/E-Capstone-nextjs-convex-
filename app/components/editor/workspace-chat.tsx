@@ -6,6 +6,7 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { MessageSquare, Send } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -51,7 +52,7 @@ export default function WorkspaceChat({
       await sendMessage({ capstoneProjectId, phase, message: trimmedMessage });
       setMessage("");
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Couldn't send your message.");
+      setError(getConvexErrorMessage(sendError, "Couldn't send your message."));
     } finally {
       setSending(false);
     }

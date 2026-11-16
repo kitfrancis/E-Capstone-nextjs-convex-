@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 const SCHOOL_DOMAIN = "antiquespride.edu.ph";
 
@@ -37,8 +38,7 @@ export default function ApprovalsPage() {
     try {
       await fn({ userId: id });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong.";
-      setError(message.replace(/^.*Error:\s*/, ""));
+      setError(getConvexErrorMessage(err, "Something went wrong."));
     } finally {
       setBusyId(null);
     }

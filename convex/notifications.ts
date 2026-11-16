@@ -1,5 +1,7 @@
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 
 export const NOTIFICATION_TYPES = [
@@ -99,16 +101,20 @@ export const myUnreadCount = query({
   },
 });
 
-async function setRead(ctx: MutationCtx, notificationId: any, read: boolean) {
+async function setRead(
+  ctx: MutationCtx,
+  notificationId: Id<"notifications">,
+  read: boolean
+) {
   const user = await getCurrentUser(ctx);
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throwUserError("Not authenticated");
 
   const notification = await ctx.db.get(notificationId);
-  if (!notification || (notification as any).userId !== user._id) {
-    throw new Error("Notification not found");
+  if (!notification || notification.userId !== user._id) {
+    throwUserError("Notification not found");
   }
 
-  if ((notification as any).read !== read) {
+  if (notification.read !== read) {
     await ctx.db.patch(notificationId, { read });
   }
 }
@@ -127,7 +133,7 @@ export const markNotificationAsUnread = mutation({
 export const markAllNotificationsAsRead = mutation({
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
-    if (!user) throw new Error("Not authenticated");
+    if (!user) throwUserError("Not authenticated");
 
     const unread = await ctx.db
       .query("notifications")

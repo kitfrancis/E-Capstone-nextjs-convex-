@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 export type EditableProject = {
   _id: Id<"projects">;
@@ -66,7 +67,7 @@ function EditForm({
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : "Couldn't save changes.");
+      toast.error(getConvexErrorMessage(err, "Couldn't save changes."));
     } finally {
       setSaving(false);
     }

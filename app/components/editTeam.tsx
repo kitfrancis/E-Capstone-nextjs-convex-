@@ -18,6 +18,7 @@ import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
 import { X } from "lucide-react";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 interface EditTeamProps {
   teamId: Id<"capstoneProjects">;
@@ -120,7 +121,7 @@ const studentsInOtherTeams = useMemo(() => {
       toast.success("Team updated successfully!");
     } catch (error) {
       console.error("Failed to update team:", error);
-      toast.error("Failed to update team");
+      toast.error(getConvexErrorMessage(error, "Failed to update team."));
     }
   };
 

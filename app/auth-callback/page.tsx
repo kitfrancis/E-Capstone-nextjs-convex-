@@ -5,6 +5,7 @@ import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 const ROLES = ["student", "instructor", "adviser", "admin"] as const;
 type Role = (typeof ROLES)[number];
@@ -81,7 +82,12 @@ export default function AuthCallback() {
           });
         } catch (err) {
           console.error("registerStaff failed:", err);
-          setError("We couldn't finish setting up your account.");
+          setError(
+            getConvexErrorMessage(
+              err,
+              "We couldn't finish setting up your account."
+            )
+          );
           handled.current = false;
           return; // keep intendedRole so a retry still works
         }

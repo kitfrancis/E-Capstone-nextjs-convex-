@@ -4,6 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,9 +65,10 @@ export default function AdminImradProcessingPage() {
       setComment("");
     } catch (reviewError) {
       setError(
-        reviewError instanceof Error
-          ? reviewError.message
-          : "Couldn't save the final verification decision."
+        getConvexErrorMessage(
+          reviewError,
+          "Couldn't save the final verification decision."
+        )
       );
     } finally {
       setBusy(false);

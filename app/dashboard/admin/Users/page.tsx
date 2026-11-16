@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -104,9 +105,7 @@ export default function UserManagementPage() {
     try {
       await setUserRole({ userId, role });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to update role.";
-      setError(message.replace(/^.*Error:\s*/, ""));
+      setError(getConvexErrorMessage(err, "Failed to update role."));
     } finally {
       setPendingId(null);
     }
@@ -126,9 +125,7 @@ export default function UserManagementPage() {
       await deleteUser({ userId: userToDelete.id });
       setUserToDelete(null);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to delete user.";
-      setDeleteError(message.replace(/^.*Error:\s*/, ""));
+      setDeleteError(getConvexErrorMessage(err, "Failed to delete user."));
     } finally {
       setDeleting(false);
     }

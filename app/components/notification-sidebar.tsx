@@ -18,6 +18,8 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useNotification } from "./notification-context";
+import { toast } from "sonner";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 type Kind =
     | "task_assigned"
@@ -228,6 +230,7 @@ export default function Notification() {
             }
         } catch (error) {
             console.error("Failed to handle notification click:", error);
+            toast.error(getConvexErrorMessage(error, "Couldn't open this notification."));
         }
     };
 
@@ -240,6 +243,7 @@ export default function Notification() {
             }
         } catch (error) {
             console.error("Failed to update notification:", error);
+            toast.error(getConvexErrorMessage(error, "Couldn't update this notification."));
         }
     };
 
@@ -248,6 +252,7 @@ export default function Notification() {
             await markAllAsRead();
         } catch (error) {
             console.error("Failed to mark all notifications as read:", error);
+            toast.error(getConvexErrorMessage(error, "Couldn't mark notifications as read."));
         }
     };
 

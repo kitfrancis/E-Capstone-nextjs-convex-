@@ -1,5 +1,6 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import type { Doc } from "./_generated/dataModel";
 
 async function getDraftUser(ctx: MutationCtx | QueryCtx) {
@@ -33,19 +34,19 @@ export const startDraft = mutation({
   }),
   handler: async (ctx, { deliverableId }) => {
     const user = await getDraftUser(ctx);
-    if (!user) throw new Error("Not authorized");
+    if (!user) throwUserError("Not authorized");
     const d = await ctx.db.get(deliverableId);
-    if (!d || !d.storageId) throw new Error("File not found");
+    if (!d || !d.storageId) throwUserError("File not found");
     const project = await ctx.db.get(d.capstoneProjectId);
-    if (!project) throw new Error("Project not found");
-    if (!canAccessDraft(user, project)) throw new Error("Not authorized");
+    if (!project) throwUserError("Project not found");
+    if (!canAccessDraft(user, project)) throwUserError("Not authorized");
     if (project.stage === "archived") {
-      throw new Error("Archived projects are read-only.");
+      throwUserError("Archived projects are read-only.");
     }
 
     // NEW: fail with a clear message if the original file is gone
     const originalUrl = await ctx.storage.getUrl(d.storageId);
-    if (!originalUrl) throw new Error("The original file is missing. Please upload this chapter again.");
+    if (!originalUrl) throwUserError("The original file is missing. Please upload this chapter again.");
 
     const existing = await ctx.db
       .query("deliverableDrafts")
@@ -135,7 +136,7 @@ export const getByDeliverable = query({
 export const generateDraftUploadUrl = mutation({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {
-    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throwUserError("Forbidden");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -156,7 +157,7 @@ export const saveDraftFile = mutation({
     ctx,
     { secret, draftId, storageId, sessionRevision: expectedSessionRevision, sessionClosed },
   ) => {
-    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throwUserError("Forbidden");
     const draft = await ctx.db.get(draftId);
     if (!draft) return null; // draft already submitted: ignore a late callback
     const currentSessionRevision = draft.sessionRevision ?? 0;
