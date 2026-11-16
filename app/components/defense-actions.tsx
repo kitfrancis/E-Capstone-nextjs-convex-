@@ -179,9 +179,9 @@ const RESULTS = [
 ] as const;
 
 const PROPOSAL_RESULTS = [
-  { value: "passed", title: "Passed", sub: "The team continues with Chapters 4–5." },
-  { value: "passed_with_revisions", title: "Passed with revisions", sub: "The team continues and applies the panel's comments." },
-  { value: "failed", title: "Failed", sub: "A proposal re-defense will be needed." },
+  { value: "passed", title: "Passed", sub: "Chapters 1–3 will be marked Approved. The team continues with Chapters 4–5." },
+  { value: "passed_with_revisions", title: "Passed with revisions", sub: "Chapters 1–3 will be marked Needs Revision. The team continues with Chapters 4–5." },
+  { value: "failed", title: "Failed", sub: "Chapters 1–3 will be marked Needs Revision. A proposal re-defense will be needed." },
 ] as const;
 
 // Used for both the proposal defense and the final defense (status only, no grade)

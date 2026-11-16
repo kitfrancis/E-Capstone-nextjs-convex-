@@ -7,7 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
 // Relative import: the "@/" alias may not resolve inside the convex/ folder.
 // If lib/progress.ts imports anything with "@/", copy computeProgress into convex/ instead.
-import { computeProgress } from "../lib/progress";
+import { CHAPTER_PHASES, computeProgress } from "../lib/progress";
 
 async function currentUser(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -307,10 +307,25 @@ export const recordProposalResult = mutation({
       v.literal("failed")
     ),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { user, project } = await requireSupervisor(ctx, args.projectId);
     if (project.stage !== "proposal_scheduled") {
       throwUserError("There's no scheduled proposal defense to record a result for.");
+    }
+
+    const chapterStatus = args.result === "passed" ? "approved" : "needs_revision";
+    for (const phase of CHAPTER_PHASES.slice(0, 3)) {
+      const latestChapter = await ctx.db
+        .query("deliverables")
+        .withIndex("by_capstone_project_phase_version", (q) =>
+          q.eq("capstoneProjectId", project._id).eq("phase", phase),
+        )
+        .order("desc")
+        .first();
+      if (latestChapter && latestChapter.status !== chapterStatus) {
+        await ctx.db.patch(latestChapter._id, { status: chapterStatus });
+      }
     }
 
     if (args.result === "failed") {
@@ -335,6 +350,7 @@ export const recordProposalResult = mutation({
       "Recorded proposal defense result",
       `${project.teamName}: ${args.result}`
     );
+    return null;
   },
 });
 
