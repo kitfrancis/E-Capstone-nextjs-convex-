@@ -1634,6 +1634,9 @@ export const submitStudentImrad = mutation({
     const abstract = abstractInput.trim();
     const keywords = keywordInput.map((keyword) => keyword.trim()).filter(Boolean);
     if (!abstract) throw new Error("Enter the IMRaD abstract before submitting.");
+    if (abstract.split(/\s+/).length > 250) {
+      throw new Error("The IMRaD abstract cannot exceed 250 words.");
+    }
     if (keywords.length < 3) {
       throw new Error("Enter at least 3 keywords, separated by commas.");
     }

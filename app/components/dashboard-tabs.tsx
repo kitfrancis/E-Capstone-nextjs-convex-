@@ -93,11 +93,30 @@ const fileStyle = (fileName: string) => {
   return { icon: FileIcon, wrap: "bg-muted text-muted-foreground" };
 };
 
-function getImradStatusLabel(status: string, revisionTarget: string | null) {
-  if (status === "student_editing" && revisionTarget === "instructor") {
+const IMRAD_ABSTRACT_MAX_WORDS = 250;
+
+function countImradAbstractWords(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+function getImradStatusLabel(
+  status: string,
+  revisionTarget: string | null,
+  hasVerificationComment: boolean
+) {
+  if (
+    status === "student_editing" &&
+    hasVerificationComment &&
+    revisionTarget === "instructor"
+  ) {
     return "Changes requested by instructor";
   }
-  if (status === "student_editing" && revisionTarget === "admin") {
+  if (
+    status === "student_editing" &&
+    hasVerificationComment &&
+    revisionTarget === "admin"
+  ) {
     return "Changes requested by admin";
   }
   if (status === "student_editing") return "In progress";
@@ -275,6 +294,7 @@ export function TabsDemo({
   const [startingImrad, setStartingImrad] = useState(false);
   const [isRestoringEditor, setIsRestoringEditor] = useState(false);
   const restoreAttemptStartedRef = useRef(false);
+  const imradAbstractWordCount = countImradAbstractWords(imradAbstract);
 
   useLayoutEffect(() => {
     if (sessionStorage.getItem(EDITOR_SESSION_KEY)) {
@@ -557,6 +577,12 @@ export function TabsDemo({
       .filter(Boolean);
     if (!abstract) {
       setImradSubmitError("Enter the IMRaD abstract.");
+      return;
+    }
+    if (countImradAbstractWords(abstract) > IMRAD_ABSTRACT_MAX_WORDS) {
+      setImradSubmitError(
+        `The abstract cannot exceed ${IMRAD_ABSTRACT_MAX_WORDS} words.`
+      );
       return;
     }
     if (keywords.length < 3) {
@@ -1145,13 +1171,18 @@ export function TabsDemo({
     ? "rounded-lg bg-blue-600 text-white hover:bg-blue-700"
     : "rounded-lg";
   const imradStatusText = imradSubmission
-    ? getImradStatusLabel(imradSubmission.status, imradSubmission.revisionTarget)
+    ? canSubmitImrad
+      ? "Ready to submit"
+      : getImradStatusLabel(
+          imradSubmission.status,
+          imradSubmission.revisionTarget,
+          !!imradSubmission.verificationComment
+        )
     : "Ready to start";
-
-  // "Changes requested" needs attention, so it uses amber instead of the neutral blue.
-  // It also explains why 4/4 parts can be complete while the document is still open for edits.
   const imradNeedsChanges =
-    imradSubmission?.status === "student_editing" && !!imradSubmission.revisionTarget;
+    imradSubmission?.status === "student_editing" &&
+    !!imradSubmission.verificationComment &&
+    !canSubmitImrad;
   const imradBadgeClass = imradNeedsChanges
     ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
     : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
@@ -1828,11 +1859,34 @@ export function TabsDemo({
                 rows={6}
                 value={imradAbstract}
                 onChange={(event) => {
-                  setImradAbstract(event.target.value);
+                  const nextAbstract = event.target.value;
+                  const nextWordCount = countImradAbstractWords(nextAbstract);
+                  if (
+                    nextWordCount > IMRAD_ABSTRACT_MAX_WORDS &&
+                    nextAbstract.length >= imradAbstract.length
+                  ) {
+                    setImradSubmitError(
+                      `The abstract cannot exceed ${IMRAD_ABSTRACT_MAX_WORDS} words.`
+                    );
+                    return;
+                  }
+                  setImradAbstract(nextAbstract);
                   setImradSubmitError("");
                 }}
-                aria-invalid={!!imradSubmitError && !imradAbstract.trim()}
+                aria-invalid={
+                  (!!imradSubmitError && !imradAbstract.trim()) ||
+                  imradAbstractWordCount > IMRAD_ABSTRACT_MAX_WORDS
+                }
               />
+              <p
+                className={`text-right text-xs ${
+                  imradAbstractWordCount > IMRAD_ABSTRACT_MAX_WORDS
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {imradAbstractWordCount} / {IMRAD_ABSTRACT_MAX_WORDS} words
+              </p>
             </div>
             <div className="space-y-2">
               <label htmlFor="imrad-keywords" className="text-sm font-medium">
@@ -1872,7 +1926,10 @@ export function TabsDemo({
             </Button>
             <Button
               type="button"
-              disabled={submittingImrad}
+              disabled={
+                submittingImrad ||
+                imradAbstractWordCount > IMRAD_ABSTRACT_MAX_WORDS
+              }
               onClick={() => void submitImradForInstructor()}
             >
               {submittingImrad ? "Submitting..." : `Submit to ${imradSubmitTarget}`}
