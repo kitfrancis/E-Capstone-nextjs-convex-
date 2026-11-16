@@ -19,6 +19,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -61,6 +70,15 @@ const emptyForm = {
   abstract: "",
 };
 
+type PendingArchiveAction =
+  | { kind: "delete"; projectId: Id<"projects">; title: string }
+  | {
+      kind: "reset";
+      projectId: Id<"projects">;
+      title: string;
+      team: string;
+    };
+
 const splitList = (s: string) =>
   s
     .split(",")
@@ -87,8 +105,10 @@ export default function AdminArchivePage() {
   const [error, setError] = useState("");
 
   const [editing, setEditing] = useState<EditableProject | null>(null);
-  const [restartingArchiveId, setRestartingArchiveId] =
-    useState<Id<"projects"> | null>(null);
+  const [pendingArchiveAction, setPendingArchiveAction] =
+    useState<PendingArchiveAction | null>(null);
+  const [archiveActionPending, setArchiveActionPending] = useState(false);
+  const [archiveActionError, setArchiveActionError] = useState("");
 
   const [viewing, setViewing] = useState<{
     storageId: Id<"_storage">;
@@ -176,37 +196,32 @@ export default function AdminArchivePage() {
     }
   };
 
-  const handleDelete = async (id: Id<"projects">, title: string) => {
-    if (!window.confirm(`Delete "${title}" and its file? This can't be undone.`))
-      return;
-    try {
-      await deleteProject({ projectId: id });
-    } catch (err) {
-      alert(getConvexErrorMessage(err, "Delete failed."));
-    }
-  };
+  const handleConfirmArchiveAction = async () => {
+    if (!pendingArchiveAction || archiveActionPending) return;
 
-  const handleCancelPrajikArchive = async (
-    projectId: Id<"projects">,
-    title: string,
-    team: string
-  ) => {
-    if (
-      !window.confirm(
-        `Reset "${title}" for ${team}? This permanently deletes the archive entry, all chapter uploads and versions, drafts, document comments, evaluation files, and the final PDF. The project and student team assignments will remain, and the students can restart from Chapter 1. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    setRestartingArchiveId(projectId);
+    setArchiveActionPending(true);
+    setArchiveActionError("");
     try {
-      await resetPrajikProjectProcess({ projectId });
+      if (pendingArchiveAction.kind === "delete") {
+        await deleteProject({ projectId: pendingArchiveAction.projectId });
+      } else {
+        await resetPrajikProjectProcess({
+          projectId: pendingArchiveAction.projectId,
+        });
+      }
+      setPendingArchiveAction(null);
     } catch (err) {
-      console.error("Failed to cancel the Prajik archive:", err);
-      alert(getConvexErrorMessage(err, "Could not reset the archived project."));
+      console.error("Failed to complete the archive action:", err);
+      setArchiveActionError(
+        getConvexErrorMessage(
+          err,
+          pendingArchiveAction.kind === "delete"
+            ? "Delete failed."
+            : "Could not reset the archived project."
+        )
+      );
     } finally {
-      setRestartingArchiveId(null);
+      setArchiveActionPending(false);
     }
   };
 
@@ -354,26 +369,34 @@ export default function AdminArchivePage() {
                       {p.title.trim().toLowerCase() === "prajik" ||
                       p.team.trim().toLowerCase() === "prajik" ? (
                         <DropdownMenuItem
-                          disabled={
-                            !p.capstoneProjectId ||
-                            restartingArchiveId === p._id
-                          }
+                          disabled={!p.capstoneProjectId}
                           className="text-amber-700 focus:text-amber-800"
-                          onSelect={() =>
-                            handleCancelPrajikArchive(p._id, p.title, p.team)
-                          }
+                          onSelect={() => {
+                            setArchiveActionError("");
+                            setPendingArchiveAction({
+                              kind: "reset",
+                              projectId: p._id,
+                              title: p.title,
+                              team: p.team,
+                            });
+                          }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
-                          {restartingArchiveId === p._id
-                            ? "Resetting..."
-                            : "Reset project process"}
+                          Reset project process
                         </DropdownMenuItem>
                       ) : null}
                       {p.title.trim().toLowerCase() !== "prajik" &&
                       p.team.trim().toLowerCase() !== "prajik" ? (
                         <DropdownMenuItem
                           className="text-red-500 focus:text-red-600"
-                          onSelect={() => handleDelete(p._id, p.title)}
+                          onSelect={() => {
+                            setArchiveActionError("");
+                            setPendingArchiveAction({
+                              kind: "delete",
+                              projectId: p._id,
+                              title: p.title,
+                            });
+                          }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete
@@ -394,6 +417,65 @@ export default function AdminArchivePage() {
 
       {/* Edit dialog (one for the whole page) */}
       <EditArchiveDialog project={editing} onClose={() => setEditing(null)} />
+
+      <AlertDialog
+        open={pendingArchiveAction !== null}
+        onOpenChange={(open) => {
+          if (!open && !archiveActionPending) {
+            setPendingArchiveAction(null);
+            setArchiveActionError("");
+          }
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingArchiveAction?.kind === "reset"
+                ? "Reset project process?"
+                : "Delete archived project?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingArchiveAction?.kind === "reset" ? (
+                <>
+                  Reset <span className="font-medium text-foreground">&quot;{pendingArchiveAction.title}&quot;</span> for{" "}
+                  <span className="font-medium text-foreground">{pendingArchiveAction.team}</span>? This permanently deletes the archive entry, all chapter uploads and versions, drafts, document comments, evaluation files, and the final PDF. The project and student team assignments will remain, and the students can restart from Chapter 1. This cannot be undone.
+                </>
+              ) : (
+                <>
+                  Delete{" "}
+                  <span className="font-medium text-foreground">
+                    &quot;{pendingArchiveAction?.title}&quot;
+                  </span>{" "}
+                  and its file? This can&apos;t be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {archiveActionError && (
+            <p role="alert" className="text-sm text-destructive">
+              {archiveActionError}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={archiveActionPending}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={archiveActionPending || !pendingArchiveAction}
+              onClick={handleConfirmArchiveAction}
+            >
+              {archiveActionPending
+                ? pendingArchiveAction?.kind === "reset"
+                  ? "Resetting..."
+                  : "Deleting..."
+                : pendingArchiveAction?.kind === "reset"
+                  ? "Reset project"
+                  : "Delete"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Upload dialog */}
       <Dialog open={showUpload} onOpenChange={handleOpenChange}>
