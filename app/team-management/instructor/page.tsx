@@ -59,7 +59,7 @@ import {
   defenseActionKind,
   defenseStatus,
 } from "@/app/components/defense-actions";
-import { computeProgress } from "@/lib/progress";
+import { CHAPTER_PHASES, chapterOf, computeProgress } from "@/lib/progress";
 import dynamic from "next/dynamic";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -67,6 +67,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 
 const PDFViewer = dynamic(
@@ -505,21 +508,67 @@ export default function InstructorTeamManagementPage() {
     teamFilter === "all" || allTeams?.some((t) => t._id === teamFilter) ? teamFilter : "all";
   const inTeam = (id?: string) => activeTeam === "all" || id === activeTeam;
 
+  type InstructorDeliverable = NonNullable<typeof allDeliverables>[number];
+  const deliverablesByChapter = new Map<string, InstructorDeliverable[]>();
+  for (const deliverable of allDeliverables ?? []) {
+    const chapter = chapterOf(deliverable.phase);
+    if (chapter === null) continue;
+
+    const key = JSON.stringify([deliverable.capstoneProjectId, chapter]);
+    const versions = deliverablesByChapter.get(key) ?? [];
+    versions.push(deliverable);
+    deliverablesByChapter.set(key, versions);
+  }
+  for (const versions of deliverablesByChapter.values()) {
+    versions.sort(
+      (a, b) =>
+        b.version - a.version || b.uploadedAt.localeCompare(a.uploadedAt)
+    );
+  }
+  const openDeliverable = (deliverable: InstructorDeliverable) => {
+    if (!deliverable.storageId) return;
+    const doc = {
+      fileName: deliverable.fileName,
+      storageId: deliverable.storageId,
+      deliverableId: deliverable._id,
+      capstoneProjectId: deliverable.capstoneProjectId,
+      phase: deliverable.phase,
+    };
+    if (isPdf(deliverable.fileName)) setSelectedDeliverable(doc);
+    else setOfficeDoc(doc);
+  };
+  const latestDeliverables =
+    allDeliverables === undefined
+      ? undefined
+      : Array.from(deliverablesByChapter.values(), (versions) => versions[0]);
+
   // Team-scoped lists feed every count and list below
-  const scopedDeliverables = allDeliverables?.filter((d) => inTeam(d.capstoneProjectId));
+  const scopedDeliverables = latestDeliverables?.filter((d) => inTeam(d.capstoneProjectId));
   const scopedTasks = tasks?.filter((t) => inTeam(t.capstoneProjectId));
 
-  // Newest upload first; if two share a timestamp, the higher version goes first
-  const filteredDeliverables = scopedDeliverables
-    ?.filter((d) => submissionFilter === "all" || d.status === submissionFilter)
-    .sort(
-      (a, b) =>
-        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime() ||
-        Number(b.version) - Number(a.version)
+  // Apply status filters after selecting one latest version per team and chapter.
+  const submissionRows = allTeams
+    ?.filter((team) => inTeam(team._id))
+    .flatMap((team) =>
+      CHAPTER_PHASES.map((phase, index) => {
+        const key = JSON.stringify([team._id, index + 1]);
+        const versions = deliverablesByChapter.get(key) ?? [];
+        return {
+          capstoneProjectId: team._id,
+          teamName: team.teamName,
+          phase,
+          deliverable: versions[0] ?? null,
+          olderVersions: versions.slice(1),
+        };
+      })
+    )
+    .filter(
+      ({ deliverable }) =>
+        submissionFilter === "all" || deliverable?.status === submissionFilter
     );
   const shownDeliverables = showAllSubmissions
-    ? filteredDeliverables
-    : filteredDeliverables?.slice(0, SIDE_PREVIEW);
+    ? submissionRows
+    : submissionRows?.slice(0, SIDE_PREVIEW);
   const countStatus = (s: string) => scopedDeliverables?.filter((d) => d.status === s).length ?? 0;
 
   // Tasks waiting for the instructor go first
@@ -547,7 +596,7 @@ export default function InstructorTeamManagementPage() {
   const tabTeams = teamTab === "active" ? activeTeams : archivedTeams;
 
   // Header summary: everything waiting on the instructor
-  const waitingSubmissions = allDeliverables?.filter((d) => d.status === "under_review").length ?? 0;
+  const waitingSubmissions = latestDeliverables?.filter((d) => d.status === "under_review").length ?? 0;
   const waitingTasks = tasks?.filter((t) => t.status === "under_review").length ?? 0;
   const waitingTotal = waitingSubmissions + waitingTasks;
 
@@ -907,12 +956,12 @@ export default function InstructorTeamManagementPage() {
           {/* ---------- SUBMISSIONS ---------- */}
           {sideTab === "submissions" && (
             <div className="mt-4 border-t pt-4">
-              {allDeliverables === undefined ? (
+              {allDeliverables === undefined || allTeams === undefined ? (
                 <p className="text-center py-4 text-muted-foreground">Loading...</p>
-              ) : allDeliverables.length === 0 ? (
+              ) : allTeams.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                  <p className="text-muted-foreground">No submissions yet</p>
+                  <p className="text-muted-foreground">No teams found</p>
                 </div>
               ) : (
                 <>
@@ -935,85 +984,103 @@ export default function InstructorTeamManagementPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {shownDeliverables?.map((d) => (
-                        <div key={d._id} className={rowClass}>
+                      {shownDeliverables?.map(
+                        ({ capstoneProjectId, teamName, phase, deliverable: d, olderVersions }) => (
+                          <div key={`${capstoneProjectId}-${phase}`} className={rowClass}>
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-600 sm:h-11 sm:w-11 dark:bg-green-900/50 dark:text-green-300">
                               <FileText className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                              <h3 className="truncate text-sm font-semibold text-foreground" title={d.fileName}>
-                                {d.fileName}
+                              <h3 className="truncate text-sm font-semibold text-foreground" title={d?.fileName ?? phase}>
+                                {d?.fileName ?? phase}
                               </h3>
-                              <p className="wrap-break-word text-xs text-muted-foreground">
-                                Team: {d.teamName} • Phase: {d.phase} • Version {d.version}
-                              </p>
-                              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                {formatDate(d.uploadedAt)} • {d.fileSize}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-                            <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>
-                              {getStatusLabel(d.status)}
-                            </span>
-
-                            <div className="flex flex-wrap items-center gap-1">
-                              {/* Quick actions for submissions waiting on you */}
-                              {d.status === "under_review" && (
+                              {d ? (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="rounded-lg px-3 text-xs"
-                                    onClick={() => handleStatus(d._id, "needs_revision")}
-                                  >
-                                    Request revision
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    className="rounded-lg bg-green-600 px-3 text-xs text-white hover:bg-green-700"
-                                    onClick={() => handleStatus(d._id, "approved")}
-                                  >
-                                    Approve
-                                  </Button>
+                                  <p className="wrap-break-word text-xs text-muted-foreground">
+                                    Team: {teamName} • Phase: {phase} • Version {d.version}
+                                  </p>
+                                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                    {formatDate(d.uploadedAt)} • {d.fileSize}
+                                  </p>
                                 </>
+                              ) : (
+                                <p className="wrap-break-word text-xs text-muted-foreground">
+                                  Team: {teamName} • No submission yet
+                                </p>
                               )}
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className={ICON_BTN} aria-label="Submission options">
-                                    <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  {/* Disabled when the upload has no stored file */}
-                                  <DropdownMenuItem
-                                    disabled={!d.storageId}
-                                    onClick={() => {
-                                      if (!d.storageId) return;
-                                      const doc = {
-                                        fileName: d.fileName,
-                                        storageId: d.storageId,
-                                        deliverableId: d._id,
-                                        capstoneProjectId: d.capstoneProjectId,
-                                        phase: d.phase,
-                                      };
-                                      if (isPdf(d.fileName)) setSelectedDeliverable(doc);
-                                      else setOfficeDoc(doc);
-                                    }}
-                                  >
-                                    View File
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
                             </div>
                           </div>
-                        </div>
-                      ))}
 
-                      {filteredDeliverables && filteredDeliverables.length > SIDE_PREVIEW && (
+                          {d && (
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                              <span className={`${BADGE_BASE} ${getStatusBadge(d.status)}`}>
+                                {getStatusLabel(d.status)}
+                              </span>
+
+                              <div className="flex flex-wrap items-center gap-1">
+                                {/* Quick actions for submissions waiting on you */}
+                                {d.status === "under_review" && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-lg px-3 text-xs"
+                                      onClick={() => handleStatus(d._id, "needs_revision")}
+                                    >
+                                      Request revision
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="rounded-lg bg-green-600 px-3 text-xs text-white hover:bg-green-700"
+                                      onClick={() => handleStatus(d._id, "approved")}
+                                    >
+                                      Approve
+                                    </Button>
+                                  </>
+                                )}
+
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className={ICON_BTN} aria-label="Submission options">
+                                      <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-44">
+                                    <DropdownMenuItem
+                                      disabled={!d.storageId}
+                                      onClick={() => openDeliverable(d)}
+                                    >
+                                      View File
+                                    </DropdownMenuItem>
+                                    {olderVersions.length > 0 && (
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          Previous versions ({olderVersions.length})
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent className="w-52">
+                                          {olderVersions.map((version) => (
+                                            <DropdownMenuItem
+                                              key={version._id}
+                                              disabled={!version.storageId}
+                                                onClick={() => openDeliverable(version)}
+                                            >
+                                              Version {version.version} • {formatDate(version.uploadedAt)}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        )
+                      )}
+
+                      {submissionRows && submissionRows.length > SIDE_PREVIEW && (
                         <div className="pt-1 text-center">
                           <ViewAllLink
                             expanded={showAllSubmissions}
