@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import { Id } from "./_generated/dataModel";
 import { requireAdmin, logAction } from "./users";
 
@@ -64,7 +65,7 @@ export const updateProject = mutation({
     const admin = await requireAdmin(ctx);
 
     const project = await ctx.db.get(projectId);
-    if (!project) throw new Error("Project not found");
+    if (!project) throwUserError("Project not found");
 
     const patch: Record<string, string | number> = {};
     for (const [key, value] of Object.entries(fields)) {
@@ -92,13 +93,13 @@ export const deleteProject = mutation({
     const admin = await requireAdmin(ctx);
 
     const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    if (!project) throwUserError("Project not found");
     if (
       project.capstoneProjectId &&
       (project.title.trim().toLowerCase() === "prajik" ||
         project.team.trim().toLowerCase() === "prajik")
     ) {
-      throw new Error("Use Reset project process to remove Prajik and clear its student workflow.");
+      throwUserError("Use Reset project process to remove Prajik and clear its student workflow.");
     }
 
     const storageIds = new Set([
@@ -117,20 +118,20 @@ export const resetPrajikProjectProcess = mutation({
   handler: async (ctx, { projectId }) => {
     const admin = await requireAdmin(ctx);
     const archiveProject = await ctx.db.get(projectId);
-    if (!archiveProject) throw new Error("Archived project not found.");
+    if (!archiveProject) throwUserError("Archived project not found.");
     if (
       archiveProject.title.trim().toLowerCase() !== "prajik" &&
       archiveProject.team.trim().toLowerCase() !== "prajik"
     ) {
-      throw new Error("This action is only available for the Prajik archive entry.");
+      throwUserError("This action is only available for the Prajik archive entry.");
     }
 
     if (!archiveProject.capstoneProjectId) {
-      throw new Error("This archive entry is not linked to its accepted team.");
+      throwUserError("This archive entry is not linked to its accepted team.");
     }
 
     const capstoneProject = await ctx.db.get(archiveProject.capstoneProjectId);
-    if (!capstoneProject) throw new Error("The accepted team for this archive entry was not found.");
+    if (!capstoneProject) throwUserError("The accepted team for this archive entry was not found.");
 
     const archiveEntries = await ctx.db
       .query("projects")
@@ -139,7 +140,7 @@ export const resetPrajikProjectProcess = mutation({
       )
       .take(50);
     if (archiveEntries.length === 50) {
-      throw new Error("Too many archive records are linked to this team to reset safely.");
+      throwUserError("Too many archive records are linked to this team to reset safely.");
     }
 
     const submissions = await ctx.db
@@ -149,7 +150,7 @@ export const resetPrajikProjectProcess = mutation({
       )
       .take(10);
     if (submissions.length === 10) {
-      throw new Error("Too many IMRaD submissions are linked to this team to reset safely.");
+      throwUserError("Too many IMRaD submissions are linked to this team to reset safely.");
     }
 
     const deliverables = await ctx.db
@@ -159,7 +160,7 @@ export const resetPrajikProjectProcess = mutation({
       )
       .take(500);
     if (deliverables.length === 500) {
-      throw new Error("Too many deliverables are linked to this team to reset safely.");
+      throwUserError("Too many deliverables are linked to this team to reset safely.");
     }
 
     const workingDocuments = await ctx.db
@@ -169,7 +170,7 @@ export const resetPrajikProjectProcess = mutation({
       )
       .take(50);
     if (workingDocuments.length === 50) {
-      throw new Error("Too many working documents are linked to this team to reset safely.");
+      throwUserError("Too many working documents are linked to this team to reset safely.");
     }
 
     const storageIds = new Set<Id<"_storage">>([
@@ -202,7 +203,7 @@ export const resetPrajikProjectProcess = mutation({
         )
         .take(50);
       if (deliverableDrafts.length === 50) {
-        throw new Error("Too many drafts are linked to this team to reset safely.");
+        throwUserError("Too many drafts are linked to this team to reset safely.");
       }
       drafts.push(...deliverableDrafts);
       relatedRecordCount += deliverableDrafts.length;
@@ -215,12 +216,12 @@ export const resetPrajikProjectProcess = mutation({
         )
         .take(500);
       if (deliverableComments.length === 500) {
-        throw new Error("Too many document comments are linked to this team to reset safely.");
+        throwUserError("Too many document comments are linked to this team to reset safely.");
       }
       comments.push(...deliverableComments);
       relatedRecordCount += deliverableComments.length;
       if (relatedRecordCount > 500) {
-        throw new Error("This project has too much history to reset in one operation.");
+        throwUserError("This project has too much history to reset in one operation.");
       }
     }
 

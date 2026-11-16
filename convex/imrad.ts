@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -16,18 +17,18 @@ async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
 
 async function requireInstructor(ctx: MutationCtx) {
   const user = await getCurrentUser(ctx);
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throwUserError("Not authenticated");
   if (user.role !== "instructor" || user.status === "pending" || user.status === "rejected") {
-    throw new Error("Approved instructor access required");
+    throwUserError("Approved instructor access required");
   }
   return user;
 }
 
 async function requireStudent(ctx: MutationCtx) {
   const user = await getCurrentUser(ctx);
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throwUserError("Not authenticated");
   if (user.role !== "student" || user.status === "pending" || user.status === "rejected") {
-    throw new Error("Approved student access required");
+    throwUserError("Approved student access required");
   }
   return user;
 }
@@ -64,7 +65,7 @@ async function requireProjectTeamMember(
   const student = await requireStudent(ctx);
   const project = await ctx.db.get(projectId);
   if (!project || !(project.members ?? []).includes(student._id)) {
-    throw new Error("You must be a member of this team to access its IMRaD.");
+    throwUserError("You must be a member of this team to access its IMRaD.");
   }
   return { student, project };
 }
@@ -93,24 +94,24 @@ export const submitPanelEvaluations = mutation({
   handler: async (ctx, args) => {
     const instructor = await requireInstructor(ctx);
     if (args.evaluationFiles.length !== 3) {
-      throw new Error("Exactly three panel evaluation PDFs are required.");
+      throwUserError("Exactly three panel evaluation PDFs are required.");
     }
 
     for (const file of args.evaluationFiles) {
       if (!file.fileName.trim().toLowerCase().endsWith(".pdf")) {
-        throw new Error("Panel evaluations must be PDF files.");
+        throwUserError("Panel evaluations must be PDF files.");
       }
     }
     const description = args.description.trim();
-    if (!description) throw new Error("Submission details are required.");
+    if (!description) throwUserError("Submission details are required.");
 
     const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     if (project.instructorId !== instructor._id) {
-      throw new Error("You can only submit evaluations for your own team.");
+      throwUserError("You can only submit evaluations for your own team.");
     }
     if (project.stage !== "ready_to_archive" || project.defenseResult !== "passed") {
-      throw new Error("Only teams accepted without revisions can be submitted for IMRAD processing.");
+      throwUserError("Only teams accepted without revisions can be submitted for IMRAD processing.");
     }
 
     const existing = await ctx.db
@@ -118,7 +119,7 @@ export const submitPanelEvaluations = mutation({
       .withIndex("by_project", (q) => q.eq("capstoneProjectId", project._id))
       .unique();
     if (existing && existing.status !== "rejected") {
-      throw new Error("This team has already been submitted for IMRAD processing.");
+      throwUserError("This team has already been submitted for IMRAD processing.");
     }
 
     if (existing) {
@@ -372,7 +373,7 @@ export const myInstructorReviewSubmissions = query({
             .unique(),
         ]);
         if (!workingDocument) {
-          throw new Error("A final verification submission is missing its PDF.");
+          throwUserError("A final verification submission is missing its PDF.");
         }
         return {
           submissionId: submission._id,
@@ -543,10 +544,10 @@ export const unlockStudentImrad = mutation({
     const instructor = await requireInstructor(ctx);
     const project = await ctx.db.get(projectId);
     if (!project || project.instructorId !== instructor._id) {
-      throw new Error("You can only unlock IMRaD for your assigned team.");
+      throwUserError("You can only unlock IMRaD for your assigned team.");
     }
     if (!isEligibleForImrad(project)) {
-      throw new Error("The capstone must be completed and passed before IMRaD can be unlocked.");
+      throwUserError("The capstone must be completed and passed before IMRaD can be unlocked.");
     }
     if (project.imradUnlockedAt) return null;
 
@@ -575,7 +576,7 @@ export const generateStudentGuideUploadUrl = mutation({
   handler: async (ctx, { projectId }) => {
     const { project } = await requireProjectTeamMember(ctx, projectId);
     if (!project.imradUnlockedAt) {
-      throw new Error("Your instructor has not unlocked the IMRaD process yet.");
+      throwUserError("Your instructor has not unlocked the IMRaD process yet.");
     }
     return await ctx.storage.generateUploadUrl();
   },
@@ -592,27 +593,27 @@ export const openStudentImradEditorSession = mutation({
   handler: async (ctx, { submissionId }) => {
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
-      throw new Error("This IMRaD document is not open for student editing.");
+      throwUserError("This IMRaD document is not open for student editing.");
     }
     const { project } = await requireProjectTeamMember(
       ctx,
       submission.capstoneProjectId
     );
     if (project.stage === "archived") {
-      throw new Error("Archived projects are read-only.");
+      throwUserError("Archived projects are read-only.");
     }
 
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
-    if (!workingDocument) throw new Error("The team IMRaD document was not found.");
+    if (!workingDocument) throwUserError("The team IMRaD document was not found.");
     if (workingDocument.activeSessionClosing) {
-      throw new Error("The previous IMRaD editing session is still saving. Please reopen it shortly.");
+      throwUserError("The previous IMRaD editing session is still saving. Please reopen it shortly.");
     }
 
     const fileUrl = await ctx.storage.getUrl(workingDocument.storageId);
-    if (!fileUrl) throw new Error("The team IMRaD file URL is unavailable.");
+    if (!fileUrl) throwUserError("The team IMRaD file URL is unavailable.");
 
     const sessionId = workingDocument.activeSessionId ?? crypto.randomUUID();
     if (!workingDocument.activeSessionId) {
@@ -640,7 +641,7 @@ export const createStudentImradCallbackToken = mutation({
   handler: async (ctx, { submissionId, sessionId }) => {
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
-      throw new Error("This IMRaD document is not open for student editing.");
+      throwUserError("This IMRaD document is not open for student editing.");
     }
     await requireProjectTeamMember(ctx, submission.capstoneProjectId);
     const workingDocument = await ctx.db
@@ -648,10 +649,10 @@ export const createStudentImradCallbackToken = mutation({
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
     if (!workingDocument || workingDocument.activeSessionId !== sessionId) {
-      throw new Error("This IMRaD editing session is no longer active.");
+      throwUserError("This IMRaD editing session is no longer active.");
     }
     const secret = process.env.ONLYOFFICE_SECRET;
-    if (!secret) throw new Error("OnlyOffice callback signing is not configured.");
+    if (!secret) throwUserError("OnlyOffice callback signing is not configured.");
 
     const expiresAt = Date.now() + 60 * 60 * 1000;
     const payload = `${submissionId}:${sessionId}:${expiresAt}`;
@@ -690,21 +691,21 @@ export const startStudentImrad = mutation({
   handler: async (ctx, { projectId, storageId }) => {
     const { student, project } = await requireProjectTeamMember(ctx, projectId);
     if (!project.imradUnlockedAt) {
-      throw new Error("Your instructor has not unlocked the IMRaD process yet.");
+      throwUserError("Your instructor has not unlocked the IMRaD process yet.");
     }
     if (project.stage === "archived") {
-      throw new Error("This project is already archived.");
+      throwUserError("This project is already archived.");
     }
 
     const metadata = await ctx.db.system.get("_storage", storageId);
     if (metadata?.contentType !== "application/pdf") {
-      throw new Error("The IMRaD guide copy must be a PDF.");
+      throwUserError("The IMRaD guide copy must be a PDF.");
     }
     const instructorId = project.instructorId
       ? ctx.db.normalizeId("users", project.instructorId)
       : null;
     if (!instructorId) {
-      throw new Error("This team does not have an assigned instructor for IMRaD review.");
+      throwUserError("This team does not have an assigned instructor for IMRaD review.");
     }
 
     const existing = await ctx.db
@@ -735,7 +736,7 @@ export const startStudentImrad = mutation({
     }
 
     if (existing && existing.status !== "rejected") {
-      throw new Error("An IMRaD submission already exists for this team.");
+      throwUserError("An IMRaD submission already exists for this team.");
     }
 
     const fileName = `${project.teamName} - IMRaD Conversion Guide.pdf`;
@@ -847,7 +848,7 @@ export const adminWorkingDocumentStatus = query({
   handler: async (ctx, { submissionId }) => {
     await requireAdmin(ctx);
     const submission = await ctx.db.get(submissionId);
-    if (!submission) throw new Error("Submission not found.");
+    if (!submission) throwUserError("Submission not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
@@ -886,24 +887,24 @@ export const completeWorkingDocumentPart = mutation({
       !submission ||
       !["processing", "changes_requested"].includes(submission.status)
     ) {
-      throw new Error("This project is not in IMRAD processing.");
+      throwUserError("This project is not in IMRAD processing.");
     }
 
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
 
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
     if (!workingDocument) {
-      throw new Error("Create the team IMRAD guide copy before marking a part complete.");
+      throwUserError("Create the team IMRAD guide copy before marking a part complete.");
     }
 
     const completedParts = workingDocument.completedParts ?? [];
     if (completedParts.includes(partNumber)) return completedParts.length;
     if (partNumber !== completedParts.length + 1) {
-      throw new Error("Complete the IMRAD parts in order.");
+      throwUserError("Complete the IMRAD parts in order.");
     }
 
     await ctx.db.patch(workingDocument._id, {
@@ -944,7 +945,7 @@ export const completeStudentWorkingDocumentPart = mutation({
   handler: async (ctx, { submissionId, partNumber }) => {
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
-      throw new Error("This IMRaD document is not open for student editing.");
+      throwUserError("This IMRaD document is not open for student editing.");
     }
     const { student, project } = await requireProjectTeamMember(
       ctx,
@@ -954,12 +955,12 @@ export const completeStudentWorkingDocumentPart = mutation({
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
-    if (!workingDocument) throw new Error("The team's IMRaD document was not found.");
+    if (!workingDocument) throwUserError("The team's IMRaD document was not found.");
 
     const completedParts = workingDocument.completedParts ?? [];
     if (completedParts.includes(partNumber)) return completedParts.length;
     if (partNumber !== completedParts.length + 1) {
-      throw new Error("Complete the IMRaD parts in order.");
+      throwUserError("Complete the IMRaD parts in order.");
     }
 
     await ctx.db.patch(workingDocument._id, {
@@ -984,7 +985,7 @@ export const generateAdminWorkingDocumentUploadUrl = mutation({
   args: { secret: v.string() },
   returns: v.string(),
   handler: async (ctx, { secret }) => {
-    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throwUserError("Forbidden");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -1002,22 +1003,22 @@ export const saveAdminWorkingDocumentFile = mutation({
     ctx,
     { secret, submissionId, storageId, sessionId, sessionClosed = false }
   ) => {
-    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throwUserError("Forbidden");
     const submission = await ctx.db.get(submissionId);
     if (!submission) {
-      throw new Error("This IMRaD document cannot be saved in its current state.");
+      throwUserError("This IMRaD document cannot be saved in its current state.");
     }
     const allowedStatuses = ["processing", "changes_requested", "student_editing"];
     if (sessionId) allowedStatuses.push("instructor_review", "admin_review");
     if (!allowedStatuses.includes(submission.status)) {
-      throw new Error("This IMRaD document cannot be saved in its current state.");
+      throwUserError("This IMRaD document cannot be saved in its current state.");
     }
 
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
-    if (!workingDocument) throw new Error("The team IMRaD document was not found.");
+    if (!workingDocument) throwUserError("The team IMRaD document was not found.");
 
     if (submission.status === "student_editing" || sessionId) {
       const isCurrentSession = sessionId
@@ -1033,7 +1034,7 @@ export const saveAdminWorkingDocumentFile = mutation({
 
     const metadata = await ctx.db.system.get("_storage", storageId);
     if (metadata?.contentType !== "application/pdf") {
-      throw new Error("The saved IMRaD document must be a PDF.");
+      throwUserError("The saved IMRaD document must be a PDF.");
     }
 
     const revision = (workingDocument.revision ?? 0) + 1;
@@ -1065,7 +1066,7 @@ export const updateStudentImradEditorSession = mutation({
   },
   returns: v.boolean(),
   handler: async (ctx, { secret, submissionId, sessionId, state }) => {
-    if (secret !== process.env.ONLYOFFICE_SECRET) throw new Error("Forbidden");
+    if (secret !== process.env.ONLYOFFICE_SECRET) throwUserError("Forbidden");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
@@ -1094,10 +1095,10 @@ export const submitFinalVerification = mutation({
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(submissionId);
     if (!submission || !["processing", "changes_requested"].includes(submission.status)) {
-      throw new Error("This IMRaD document is not ready to submit for verification.");
+      throwUserError("This IMRaD document is not ready to submit for verification.");
     }
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
@@ -1108,7 +1109,7 @@ export const submitFinalVerification = mutation({
       workingDocument.savedAt === undefined ||
       (workingDocument.revision ?? 0) < (submission.requiredSaveRevision ?? 1)
     ) {
-      throw new Error("Save the completed four-part IMRaD PDF before submitting final verification.");
+      throwUserError("Save the completed four-part IMRaD PDF before submitting final verification.");
     }
 
     await ctx.db.patch(submissionId, {
@@ -1143,15 +1144,15 @@ export const saveWorkingDocument = mutation({
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "processing") {
-      throw new Error("This project is not in IMRAD processing.");
+      throwUserError("This project is not in IMRAD processing.");
     }
 
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
 
     const metadata = await ctx.db.system.get("_storage", storageId);
     if (metadata?.contentType !== "application/pdf") {
-      throw new Error("The IMRAD working document must be a PDF.");
+      throwUserError("The IMRAD working document must be a PDF.");
     }
 
     const existing = await ctx.db
@@ -1191,12 +1192,12 @@ export const deleteInvalidSubmission = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(args.submissionId);
-    if (!submission) throw new Error("Submission not found.");
+    if (!submission) throwUserError("Submission not found.");
     if (submission.status !== "submitted") {
-      throw new Error("Only unprocessed submissions can be deleted.");
+      throwUserError("Only unprocessed submissions can be deleted.");
     }
     if (submission.evaluationFiles.length === 3) {
-      throw new Error("Only submissions with an incorrect number of panel evaluations can be deleted here.");
+      throwUserError("Only submissions with an incorrect number of panel evaluations can be deleted here.");
     }
 
     const project = await ctx.db.get(submission.capstoneProjectId);
@@ -1219,11 +1220,11 @@ export const processSubmission = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(args.submissionId);
-    if (!submission) throw new Error("Submission not found.");
-    if (submission.status !== "submitted") throw new Error("Submission is already being processed.");
+    if (!submission) throwUserError("Submission not found.");
+    if (submission.status !== "submitted") throwUserError("Submission is already being processed.");
 
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     await ctx.db.patch(submission._id, { status: "processing", processedAt: Date.now() });
     await logAction(ctx, admin, "Started IMRAD processing", project.teamName);
     return null;
@@ -1239,16 +1240,16 @@ export const rejectSubmission = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(args.submissionId);
-    if (!submission) throw new Error("Submission not found.");
+    if (!submission) throwUserError("Submission not found.");
     if (submission.status !== "submitted") {
-      throw new Error("Only submitted evaluations can be rejected.");
+      throwUserError("Only submitted evaluations can be rejected.");
     }
 
     const rejectionMessage = args.rejectionMessage.trim();
-    if (!rejectionMessage) throw new Error("Provide a reason for rejecting this submission.");
+    if (!rejectionMessage) throwUserError("Provide a reason for rejecting this submission.");
 
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     await ctx.db.patch(submission._id, {
       status: "rejected",
       rejectionMessage,
@@ -1264,15 +1265,15 @@ export const cancelProcessing = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
-    if (!user) throw new Error("Not authenticated.");
+    if (!user) throwUserError("Not authenticated.");
     const submission = await ctx.db.get(args.submissionId);
-    if (!submission) throw new Error("Submission not found.");
+    if (!submission) throwUserError("Submission not found.");
     if (
       !["processing", "changes_requested", "verification"].includes(
         submission.status
       )
     ) {
-      throw new Error("This IMRaD submission can no longer be canceled.");
+      throwUserError("This IMRaD submission can no longer be canceled.");
     }
 
     if (user.role === "admin") {
@@ -1283,7 +1284,7 @@ export const cancelProcessing = mutation({
         submission.status !== "verification" ||
         submission.instructorId !== instructor._id
       ) {
-        throw new Error("You can only cancel your team's pending verification.");
+        throwUserError("You can only cancel your team's pending verification.");
       }
     }
 
@@ -1320,16 +1321,16 @@ export const completeConversion = mutation({
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "approved") {
-      throw new Error("Only an instructor-approved IMRaD document can be completed.");
+      throwUserError("Only an instructor-approved IMRaD document can be completed.");
     }
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
     if (!workingDocument || !workingDocument.savedAt) {
-      throw new Error("The final IMRaD PDF is not saved.");
+      throwUserError("The final IMRaD PDF is not saved.");
     }
 
     await ctx.db.patch(submissionId, { status: "completed" });
@@ -1373,10 +1374,10 @@ export const reviewAdminImrad = mutation({
     const admin = await requireAdmin(ctx);
     const submission = await ctx.db.get(args.submissionId);
     if (!submission || submission.status !== "admin_review") {
-      throw new Error("This IMRaD document is not awaiting final verification.");
+      throwUserError("This IMRaD document is not awaiting final verification.");
     }
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
@@ -1388,12 +1389,12 @@ export const reviewAdminImrad = mutation({
       (workingDocument.revision ?? 0) <
         (submission.requiredSaveRevision ?? 1)
     ) {
-      throw new Error("The saved four-part IMRaD document is not ready for final verification.");
+      throwUserError("The saved four-part IMRaD document is not ready for final verification.");
     }
 
     if (args.decision === "request_changes") {
       const comment = args.comment?.trim() ?? "";
-      if (!comment) throw new Error("Enter a comment explaining the requested changes.");
+      if (!comment) throwUserError("Enter a comment explaining the requested changes.");
       await ctx.db.patch(submission._id, {
         status: "student_editing",
         revisionTarget: "admin",
@@ -1445,16 +1446,16 @@ async function archiveImradDocument(
 ) {
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "completed") {
-      throw new Error("Complete the approved IMRaD conversion before archiving it.");
+      throwUserError("Complete the approved IMRaD conversion before archiving it.");
     }
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
     if (!workingDocument || !workingDocument.savedAt) {
-      throw new Error("The final IMRaD PDF is not saved.");
+      throwUserError("The final IMRaD PDF is not saved.");
     }
 
     const memberNames: string[] = [];
@@ -1518,14 +1519,14 @@ async function archiveImradDocument(
             : [{ storageId: workingDocument.storageId, fileName: workingDocument.fileName }],
       });
       archiveEntry = await ctx.db.get(archiveEntryId);
-      if (!archiveEntry) throw new Error("Could not create the project archive entry.");
+      if (!archiveEntry) throwUserError("Could not create the project archive entry.");
     } else {
       const additionalFiles = archiveEntry.additionalFiles ?? [];
       if (
         archiveEntry.storageId !== workingDocument.storageId &&
         additionalFiles.some((file) => file.storageId === workingDocument.storageId)
       ) {
-        throw new Error("This IMRaD PDF is already in the project archive.");
+        throwUserError("This IMRaD PDF is already in the project archive.");
       }
       await ctx.db.patch(archiveEntry._id, {
         capstoneProjectId: project._id,
@@ -1576,10 +1577,10 @@ export const reviewFinalVerification = mutation({
       submission.instructorId !== instructor._id ||
       submission.status !== "verification"
     ) {
-      throw new Error("This IMRaD document is not awaiting your verification.");
+      throwUserError("This IMRaD document is not awaiting your verification.");
     }
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) =>
@@ -1587,12 +1588,12 @@ export const reviewFinalVerification = mutation({
       )
       .unique();
     if (!workingDocument || (workingDocument.completedParts ?? []).length !== 4) {
-      throw new Error("All four IMRaD parts must be complete before verification.");
+      throwUserError("All four IMRaD parts must be complete before verification.");
     }
 
     if (args.decision === "request_changes") {
       const comment = args.comment?.trim() ?? "";
-      if (!comment) throw new Error("Enter a comment explaining the requested changes.");
+      if (!comment) throwUserError("Enter a comment explaining the requested changes.");
       const requiredSaveRevision = (workingDocument.revision ?? 0) + 1;
       await ctx.db.patch(submission._id, {
         status: "changes_requested",
@@ -1633,17 +1634,17 @@ export const submitStudentImrad = mutation({
   handler: async (ctx, { submissionId, abstract: abstractInput, keywords: keywordInput }) => {
     const abstract = abstractInput.trim();
     const keywords = keywordInput.map((keyword) => keyword.trim()).filter(Boolean);
-    if (!abstract) throw new Error("Enter the IMRaD abstract before submitting.");
+    if (!abstract) throwUserError("Enter the IMRaD abstract before submitting.");
     if (abstract.split(/\s+/).length > 250) {
-      throw new Error("The IMRaD abstract cannot exceed 250 words.");
+      throwUserError("The IMRaD abstract cannot exceed 250 words.");
     }
     if (keywords.length < 3) {
-      throw new Error("Enter at least 3 keywords, separated by commas.");
+      throwUserError("Enter at least 3 keywords, separated by commas.");
     }
 
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
-      throw new Error("This IMRaD document is not ready to submit.");
+      throwUserError("This IMRaD document is not ready to submit.");
     }
     const { student, project } = await requireProjectTeamMember(
       ctx,
@@ -1660,7 +1661,7 @@ export const submitStudentImrad = mutation({
       (workingDocument.revision ?? 0) <
         (submission.requiredSaveRevision ?? 1)
     ) {
-      throw new Error("Complete all four IMRaD parts and save the PDF before submitting.");
+      throwUserError("Complete all four IMRaD parts and save the PDF before submitting.");
     }
 
     const target = submission.revisionTarget ?? "instructor";
@@ -1714,10 +1715,10 @@ export const reviewInstructorSubmission = mutation({
       submission.instructorId !== instructor._id ||
       submission.status !== "instructor_review"
     ) {
-      throw new Error("This IMRaD document is not awaiting your review.");
+      throwUserError("This IMRaD document is not awaiting your review.");
     }
     const project = await ctx.db.get(submission.capstoneProjectId);
-    if (!project) throw new Error("Project not found.");
+    if (!project) throwUserError("Project not found.");
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
       .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
@@ -1729,12 +1730,12 @@ export const reviewInstructorSubmission = mutation({
       (workingDocument.revision ?? 0) <
         (submission.requiredSaveRevision ?? 1)
     ) {
-      throw new Error("The saved four-part IMRaD document is not ready for review.");
+      throwUserError("The saved four-part IMRaD document is not ready for review.");
     }
 
     if (args.decision === "request_changes") {
       const comment = args.comment?.trim() ?? "";
-      if (!comment) throw new Error("Enter a comment explaining the requested changes.");
+      if (!comment) throwUserError("Enter a comment explaining the requested changes.");
       await ctx.db.patch(submission._id, {
         status: "student_editing",
         revisionTarget: "instructor",
@@ -1773,7 +1774,7 @@ export const confirmAdminWorkingDocumentHasNoPendingChanges = mutation({
     await requireAdmin(ctx);
     const submission = await ctx.db.get(submissionId);
     if (!submission || !["processing", "changes_requested"].includes(submission.status)) {
-      throw new Error("This IMRaD document cannot be confirmed in its current state.");
+      throwUserError("This IMRaD document cannot be confirmed in its current state.");
     }
     const workingDocument = await ctx.db
       .query("imradWorkingDocuments")
@@ -1783,12 +1784,12 @@ export const confirmAdminWorkingDocumentHasNoPendingChanges = mutation({
       !workingDocument ||
       (workingDocument.completedParts ?? []).length !== 4
     ) {
-      throw new Error("Save the completed four-part IMRaD PDF before confirming it.");
+      throwUserError("Save the completed four-part IMRaD PDF before confirming it.");
     }
 
     const metadata = await ctx.db.system.get("_storage", workingDocument.storageId);
     if (metadata?.contentType !== "application/pdf") {
-      throw new Error("The current IMRaD working document is not a saved PDF.");
+      throwUserError("The current IMRaD working document is not a saved PDF.");
     }
 
     const savedAt = workingDocument.savedAt ?? Date.now();
@@ -1808,7 +1809,7 @@ export const confirmStudentWorkingDocumentHasNoPendingChanges = mutation({
   handler: async (ctx, { submissionId }) => {
     const submission = await ctx.db.get(submissionId);
     if (!submission || submission.status !== "student_editing") {
-      throw new Error("This IMRaD document is not open for student editing.");
+      throwUserError("This IMRaD document is not open for student editing.");
     }
     await requireProjectTeamMember(ctx, submission.capstoneProjectId);
     const workingDocument = await ctx.db
@@ -1816,12 +1817,12 @@ export const confirmStudentWorkingDocumentHasNoPendingChanges = mutation({
       .withIndex("by_submission", (q) => q.eq("submissionId", submissionId))
       .unique();
     if (!workingDocument || (workingDocument.completedParts ?? []).length !== 4) {
-      throw new Error("Complete all four IMRaD parts before saving for review.");
+      throwUserError("Complete all four IMRaD parts before saving for review.");
     }
 
     const metadata = await ctx.db.system.get("_storage", workingDocument.storageId);
     if (metadata?.contentType !== "application/pdf") {
-      throw new Error("The current IMRaD document is not a saved PDF.");
+      throwUserError("The current IMRaD document is not a saved PDF.");
     }
     await ctx.db.patch(submissionId, {
       requiredSaveRevision: workingDocument.revision ?? 0,

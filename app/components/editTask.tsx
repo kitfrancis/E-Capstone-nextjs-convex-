@@ -18,6 +18,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { toast } from "sonner"
 import type { Id } from "@/convex/_generated/dataModel"
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 const TEAM_ROLES = [
   "Project Manager",
@@ -81,7 +82,7 @@ export function EditTask({
       toast.success("Task updated successfully!");
     } catch (error) {
       console.error("Failed to update task:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to update task.");
+      toast.error(getConvexErrorMessage(error, "Failed to update task."));
     }
   };
 

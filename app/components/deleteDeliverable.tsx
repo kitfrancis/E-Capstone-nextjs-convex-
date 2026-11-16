@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +35,7 @@ export function DeleteDeliverable({
       toast.success("File deleted successfully.");
     } catch (error) {
       console.error("Failed to delete deliverable:", error);
-      toast.error("Failed to delete file.");
+      toast.error(getConvexErrorMessage(error, "Failed to delete file."));
     }
   };
 

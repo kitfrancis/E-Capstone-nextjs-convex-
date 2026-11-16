@@ -6,6 +6,7 @@ import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -84,11 +85,12 @@ export default function SignUpPage() {
         inviteCode,
       });
       router.push("/dashboard/student");
-    } catch (err: any) {
+    } catch (err) {
       setError(
-        err?.data ??
-          err?.message ??
+        getConvexErrorMessage(
+          err,
           "Your account was created but setup failed. Please try again."
+        )
       );
       setSetupState("failed");
       setLoading(false);

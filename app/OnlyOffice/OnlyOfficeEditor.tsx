@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 type OnlyOfficeEditorProps = {
   fileId: string;
@@ -133,9 +134,10 @@ export default function OnlyOfficeEditor({
         if (!cancelled) {
           setLoading(false);
           setLoadError(
-            error instanceof Error
-              ? error.message
-              : `OnlyOffice could not be reached at ${serverUrl}.`,
+            getConvexErrorMessage(
+              error,
+              `OnlyOffice could not be reached at ${serverUrl}.`
+            )
           );
         }
         return;
@@ -219,7 +221,10 @@ export default function OnlyOfficeEditor({
       onClose();
     } catch (error) {
       setSubmitError(
-        error instanceof Error ? error.message : "Submit failed. Your draft is still saved.",
+        getConvexErrorMessage(
+          error,
+          "Submit failed. Your draft is still saved."
+        ),
       );
     } finally {
       setSubmitting(false);

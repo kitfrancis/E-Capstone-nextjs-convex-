@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Save, Mail, ShieldCheck, KeyRound, GraduationCap, BadgeCheck, Loader2 } from "lucide-react";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 export default function AdviserProfile() {
   const me = useQuery(api.users.getMe);
@@ -36,7 +37,7 @@ export default function AdviserProfile() {
       toast.success("Profile updated successfully", { position: "top-center" });
     } catch (error) {
       console.error("Failed to update profile:", error);
-      toast.error("Failed to update profile");
+      toast.error(getConvexErrorMessage(error, "Failed to update profile."));
     } finally {
       setSaving(false);
     }

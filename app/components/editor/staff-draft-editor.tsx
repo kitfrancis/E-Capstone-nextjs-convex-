@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Loader2 } from "lucide-react";
 import { forceSaveDraft } from "@/lib/onlyoffice-draft";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import OnlyOfficeEditor from "./document-editor";
 
 type Deliverable = {
@@ -94,9 +95,10 @@ export default function StaffDraftEditor({
       .catch((draftError) => {
         if (cancelled) return;
         setError(
-          draftError instanceof Error
-            ? draftError.message
-            : "Couldn't open the team's active draft.",
+          getConvexErrorMessage(
+            draftError,
+            "Couldn't open the team's active draft."
+          )
         );
       });
 

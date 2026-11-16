@@ -12,6 +12,7 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { useState, useRef } from "react"
 import type { ReactNode } from "react"
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 // `trigger` is optional: pass a compact button for headers, or omit it to get
 // the original full-width card button.
@@ -71,7 +72,7 @@ export function DialogDemo({ trigger }: { trigger?: ReactNode }) {
       setCreatedCode(code);
     } catch (error) {
       console.error("Failed to create project:", error);
-      alert("Failed to create project");
+      alert(getConvexErrorMessage(error, "Failed to create project."));
     } finally {
       setIsLoading(false);
       isSubmitting.current = false;

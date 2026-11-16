@@ -12,6 +12,7 @@ import { useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 interface DeleteTeamProps {
   teamId: Id<"capstoneProjects">;
@@ -28,7 +29,7 @@ export function DeleteTeam({ teamId, teamName, trigger }: DeleteTeamProps) {
       toast.success("Team deleted successfully!");
     } catch (error) {
       console.error("Failed to delete team:", error);
-      toast.error("Failed to delete team");
+      toast.error(getConvexErrorMessage(error, "Failed to delete team."));
     }
   };
 

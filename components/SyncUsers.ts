@@ -36,8 +36,8 @@ export function SyncUser() {
     const imageChanged = !!image && image !== me.image;
     if (!emailChanged && !imageChanged) return;
 
-    syncMe({ image: imageChanged ? image : undefined }).catch(() => {
-      // Non-critical; it will retry on the next load
+    syncMe({ image: imageChanged ? image : undefined }).catch((error) => {
+      console.error("Failed to sync the signed-in user's profile with Convex:", error);
     });
   }, [isLoaded, isSignedIn, user, me, syncMe]);
 

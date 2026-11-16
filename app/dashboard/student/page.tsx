@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useConvex } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status-card";
 import { ProposalScheduleCard } from "@/app/components/proposal-schedule-card";
 import { Id } from "@/convex/_generated/dataModel";
@@ -453,7 +454,7 @@ function DashboardContent() {
       .catch((error) => {
         sessionStorage.removeItem(EDITOR_SESSION_KEY);
         setIsRestoringEditor(false);
-        toast.error(error instanceof Error ? error.message : "Couldn't restore the editor.");
+        toast.error(getConvexErrorMessage(error, "Couldn't restore the editor."));
       });
   }, [deliverables, officeDoc, startDraft, viewDraftFromUrl]);
 
@@ -506,7 +507,7 @@ function DashboardContent() {
       .catch((error) => {
         openedDraftDeliverableRef.current = null;
         setIsRestoringEditor(false);
-        toast.error(error instanceof Error ? error.message : "Couldn't open the shared draft.");
+        toast.error(getConvexErrorMessage(error, "Couldn't open the shared draft."));
       });
   }, [
     deliverableIdFromUrl,
@@ -559,14 +560,18 @@ function DashboardContent() {
   const needsSync = proposalDone ? progress.total >= 100 : ch13Done;
   useEffect(() => {
     if (project && !project.stage && needsSync) {
-      syncReadiness({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
+      syncReadiness({ projectId: project._id as Id<"capstoneProjects"> }).catch((error) => {
+        console.error("Failed to sync defense readiness:", error);
+      });
     }
   }, [project?._id, project?.stage, needsSync, syncReadiness]);
 
   // Final revisions: unlock IMRaD once every chapter was resubmitted and approved
   useEffect(() => {
     if (project?.stage === "final_revisions" && progress.total >= 100) {
-      syncFinalRevisions({ projectId: project._id as Id<"capstoneProjects"> }).catch(() => {});
+      syncFinalRevisions({ projectId: project._id as Id<"capstoneProjects"> }).catch((error) => {
+        console.error("Failed to sync final revision readiness:", error);
+      });
     }
   }, [project?._id, project?.stage, progress.total, syncFinalRevisions]);
 
@@ -614,7 +619,7 @@ function DashboardContent() {
         JSON.stringify({ deliverableId: d._id }),
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't open the editor.");
+      toast.error(getConvexErrorMessage(err, "Couldn't open the editor."));
     }
   };
 
@@ -995,7 +1000,7 @@ function DashboardContent() {
       router.push("/dashboard/student/manuscript", { scroll: false });
     } catch (err) {
       console.error(err);
-      toast.error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(`Upload failed: ${getConvexErrorMessage(err, "Please try again.")}`);
     } finally {
       setUploading(false);
     }
@@ -1009,7 +1014,7 @@ function DashboardContent() {
       else toast.success("Task updated.");
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't update the task. Try again.");
+      toast.error(getConvexErrorMessage(err, "Couldn't update the task. Try again."));
     }
   };
 
@@ -1024,7 +1029,7 @@ function DashboardContent() {
       toast.success("Your team role has been updated.");
     } catch (error) {
       console.error("Failed to update team role:", error);
-      toast.error(error instanceof Error ? error.message : "Couldn't update your team role.");
+      toast.error(getConvexErrorMessage(error, "Couldn't update your team role."));
     } finally {
       setSavingTeamRole(false);
     }

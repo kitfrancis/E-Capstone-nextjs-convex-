@@ -16,6 +16,7 @@ import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
 import type { Id } from "@/convex/_generated/dataModel"
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 const TEAM_ROLES = [
   "Project Manager",
@@ -112,7 +113,7 @@ export function TaskDialogDemo({ trigger }: { trigger?: ReactNode }) {
       setOpen(false);
     } catch (error) {
       console.error("Failed to create task:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to create task.");
+      toast.error(getConvexErrorMessage(error, "Failed to create task."));
     } finally {
       setIsSubmitting(false);
     }

@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -153,7 +154,7 @@ export default function ReportsPage() {
       }
       downloadCsv(file, toCsv(rows));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not download");
+      toast.error(getConvexErrorMessage(err, "Could not download the report."));
     } finally {
       setBusy(null);
     }

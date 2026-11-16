@@ -2,6 +2,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -225,7 +226,7 @@ export function InstructorTabsDemo({
       toast.success(decision === "confirm" ? "Task confirmed." : "Task sent back to the team.");
     } catch (err) {
       console.error(err);
-      toast.error("Couldn't update the task. Try again.");
+      toast.error(getConvexErrorMessage(err, "Couldn't update the task. Try again."));
     }
   };
 
@@ -241,7 +242,7 @@ const handleStatus = async (
     );
   } catch (err) {
     console.error(err);
-    toast.error(err instanceof Error ? err.message : "Couldn't update the deliverable.");
+    toast.error(getConvexErrorMessage(err, "Couldn't update the deliverable."));
   }
 };
 
@@ -273,16 +274,33 @@ const handleStatus = async (
   const scopedDeliverables = allDeliverables?.filter((d) => inTeam(d.capstoneProjectId));
   const scopedTasks = tasks?.filter((t) => inTeam(t.capstoneProjectId));
 
+  const latestByChapter = new Map<string, NonNullable<typeof allDeliverables>[number]>();
+  for (const deliverable of scopedDeliverables ?? []) {
+    const key = JSON.stringify([deliverable.capstoneProjectId, deliverable.phase]);
+    const current = latestByChapter.get(key);
+    if (
+      !current ||
+      deliverable.version > current.version ||
+      (deliverable.version === current.version &&
+        new Date(deliverable.uploadedAt).getTime() > new Date(current.uploadedAt).getTime())
+    ) {
+      latestByChapter.set(key, deliverable);
+    }
+  }
+  const latestScopedDeliverables =
+    scopedDeliverables === undefined ? undefined : Array.from(latestByChapter.values());
+
   // Filtered lists
-  // Newest upload first; if two share a timestamp, the higher version goes first
-  const shownDeliverables = scopedDeliverables
+  // Keep the latest version per team and chapter before applying status filters.
+  const shownDeliverables = latestScopedDeliverables
     ?.filter((d) => submissionFilter === "all" || d.status === submissionFilter)
     .sort(
       (a, b) =>
         new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime() ||
         Number(b.version) - Number(a.version)
     );
-  const countStatus = (s: string) => scopedDeliverables?.filter((d) => d.status === s).length ?? 0;
+  const countStatus = (s: string) =>
+    latestScopedDeliverables?.filter((d) => d.status === s).length ?? 0;
 
   // Tasks waiting for the instructor go first
   const shownTasks = scopedTasks
@@ -582,7 +600,7 @@ const handleStatus = async (
                 value={submissionFilter}
                 onChange={setSubmissionFilter}
                 options={[
-                  { label: "All", value: "all", count: scopedDeliverables?.length ?? 0 },
+                  { label: "All", value: "all", count: latestScopedDeliverables?.length ?? 0 },
                   { label: "Under Review", value: "under_review", count: countStatus("under_review") },
                   { label: "Needs Revision", value: "needs_revision", count: countStatus("needs_revision") },
                   { label: "Approved", value: "approved", count: countStatus("approved") },

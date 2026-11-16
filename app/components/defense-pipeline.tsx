@@ -287,7 +287,9 @@ function PipelineRow({ project, onViewTeam }: { project: Project; onViewTeam: ()
 
   useEffect(() => {
     if (!project.stage && progress >= 100) {
-      syncReadiness({ projectId: project._id }).catch(() => {});
+      syncReadiness({ projectId: project._id }).catch((error) => {
+        console.error("Failed to sync defense readiness:", error);
+      });
     }
   }, [project._id, project.stage, progress, syncReadiness]);
 

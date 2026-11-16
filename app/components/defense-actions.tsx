@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -281,7 +282,7 @@ function EvaluationFormsDialog({ project, open, onOpenChange }: DialogProps) {
       await saveForms({ projectId: project._id, files: uploaded });
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't upload the forms. Please try again.");
+      setError(getConvexErrorMessage(e, "Couldn't upload the forms. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -354,7 +355,7 @@ function ArchiveDialog({ project, open, onOpenChange }: DialogProps) {
       await archive({ projectId: project._id, abstract, keywords: keywordList, fileId });
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't archive the project. Please try again.");
+      setError(getConvexErrorMessage(e, "Couldn't archive the project. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -415,7 +416,7 @@ function EndorseDialog({ project, open, onOpenChange }: DialogProps) {
       await endorse({ projectId: project._id });
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't endorse this project.");
+      setError(getConvexErrorMessage(e, "Couldn't endorse this project."));
     } finally {
       setBusy(false);
     }
@@ -463,7 +464,9 @@ export function DefenseActionButton({ project, progress }: { project: Project; p
   // were resubmitted and approved, then makes the team eligible for instructor unlock.
   useEffect(() => {
     if (project.stage === "final_revisions" && progress >= 100) {
-      syncFinal({ projectId: project._id }).catch(() => {});
+      syncFinal({ projectId: project._id }).catch((error) => {
+        console.error("Failed to sync final revision readiness:", error);
+      });
     }
   }, [project._id, project.stage, progress, syncFinal]);
 

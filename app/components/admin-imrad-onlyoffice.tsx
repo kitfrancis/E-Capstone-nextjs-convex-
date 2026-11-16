@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Check, LoaderCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -179,10 +180,17 @@ export default function AdminImradOnlyOffice({
         result = await response.json();
       } catch (parseError) {
         console.error("OnlyOffice force-save API returned invalid JSON:", parseError);
-        throw new Error("Internal server error. Please try again later.");
+        throw new Error("The document save service returned an invalid response. Please try again.");
       }
       if (!response.ok || !result || typeof result !== "object" || !("ok" in result) || result.ok !== true) {
-        throw new Error("Internal server error. Please try again later.");
+        const message =
+          result &&
+          typeof result === "object" &&
+          "message" in result &&
+          typeof result.message === "string"
+            ? result.message
+            : "The document could not be saved. Please try again.";
+        throw new Error(message);
       }
       if (!("waitForCallback" in result) || typeof result.waitForCallback !== "boolean") {
         throw new Error("OnlyOffice returned an invalid save confirmation.");
@@ -231,9 +239,7 @@ export default function AdminImradOnlyOffice({
     } catch (saveError) {
       console.error("Failed to save final IMRaD PDF:", saveError);
       setSaveMessage(
-        saveError instanceof Error
-          ? saveError.message
-          : "Could not save the final IMRaD PDF."
+        getConvexErrorMessage(saveError, "Could not save the final IMRaD PDF.")
       );
     } finally {
       setSavingFinalPdf(false);
@@ -267,9 +273,10 @@ export default function AdminImradOnlyOffice({
     } catch (updateError) {
       console.error("Failed to complete IMRAD part:", updateError);
       setPartUpdateError(
-        updateError instanceof Error
-          ? updateError.message
-          : "Could not update IMRAD progress or notify the instructor."
+        getConvexErrorMessage(
+          updateError,
+          "Could not update IMRAD progress or notify the instructor."
+        )
       );
     } finally {
       setUpdatingPart(false);
@@ -324,9 +331,10 @@ export default function AdminImradOnlyOffice({
       } catch (draftError) {
         setLoading(false);
         setError(
-          draftError instanceof Error
-            ? draftError.message
-            : "Could not create the team IMRAD guide copy."
+          getConvexErrorMessage(
+            draftError,
+            "Could not create the team IMRAD guide copy."
+          )
         );
       }
     };
@@ -468,9 +476,7 @@ export default function AdminImradOnlyOffice({
         editorDocumentKeyRef.current = null;
         setLoading(false);
         setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "OnlyOffice could not be loaded."
+          getConvexErrorMessage(loadError, "OnlyOffice could not be loaded.")
         );
       }
     };

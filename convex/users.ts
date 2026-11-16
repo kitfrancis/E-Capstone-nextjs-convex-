@@ -1,6 +1,7 @@
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,8 +29,8 @@ async function getApprovedUser(ctx: QueryCtx | MutationCtx) {
 // Use this at the top of every admin-only query/mutation (in any file)
 export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
   const user = await getCurrentUser(ctx);
-  if (!user) throw new Error("Not authenticated");
-  if (user.role !== "admin") throw new Error("Admin access required");
+  if (!user) throwUserError("Not authenticated");
+  if (user.role !== "admin") throwUserError("Admin access required");
   return user;
 }
 
@@ -71,7 +72,7 @@ export const registerStudent = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not signed in");
+    if (!identity) throwUserError("Not signed in");
 
     const existing = await ctx.db
       .query("users")
@@ -87,14 +88,14 @@ export const registerStudent = mutation({
         q.eq(q.field("inviteCode"), args.inviteCode.trim().toUpperCase())
       )
       .first();
-    if (!team) throw new Error("Invalid or expired invite code.");
+    if (!team) throwUserError("Invalid or expired invite code.");
 
     const studentNo = args.studentNo.trim();
     const duplicate = await ctx.db
       .query("users")
       .withIndex("by_studentno", (q) => q.eq("studentNo", studentNo))
       .first();
-    if (duplicate) throw new Error("Student number is already registered.");
+    if (duplicate) throwUserError("Student number is already registered.");
 
     // Prefer the verified email from the Clerk token.
     const email = identity.email ?? args.email;
@@ -135,7 +136,7 @@ export const registerStaff = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not signed in");
+    if (!identity) throwUserError("Not signed in");
 
     const existing = await ctx.db
       .query("users")
@@ -171,7 +172,7 @@ export const updateProfile = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
-    if (!user) throw new Error("Not authenticated");
+    if (!user) throwUserError("Not authenticated");
 
     // Only include fields that were actually sent. Patching with `undefined`
     // would REMOVE the stored field in Convex.
@@ -189,14 +190,14 @@ export const updateProfile = mutation({
     if (newNo && newNo !== user.studentNo) {
       // Student number is write-once for non-admins
       if (user.studentNo && user.role !== "admin") {
-        throw new Error("Student number can't be changed. Contact an admin.");
+        throwUserError("Student number can't be changed. Contact an admin.");
       }
       const duplicate = await ctx.db
         .query("users")
         .withIndex("by_studentno", (q) => q.eq("studentNo", newNo))
         .first();
       if (duplicate && duplicate._id !== user._id) {
-        throw new Error("Student number is already registered.");
+        throwUserError("Student number is already registered.");
       }
       patch.studentNo = newNo;
     }
@@ -290,7 +291,7 @@ export const approveUser = mutation({
     const admin = await requireAdmin(ctx);
 
     const target = await ctx.db.get(args.userId);
-    if (!target) throw new Error("User not found");
+    if (!target) throwUserError("User not found");
 
     await ctx.db.patch(args.userId, { status: "approved" });
     await logAction(ctx, admin, "Approved account", `${target.name} (${target.role})`);
@@ -303,9 +304,9 @@ export const rejectUser = mutation({
     const admin = await requireAdmin(ctx);
 
     const target = await ctx.db.get(args.userId);
-    if (!target) throw new Error("User not found");
+    if (!target) throwUserError("User not found");
     if (target.role === "admin") {
-      throw new Error("The admin account can't be rejected.");
+      throwUserError("The admin account can't be rejected.");
     }
 
     await ctx.db.patch(args.userId, { status: "rejected" });
@@ -327,9 +328,9 @@ export const setUserRole = mutation({
     const admin = await requireAdmin(ctx);
 
     const target = await ctx.db.get(args.userId);
-    if (!target) throw new Error("User not found");
+    if (!target) throwUserError("User not found");
     if (target.role === "admin") {
-      throw new Error("The admin account's role can't be changed.");
+      throwUserError("The admin account's role can't be changed.");
     }
 
     await ctx.db.patch(args.userId, { role: args.role });
@@ -352,9 +353,9 @@ export const deleteUser = mutation({
     const admin = await requireAdmin(ctx);
 
     const target = await ctx.db.get(args.userId);
-    if (!target) throw new Error("User not found");
+    if (!target) throwUserError("User not found");
     if (target.role === "admin") {
-      throw new Error("The admin account can't be deleted.");
+      throwUserError("The admin account can't be deleted.");
     }
 
     const teams = await ctx.db.query("capstoneProjects").collect();
@@ -364,7 +365,7 @@ export const deleteUser = mutation({
       (t) => t.adviserId === target._id || t.instructorId === target._id
     );
     if (supervised.length > 0) {
-      throw new Error(
+      throwUserError(
         `${target.name} is the adviser or instructor of ${supervised.length} team(s). Reassign those teams first.`
       );
     }
@@ -408,7 +409,7 @@ export const makeAdmin = internalMutation({
       .withIndex("by_role", (q) => q.eq("role", "admin"))
       .first();
     if (existingAdmin) {
-      throw new Error("An admin already exists. Only one admin is allowed.");
+      throwUserError("An admin already exists. Only one admin is allowed.");
     }
 
     const user = await ctx.db
@@ -417,7 +418,7 @@ export const makeAdmin = internalMutation({
       .first();
 
     if (!user) {
-      throw new Error("No user with that email. Sign up first, then run this.");
+      throwUserError("No user with that email. Sign up first, then run this.");
     }
 
     await ctx.db.patch(user._id, { role: "admin", status: "approved" });

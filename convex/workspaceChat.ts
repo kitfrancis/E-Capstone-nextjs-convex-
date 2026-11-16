@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
+import { throwUserError } from "./errors";
 import type { Doc } from "./_generated/dataModel";
 
 const messageValidator = v.object({
@@ -23,15 +24,15 @@ const messageValidator = v.object({
 
 async function getApprovedCaller(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Not signed in");
+  if (!identity) throwUserError("Not signed in");
 
   const caller = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .first();
-  if (!caller) throw new Error("User not found");
+  if (!caller) throwUserError("User not found");
   if (caller.status === "pending" || caller.status === "rejected") {
-    throw new Error("Your account is awaiting admin approval");
+    throwUserError("Your account is awaiting admin approval");
   }
   return caller;
 }
@@ -42,14 +43,14 @@ async function requireProjectAccess(
   projectId: Doc<"capstoneProjects">["_id"],
 ) {
   const project = await ctx.db.get(projectId);
-  if (!project) throw new Error("Project not found");
+  if (!project) throwUserError("Project not found");
   const isProjectMember = (project.members ?? []).includes(caller._id);
   const canAccess =
     caller.role === "admin" ||
     project.adviserId === caller._id ||
     project.instructorId === caller._id ||
     isProjectMember;
-  if (!canAccess) throw new Error("Not authorized to access this project chat");
+  if (!canAccess) throwUserError("Not authorized to access this project chat");
 }
 
 export const list = query({
@@ -85,10 +86,10 @@ export const send = mutation({
     await requireProjectAccess(ctx, caller, args.capstoneProjectId);
 
     const message = args.message.trim();
-    if (!message) throw new Error("Message cannot be empty");
-    if (message.length > 2000) throw new Error("Message must be 2000 characters or fewer");
+    if (!message) throwUserError("Message cannot be empty");
+    if (message.length > 2000) throwUserError("Message must be 2000 characters or fewer");
     if (!args.phase.trim() || args.phase.length > 100) {
-      throw new Error("Invalid chapter or phase");
+      throwUserError("Invalid chapter or phase");
     }
 
     return await ctx.db.insert("workspaceChatMessages", {

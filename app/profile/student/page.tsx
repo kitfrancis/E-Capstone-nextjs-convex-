@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, Mail, ShieldCheck, KeyRound, BadgeCheck, Loader2, IdCard, GraduationCap, Users } from "lucide-react";
+import { getConvexErrorMessage } from "@/lib/convex-errors";
 
 export default function StudentProfile() {
   const me = useQuery(api.users.getMe);
@@ -42,12 +43,12 @@ export default function StudentProfile() {
     try {
       await updateProfile({ name, studentNo, program, section });
       toast.success("Profile updated successfully", { position: "top-center" });
-    } catch (err: any) {
-      const message = String(err?.data ?? err?.message ?? "");
+    } catch (err) {
+      const message = getConvexErrorMessage(err, "Failed to save changes.");
       if (message.includes("Student number")) {
         setStudentNoError("This student number is already registered.");
       } else {
-        toast.error("Failed to save changes.");
+        toast.error(message);
       }
     } finally {
       setSaving(false);
