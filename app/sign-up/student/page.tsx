@@ -195,57 +195,63 @@ export default function SignUpPage() {
 
   if (step === "verify") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="px-6">
-            <CardTitle className="mt-2 text-base text-center md:text-left">Verify your email</CardTitle>
-            <CardDescription className="text-center md:text-left">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="px-6 text-center sm:px-8">
+            <CardTitle className="w-full text-lg font-semibold">
+              Verify your email
+            </CardTitle>
+            <CardDescription className="mx-auto max-w-sm text-sm">
               Enter the verification code we sent to{" "}
-              <span className="font-semibold">{email}</span>.
+              <span className="break-all font-semibold">{email}</span>.
             </CardDescription>
           </CardHeader>
 
           <form onSubmit={handleVerify}>
-            <CardContent className="px-6 pb-2">
-              <Field>
-                <div className="flex items-center justify-between gap-2 px-6 md:px-10">
-                  <FieldLabel htmlFor="otp-verification">Verification code</FieldLabel>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    disabled={loading || setupState !== "idle"}
-                    onClick={() => signUp?.prepareEmailAddressVerification({ strategy: "email_code" })}
-                  >
-                    <RefreshCwIcon />
-                    Resend Code
-                  </Button>
-                </div>
-
-                <div className="flex justify-center mb-4 mt-2 px-6 md:px-2">
-                  <InputOTP
-                    maxLength={6}
-                    id="otp-verification"
-                    value={verifyCode}
-                    onChange={(value) => setVerifyCode(value)}
-                    disabled={setupState !== "idle"}
-                  >
-                    <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 md:*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-10 md:*:data-[slot=input-otp-slot]:w-11 *:data-[slot=input-otp-slot]:text-xl">
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                    </InputOTPGroup>
-                    <InputOTPSeparator className="mx-0 md:mx-2" />
-                    <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 md:*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-10 md:*:data-[slot=input-otp-slot]:w-11 *:data-[slot=input-otp-slot]:text-xl">
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-
-                {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+            <CardContent className="space-y-4 px-6 pb-4 sm:px-8">
+              <Field className="items-center gap-3">
+                <FieldLabel htmlFor="otp-verification">
+                  Verification code
+                </FieldLabel>
+                <InputOTP
+                  maxLength={6}
+                  id="otp-verification"
+                  value={verifyCode}
+                  onChange={setVerifyCode}
+                  disabled={setupState !== "idle"}
+                >
+                  <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 *:data-[slot=input-otp-slot]:w-9 *:data-[slot=input-otp-slot]:text-lg sm:*:data-[slot=input-otp-slot]:h-12 sm:*:data-[slot=input-otp-slot]:w-11">
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                  </InputOTPGroup>
+                  <InputOTPSeparator className="mx-1 sm:mx-2" />
+                  <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 *:data-[slot=input-otp-slot]:w-9 *:data-[slot=input-otp-slot]:text-lg sm:*:data-[slot=input-otp-slot]:h-12 sm:*:data-[slot=input-otp-slot]:w-11">
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+                {error && (
+                  <p role="alert" className="text-center text-sm text-red-500">
+                    {error}
+                  </p>
+                )}
               </Field>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={loading || setupState !== "idle"}
+                onClick={() =>
+                  signUp?.prepareEmailAddressVerification({
+                    strategy: "email_code",
+                  })
+                }
+              >
+                <RefreshCwIcon />
+                Resend code
+              </Button>
             </CardContent>
 
             <CardFooter className="flex flex-col gap-3 px-6 pb-6">

@@ -120,19 +120,21 @@ export default function ClerkSignUpPage() {
 
   if (step === "verify") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader>
-            <CardTitle className="text-center">Verify your email</CardTitle>
-            <CardDescription className="text-center">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="px-6 text-center sm:px-8">
+            <CardTitle className="w-full text-lg font-semibold">
+              Verify your email
+            </CardTitle>
+            <CardDescription className="mx-auto max-w-sm text-sm">
               Enter the verification code we sent to{" "}
-              <span className="font-semibold">{email}</span>.
+              <span className="break-all font-semibold">{email}</span>.
             </CardDescription>
           </CardHeader>
 
           <form onSubmit={handleVerify}>
-            <CardContent className="space-y-4">
-              <Field>
+            <CardContent className="space-y-4 px-6 pb-6 sm:px-8">
+              <Field className="items-center gap-3">
                 <FieldLabel htmlFor="staff-email-verification">
                   Verification code
                 </FieldLabel>
@@ -143,13 +145,13 @@ export default function ClerkSignUpPage() {
                   onChange={setVerifyCode}
                   disabled={loading}
                 >
-                  <InputOTPGroup>
+                  <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 *:data-[slot=input-otp-slot]:w-9 *:data-[slot=input-otp-slot]:text-lg sm:*:data-[slot=input-otp-slot]:h-12 sm:*:data-[slot=input-otp-slot]:w-11">
                     <InputOTPSlot index={0} />
                     <InputOTPSlot index={1} />
                     <InputOTPSlot index={2} />
                   </InputOTPGroup>
-                  <InputOTPSeparator />
-                  <InputOTPGroup>
+                  <InputOTPSeparator className="mx-1 sm:mx-2" />
+                  <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-11 *:data-[slot=input-otp-slot]:w-9 *:data-[slot=input-otp-slot]:text-lg sm:*:data-[slot=input-otp-slot]:h-12 sm:*:data-[slot=input-otp-slot]:w-11">
                     <InputOTPSlot index={3} />
                     <InputOTPSlot index={4} />
                     <InputOTPSlot index={5} />
@@ -157,7 +159,11 @@ export default function ClerkSignUpPage() {
                 </InputOTP>
               </Field>
 
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && (
+                <p role="alert" className="text-center text-sm text-red-500">
+                  {error}
+                </p>
+              )}
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Verifying..." : "Verify"}
