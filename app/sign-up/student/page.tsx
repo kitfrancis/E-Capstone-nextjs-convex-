@@ -135,7 +135,13 @@ export default function SignUpPage() {
         return;
       }
 
-      await signUp.create({ firstName, lastName, emailAddress: email, password });
+      await signUp.create({
+        firstName,
+        lastName,
+        emailAddress: email,
+        password,
+        legalAccepted: acceptedDataPrivacy,
+      });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("verify");
     } catch (err: any) {
