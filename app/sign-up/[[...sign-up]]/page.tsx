@@ -75,6 +75,7 @@ export default function ClerkSignUpPage() {
         lastName,
         emailAddress: email,
         password,
+        legalAccepted: acceptedDataPrivacy,
       });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("verify");
