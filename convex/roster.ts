@@ -178,7 +178,7 @@ async function validateRoster(
         .query("users")
         .withIndex("by_studentno", (q) => q.eq("studentNo", studentNo))
         .first();
-      if (holder && holder.email !== email) {
+      if (holder && holder.email.trim().toLowerCase() !== email) {
         addError(rowNo, "Student number is registered to another account.");
       }
     }

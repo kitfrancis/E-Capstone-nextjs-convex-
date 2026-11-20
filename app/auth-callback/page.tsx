@@ -39,7 +39,17 @@ export default function AuthCallback() {
     // Validate instead of casting: sessionStorage can hold anything.
     const raw = sessionStorage.getItem("intendedRole");
     const intendedRole: Role | null = ROLES.find((r) => r === raw) ?? null;
-    
+
+    // Signed in with Clerk (for example Google) but there is no E-Capstone
+    // account for them. Sign out and explain, instead of leaving a half-signed-in
+    // session. A leftover Clerk user is harmless: the roster import reuses it.
+    const noAccount = async () => {
+      const email = user.primaryEmailAddress?.emailAddress ?? "";
+      await signOut(() =>
+        router.replace(`/no-account?email=${encodeURIComponent(email)}`)
+      );
+    };
+
     // Where a registered user belongs.
     const destinationFor = (u: NonNullable<typeof me>) =>
       u.mustChangePassword
@@ -49,7 +59,12 @@ export default function AuthCallback() {
           : `/dashboard/${u.role}`;
 
     if (!intendedRole) {
-      router.replace(me ? destinationFor(me) : "/");
+      if (me) {
+        router.replace(destinationFor(me));
+        return;
+      }
+      handled.current = true;
+      void noAccount();
       return;
     }
 
@@ -74,10 +89,11 @@ export default function AuthCallback() {
 
       // ---------- NEW USER ----------
       if (!me) {
-        // Students need extra fields (studentNo, inviteCode, program, section).
+        // Students never register themselves: their account comes from the
+        // instructor's roster import.
         if (intendedRole === "student") {
           sessionStorage.removeItem("intendedRole");
-          router.replace("/sign-up/student");
+          await noAccount();
           return;
         }
 

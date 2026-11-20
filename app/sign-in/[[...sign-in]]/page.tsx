@@ -10,8 +10,11 @@ export default function SignInPage() {
 
   // Students no longer self-register: their account is created by the
   // instructor's roster import. Staff still sign up (admin approves advisers).
+  // For students, a Google/GitHub identity Clerk doesn't know has nowhere to
+  // "sign up", so it goes to the no-account page. Pointing this back at the
+  // sign-in page makes it loop.
   const signUpUrl = isStudent
-    ? "/sign-in?role=student"
+    ? "/no-account"
     : `/sign-up/clerk-signup?role=${role ?? "adviser"}`;
 
   return (
@@ -28,6 +31,10 @@ export default function SignInPage() {
           path="/sign-in"
           fallbackRedirectUrl="/auth-callback"
           signUpUrl={signUpUrl}
+          // If Clerk does create the user from an OAuth sign-in, land on the
+          // callback so it can check for an E-Capstone account (otherwise
+          // Clerk sends them to "/").
+          signUpFallbackRedirectUrl="/auth-callback"
           appearance={
             isStudent
               ? {
@@ -36,8 +43,6 @@ export default function SignInPage() {
                   // utility class, which is why the Sign up link stayed visible.
                   elements: {
                     footerAction: { display: "none" }, // "Don't have an account? Sign up"
-                    socialButtonsRoot: { display: "none" }, // GitHub / Google
-                    dividerRow: { display: "none" }, // the "or" line
                   },
                 }
               : undefined
