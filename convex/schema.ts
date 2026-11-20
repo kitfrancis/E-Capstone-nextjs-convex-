@@ -26,10 +26,45 @@ export default defineSchema({
     inviteCode: v.optional(v.string()),
     privacyConsentAt: v.optional(v.number()),
     privacyConsentVersion: v.optional(v.string()),
+
+    // Roster import: until the temporary password is changed, the account
+    // can't use the app (enforced in Convex, not just the UI)
+    mustChangePassword: v.optional(v.boolean()),
+    tempPasswordExpiresAt: v.optional(v.number()),
+    importedAt: v.optional(v.number()),
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_studentno", ["studentNo"])
     .index("by_role", ["role"])
+    .index("by_email", ["email"]),
+
+  // One row per student in an uploaded roster. Lets the instructor see what
+  // happened to each student and retry only the failures. Never stores passwords.
+  rosterEntries: defineTable({
+    batchId: v.string(),
+    instructorId: v.id("users"),
+    teamName: v.string(),
+    projectTitle: v.string(),
+    adviserEmail: v.string(),
+    name: v.string(),
+    email: v.string(),
+    studentNo: v.optional(v.string()),
+    program: v.optional(v.string()),
+    section: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("created"),
+      v.literal("emailed"),
+      v.literal("failed")
+    ),
+    emailId: v.optional(v.string()),
+    deliveryStatus: v.optional(v.string()),
+    error: v.optional(v.string()),
+    userId: v.optional(v.id("users")),
+    createdAt: v.number(),
+  })
+    .index("by_batch", ["batchId"])
+    .index("by_instructor", ["instructorId"])
     .index("by_email", ["email"]),
 
   projects: defineTable({
@@ -94,7 +129,6 @@ export default defineSchema({
         v.literal("final_revisions"),
         v.literal("chapter_revisions"),
         v.literal("ready_to_archive"),
-        
         v.literal("archived")
       )
     ),

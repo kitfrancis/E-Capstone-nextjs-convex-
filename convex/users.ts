@@ -24,6 +24,7 @@ async function getApprovedUser(ctx: QueryCtx | MutationCtx) {
   const user = await getCurrentUser(ctx);
   if (!user) return null;
   if (user.status === "pending" || user.status === "rejected") return null;
+  if (user.mustChangePassword === true) return null;
   return user;
 }
 

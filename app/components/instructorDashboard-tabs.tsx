@@ -38,6 +38,7 @@ import { InstructorProgress } from "@/app/components/TeamsProgress";
 import { EditTeam } from "@/app/components/editTeam";
 import { DeleteTeam } from "@/app/components/deleteTeam";
 import { InstructorTeamDetailsDialog } from "@/app/components/instructor-team-details-dialog";
+import { ImportRosterDialog } from "@/app/components/import-roster-dialog"; // NEW
 import {
   DefenseActionButton,
   defenseActionKind,
@@ -379,6 +380,13 @@ const handleStatus = async (
 
       {/* TEAMS TAB */}
       <TabsContent value="teams">
+        {/* NEW: roster import button (instructors only) */}
+        {me?.role === "instructor" && (
+          <div className="mb-4 flex justify-end">
+            <ImportRosterDialog />
+          </div>
+        )}
+
         {allTeams === undefined ? (
           <p className="text-center py-4 text-muted-foreground">Loading...</p>
         ) : allTeams.length === 0 ? (

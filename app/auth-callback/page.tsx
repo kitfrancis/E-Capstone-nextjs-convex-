@@ -39,10 +39,14 @@ export default function AuthCallback() {
     // Validate instead of casting: sessionStorage can hold anything.
     const raw = sessionStorage.getItem("intendedRole");
     const intendedRole: Role | null = ROLES.find((r) => r === raw) ?? null;
-
+    
     // Where a registered user belongs.
     const destinationFor = (u: NonNullable<typeof me>) =>
-      u.status === "pending" ? "/pending-approval" : `/dashboard/${u.role}`;
+      u.mustChangePassword
+        ? "/change-password"
+        : u.status === "pending"
+          ? "/pending-approval"
+          : `/dashboard/${u.role}`;
 
     if (!intendedRole) {
       router.replace(me ? destinationFor(me) : "/");

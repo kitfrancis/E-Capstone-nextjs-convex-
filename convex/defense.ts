@@ -12,10 +12,15 @@ import { computeProgress } from "../lib/progress";
 async function currentUser(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
-  return await ctx.db
+  const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
     .unique();
+  if (!user) return null;
+  // Deactivated accounts, and imported students who haven't set their own
+  // password yet, get nothing from this file
+  if (user.status === "rejected" || user.mustChangePassword === true) return null;
+  return user;
 }
 
 const IMRAD_PHASE = "IMRaD Final";
@@ -259,7 +264,7 @@ export const myImradReadyProjects = query({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    if (!(await ctx.auth.getUserIdentity())) throwUserError("Not authenticated");
+    if (!(await currentUser(ctx))) throwUserError("Not authenticated");
     return await ctx.storage.generateUploadUrl();
   },
 });
