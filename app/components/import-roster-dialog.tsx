@@ -422,101 +422,105 @@ function RosterStatus() {
         {visible.map((e) => {
           const b = badge(e);
           const stuck = isStuck(e);
+          const isSelected = selected.has(e._id);
+          const bounced = e.deliveryStatus === "bounced";
           const canRetry =
             e.status === "failed" ||
             stuck ||
-            (e.status === "emailed" && !e.passwordChanged);
+            (e.status === "emailed" && !e.passwordChanged && !bounced);
           return (
             <div key={e._id} className="rounded-lg border p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 shrink-0"
-                  checked={selected.has(e._id)}
-                  onChange={() => toggleOne(e._id)}
-                  aria-label={`Select ${e.name}`}
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{e.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {e.email} · {e.teamName}
-                  </p>
-                  {e.emailId && (
-                    <p className="mt-0.5 break-all text-[11px] text-muted-foreground">
-                      Resend message ID: {e.emailId}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0"
+                    checked={isSelected}
+                    onChange={() => toggleOne(e._id)}
+                    aria-label={`Select ${e.name}`}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{e.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {e.email} · {e.teamName}
                     </p>
+                    {e.emailId && (
+                      <p className="mt-0.5 break-all text-[11px] text-muted-foreground">
+                        Resend message ID: {e.emailId}
+                      </p>
+                    )}
+                    {e.deliveryStatus && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Latest Resend event: {e.deliveryStatus}
+                      </p>
+                    )}
+                    {stuck && !e.emailId && (
+                      <p className="mt-0.5 text-[11px] text-orange-700 dark:text-orange-300">
+                        No Resend message ID after {minutesSince(e)} min. The send
+                        most likely never left the queue, so retrying is safe.
+                      </p>
+                    )}
+                    {e.error && <p className="mt-0.5 text-xs text-red-500">{e.error}</p>}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`${BADGE} ${b.cls}`}>{b.label}</span>
+                  {e.status === "emailed" && e.emailId && !bounced && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={checkingId === e._id}
+                      onClick={() => void checkEmail(e._id)}
+                    >
+                      {checkingId === e._id ? "Checking..." : "Check delivery"}
+                    </Button>
                   )}
-                  {e.deliveryStatus && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Latest Resend event: {e.deliveryStatus}
-                    </p>
+                  {isSelected && canRetry && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => retry([e._id])}
+                    >
+                      {e.status === "emailed" ? "Re-send" : "Retry"}
+                    </Button>
                   )}
-                  {stuck && !e.emailId && (
-                    <p className="mt-0.5 text-[11px] text-orange-700 dark:text-orange-300">
-                      No Resend message ID after {minutesSince(e)} min. The send
-                      most likely never left the queue, so retrying is safe.
-                    </p>
+                  {isSelected && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 dark:text-red-400"
+                      disabled={busy}
+                      onClick={() => setConfirm(e._id)}
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                    </Button>
                   )}
-                  {e.error && <p className="mt-0.5 text-xs text-red-500">{e.error}</p>}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className={`${BADGE} ${b.cls}`}>{b.label}</span>
-                {e.status === "emailed" && e.emailId && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={checkingId === e._id}
-                    onClick={() => void checkEmail(e._id)}
-                  >
-                    {checkingId === e._id ? "Checking..." : "Check delivery"}
-                  </Button>
-                )}
-                {canRetry && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => retry([e._id])}
-                  >
-                    {e.status === "emailed" ? "Re-send" : "Retry"}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-red-600 dark:text-red-400"
-                  disabled={busy}
-                  onClick={() => setConfirm(e._id)}
-                >
-                <Trash className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-            {confirm === e._id && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                <span>
-                  {e.status === "emailed" && e.passwordChanged
-                    ? `Remove ${e.name} from this list? Their account and team spot stay as they are.`
-                    : `Remove ${e.name} from this import? Their unused account is deleted and nothing more is sent.`}{" "}
-                  This can&apos;t be undone.
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    disabled={busy}
-                    onClick={() => void remove([e._id])}
-                  >
-                    {busy ? "Removing..." : "Remove"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setConfirm(null)}>
-                    Keep
-                  </Button>
+              {confirm === e._id && isSelected && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                  <span>
+                    {e.status === "emailed" && e.passwordChanged
+                      ? `Remove ${e.name} from this list? Their account and team spot stay as they are.`
+                      : `Remove ${e.name} from this import? Their unused account is deleted and nothing more is sent.`}{" "}
+                    This can&apos;t be undone.
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={busy}
+                      onClick={() => void remove([e._id])}
+                    >
+                      {busy ? "Removing..." : "Remove"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setConfirm(null)}>
+                      Keep
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             </div>
           );
         })}
