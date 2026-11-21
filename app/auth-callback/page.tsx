@@ -6,6 +6,8 @@ import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
+import { DataPrivacyConsent } from "@/components/data-privacy-consent";
+import { Button } from "@/components/ui/button";
 import {
   PRIVACY_CONSENT_SESSION_KEY,
   PRIVACY_NOTICE_VERSION,
@@ -30,6 +32,10 @@ export default function AuthCallback() {
   const handled = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [registrationRole, setRegistrationRole] = useState<
+    "instructor" | "adviser" | null
+  >(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   useEffect(() => {
     if (!isLoaded || !user || isLoading || !isAuthenticated) return;
@@ -102,8 +108,7 @@ export default function AuthCallback() {
           PRIVACY_CONSENT_SESSION_KEY
         );
         if (privacyConsentVersion !== PRIVACY_NOTICE_VERSION) {
-          router.replace(`/sign-up/clerk-signup?role=${intendedRole}`);
-          handled.current = false;
+          setRegistrationRole(intendedRole);
           return;
         }
 
@@ -168,6 +173,42 @@ export default function AuthCallback() {
     signOut,
     attempt,
   ]);
+
+  if (registrationRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4 py-8">
+        <div className="w-full max-w-md space-y-4 rounded-lg bg-background p-6 shadow">
+          <div className="space-y-2 text-center">
+            <h1 className="text-lg font-semibold">Finish account setup</h1>
+            <p className="text-sm text-muted-foreground">
+              Review and accept the privacy notice to create your{" "}
+              {registrationRole} account. It will be pending admin approval.
+            </p>
+          </div>
+          <DataPrivacyConsent
+            role={registrationRole}
+            accepted={privacyAccepted}
+            onAcceptedChange={setPrivacyAccepted}
+          />
+          <Button
+            className="w-full"
+            disabled={!privacyAccepted}
+            onClick={() => {
+              sessionStorage.setItem(
+                PRIVACY_CONSENT_SESSION_KEY,
+                PRIVACY_NOTICE_VERSION
+              );
+              setRegistrationRole(null);
+              handled.current = false;
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Continue
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
