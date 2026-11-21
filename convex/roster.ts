@@ -118,6 +118,18 @@ async function validateRoster(
     for (const m of t.members ?? []) teamOfUser.set(m, t);
   }
 
+  const instructorTeams = await ctx.db
+    .query("capstoneProjects")
+    .withIndex("by_instructor_stage_result", (q) =>
+      q.eq("instructorId", caller._id)
+    )
+    .collect();
+  const teamByName = new Map<string, Doc<"capstoneProjects">>();
+  for (const team of instructorTeams) {
+    const key = team.teamName.trim().toLowerCase();
+    if (!teamByName.has(key)) teamByName.set(key, team);
+  }
+
   const adviserCache = new Map<string, Doc<"users"> | null>();
   const groups = new Map<string, TeamGroup>();
   const emailRow = new Map<string, number>();
@@ -234,7 +246,7 @@ async function validateRoster(
     const key = teamName.toLowerCase();
     let group = groups.get(key);
     if (!group) {
-      const existingTeam = await findTeam(ctx, caller._id, teamName);
+      const existingTeam = teamByName.get(key) ?? null;
       if (existingTeam?.stage === "archived") {
         addError(rowNo, "This team is archived.");
       }
