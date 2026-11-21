@@ -24,6 +24,7 @@ async function getApprovedUser(ctx: QueryCtx | MutationCtx) {
   const user = await getCurrentUser(ctx);
   if (!user) return null;
   if (user.status === "pending" || user.status === "rejected") return null;
+  if (user.mustChangePassword === true) return null;
   return user;
 }
 
@@ -58,10 +59,8 @@ export async function logAction(
 // already-registered account returns the existing user id instead of throwing,
 // so a retry after a network hiccup doesn't show a false error.
 
-// STUDENT sign-up. The role is always "student", the invite code is checked
-// on the server, and creating the user + joining the team happen in ONE
-// transaction (no half-created accounts).
-// Call this AFTER the Clerk session is active (setActive) and Convex is authed.
+// Retained for compatibility with older clients. New student accounts must be
+// created by an instructor's roster import.
 export const registerStudent = mutation({
   args: {
     name: v.string(),
@@ -72,7 +71,7 @@ export const registerStudent = mutation({
     inviteCode: v.string(),
     privacyConsentVersion: v.literal(PRIVACY_NOTICE_VERSION),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throwUserError("Not signed in");
 
@@ -82,51 +81,9 @@ export const registerStudent = mutation({
       .unique();
     if (existing) return existing._id;
 
-    // Tip: add .index("by_invite_code", ["inviteCode"]) to capstoneProjects in
-    // schema.ts and switch this to withIndex. Codes must be stored UPPERCASE.
-    const team = await ctx.db
-      .query("capstoneProjects")
-      .filter((q) =>
-        q.eq(q.field("inviteCode"), args.inviteCode.trim().toUpperCase())
-      )
-      .first();
-    if (!team) throwUserError("Invalid or expired invite code.");
-
-    const studentNo = args.studentNo.trim();
-    const duplicate = await ctx.db
-      .query("users")
-      .withIndex("by_studentno", (q) => q.eq("studentNo", studentNo))
-      .first();
-    if (duplicate) throwUserError("Student number is already registered.");
-
-    // Prefer the verified email from the Clerk token.
-    const email = identity.email ?? args.email;
-
-    const userId = await ctx.db.insert("users", {
-      clerkId: identity.subject,
-      name: args.name.trim(),
-      email,
-      role: "student",
-      status: "approved",
-      studentNo,
-      program: args.program,
-      section: args.section,
-      privacyConsentAt: Date.now(),
-      privacyConsentVersion: args.privacyConsentVersion,
-    });
-
-    await ctx.db.patch(team._id, {
-      members: [...(team.members ?? []), userId],
-    });
-
-    await logAction(
-      ctx,
-      { clerkId: identity.subject, name: args.name },
-      "User registered",
-      `${args.name} joined "${team.teamName}" as student`
+    throwUserError(
+      "Student accounts can only be created when an instructor imports the roster."
     );
-
-    return userId;
   },
 });
 

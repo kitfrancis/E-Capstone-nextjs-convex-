@@ -54,6 +54,8 @@ async function getCaller(ctx: QueryCtx): Promise<Doc<"users"> | null> {
     .first();
   if (!user) return null;
   if (user.status === "pending" || user.status === "rejected") return null;
+  // Imported students can't use the app until they set their own password
+  if (user.mustChangePassword === true) return null;
   return user;
 }
 
@@ -83,6 +85,9 @@ async function requireCaller(ctx: MutationCtx) {
   if (!user) throwUserError("User not found");
   if (user.status === "pending" || user.status === "rejected") {
     throwUserError("Your account is awaiting admin approval");
+  }
+  if (user.mustChangePassword === true) {
+    throwUserError("Please change your temporary password first.");
   }
   return user;
 }

@@ -6,6 +6,7 @@ import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { ImportRosterDialog } from "@/app/components/import-roster-dialog";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -654,6 +655,8 @@ export default function InstructorTeamManagementPage() {
             </p>
           )}
         </div>
+        <ImportRosterDialog />
+{/* existing Create Task and Create Team buttons */}
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
           <CreateTaskDialog
             trigger={
@@ -662,6 +665,8 @@ export default function InstructorTeamManagementPage() {
               </Button>
             }
           />
+
+          
           <CreateTeamDialog
             trigger={
               <Button className="w-full rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 sm:w-auto">

@@ -80,7 +80,9 @@ export default function LandingPage() {
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn && me && me.role) {
-      router.replace(`/dashboard/${me.role}`);
+      router.replace(
+        me.mustChangePassword ? "/change-password" : `/dashboard/${me.role}`
+      );
     }
   }, [isLoaded, isSignedIn, me, router]);
 
