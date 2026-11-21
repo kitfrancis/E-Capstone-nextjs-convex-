@@ -107,7 +107,7 @@ export default function LandingPage() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-right bg-no-repeat opacity-60 dark:opacity-25"
-        style={{ backgroundImage: "url('/CCISbuilding.jpg')" }}
+        style={{ backgroundImage: "url('/ccisbuilding.jpg')" }}
       />
       {/* Fade from the page color (left) to transparent (right) so text stays readable */}
       <div
@@ -197,7 +197,7 @@ export default function LandingPage() {
 
                   <button
                     onClick={() => handleClick(role)}
-                    className={`relative z-10 mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 dark:focus-visible:outline-white ${button}`}
+                    className={`relative z-10 mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 dark:focus-visible:outline-white ${button}`}
                   >
                     {cta}
                     <ArrowRight className="h-4 w-4" />
