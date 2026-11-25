@@ -109,7 +109,7 @@ export default function LandingPage() {
         className="pointer-events-none absolute inset-0 bg-cover bg-right bg-no-repeat opacity-60 dark:opacity-25"
         style={{ backgroundImage: "url('/ccisbuilding.jpg')" }}
       />
-      {/* Fade from the page color (left) to transparent (right) so text stays readable */}
+      {/* Fade from  the page color (left) to transparent (right) so text stays readable */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-linear-to-r from-white via-white/80 to-white/10 dark:from-slate-950 dark:via-slate-950/85 dark:to-slate-950/40"
@@ -124,7 +124,7 @@ export default function LandingPage() {
         onClick={() => handleClick("admin")}
         aria-label="Admin sign in"
         title="Admin sign in"
-        className="fixed top-4 right-4 z-50 p-2 rounded-full text-slate-500 hover:text-slate-900 hover:bg-white/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors"
+        className="absolute top-4 right-4 z-50 p-2 rounded-full text-slate-500 hover:text-slate-900 hover:bg-white/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors"
       >
         <User className="h-5 w-5" />
       </button>
