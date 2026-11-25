@@ -10,7 +10,7 @@ import { getConvexErrorMessage } from "@/lib/convex-errors";
 const SCHOOL_DOMAIN = "antiquespride.edu.ph";
 
 export default function ApprovalsPage() {
-  const users = useQuery(api.users.listAllUsers);
+  const users = useQuery(api.users.listAdviserApprovals);
   const approveUser = useMutation(api.users.approveUser);
   const rejectUser = useMutation(api.users.rejectUser);
 
@@ -54,7 +54,7 @@ export default function ApprovalsPage() {
         <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
         <p className="text-sm text-muted-foreground">
           Advisers can sign up on their own, but they can&apos;t
-          use the system until you verify them.{" "}
+          use the system until an instructor verifies them.{" "}
           {users && `${pendingCount} waiting.`}
         </p>
       </div>

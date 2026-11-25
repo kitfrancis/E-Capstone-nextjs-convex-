@@ -36,6 +36,7 @@ export default defineSchema({
     .index("by_clerk_id", ["clerkId"])
     .index("by_studentno", ["studentNo"])
     .index("by_role", ["role"])
+    .index("by_role_status", ["role", "status"])
     .index("by_email", ["email"]),
 
   // One row per student in an uploaded roster. Lets the instructor see what

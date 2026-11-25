@@ -14,7 +14,7 @@ export function SyncUser() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Accounts waiting for (or denied) admin approval can only see /pending-approval
+  // Accounts waiting for (or denied) approval can only see /pending-approval
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !me) return;
     const blocked = me.status === "pending" || me.status === "rejected";

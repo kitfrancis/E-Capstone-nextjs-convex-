@@ -36,6 +36,21 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
   return user;
 }
 
+async function requireAdminOrApprovedInstructor(ctx: MutationCtx) {
+  const user = await getCurrentUser(ctx);
+  if (!user) throwUserError("Not authenticated");
+  if (user.role === "admin") return user;
+  if (
+    user.role !== "instructor" ||
+    user.status === "pending" ||
+    user.status === "rejected" ||
+    user.mustChangePassword === true
+  ) {
+    throwUserError("Approved instructor access required");
+  }
+  return user;
+}
+
 // Call from any mutation to add an entry to the audit log
 export async function logAction(
   ctx: MutationCtx,
@@ -87,8 +102,8 @@ export const registerStudent = mutation({
   },
 });
 
-// INSTRUCTOR / ADVISER sign-up. Always starts as "pending" until an admin
-// approves. "admin" and "student" are rejected by the validator below.
+// Instructors start as pending until an admin approves; advisers await an
+// instructor's verification. "admin" and "student" are rejected below.
 export const registerStaff = mutation({
   args: {
     name: v.string(),
@@ -249,32 +264,128 @@ export const listAllUsers = query({
   },
 });
 
+export const listAdviserApprovals = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("users"),
+      _creationTime: v.number(),
+      name: v.string(),
+      email: v.string(),
+      role: v.literal("adviser"),
+      status: v.union(v.literal("pending"), v.literal("rejected")),
+    })
+  ),
+  handler: async (ctx) => {
+    const caller = await getApprovedUser(ctx);
+    if (!caller || caller.role !== "instructor") return [];
+
+    const pending = await ctx.db
+      .query("users")
+      .withIndex("by_role_status", (q) =>
+        q.eq("role", "adviser").eq("status", "pending")
+      )
+      .take(100);
+    const rejected = await ctx.db
+      .query("users")
+      .withIndex("by_role_status", (q) =>
+        q.eq("role", "adviser").eq("status", "rejected")
+      )
+      .take(100);
+
+    return [
+      ...pending.map(({ _id, _creationTime, name, email }) => ({
+        _id,
+        _creationTime,
+        name,
+        email,
+        role: "adviser" as const,
+        status: "pending" as const,
+      })),
+      ...rejected.map(({ _id, _creationTime, name, email }) => ({
+        _id,
+        _creationTime,
+        name,
+        email,
+        role: "adviser" as const,
+        status: "rejected" as const,
+      })),
+    ];
+  },
+});
+
+// Sidebar badge: admins see pending instructors, instructors see pending advisers.
+export const pendingApprovalsCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const caller = await getApprovedUser(ctx);
+    if (!caller) return 0;
+
+    let targetRole: "instructor" | "adviser";
+    if (caller.role === "admin") targetRole = "instructor";
+    else if (caller.role === "instructor") targetRole = "adviser";
+    else return 0;
+
+    const pending = await ctx.db
+      .query("users")
+      .withIndex("by_role_status", (q) =>
+        q.eq("role", targetRole).eq("status", "pending")
+      )
+      .take(100);
+    return pending.length;
+  },
+});
+
 export const approveUser = mutation({
   args: { userId: v.id("users") },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const approver = await requireAdminOrApprovedInstructor(ctx);
 
     const target = await ctx.db.get(args.userId);
     if (!target) throwUserError("User not found");
+    if (approver.role === "admin" && target.role !== "instructor") {
+      throwUserError("Admins can only approve instructor accounts.");
+    }
+    if (approver.role === "instructor" && target.role !== "adviser") {
+      throwUserError("Instructors can only approve adviser accounts.");
+    }
 
     await ctx.db.patch(args.userId, { status: "approved" });
-    await logAction(ctx, admin, "Approved account", `${target.name} (${target.role})`);
+    await logAction(
+      ctx,
+      approver,
+      "Approved account",
+      `${target.name} (${target.role})`
+    );
+    return null;
   },
 });
 
 export const rejectUser = mutation({
   args: { userId: v.id("users") },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const approver = await requireAdminOrApprovedInstructor(ctx);
 
     const target = await ctx.db.get(args.userId);
     if (!target) throwUserError("User not found");
-    if (target.role === "admin") {
-      throwUserError("The admin account can't be rejected.");
+    if (approver.role === "admin" && target.role !== "instructor") {
+      throwUserError("Admins can only reject instructor accounts.");
+    }
+    if (approver.role === "instructor" && target.role !== "adviser") {
+      throwUserError("Instructors can only reject adviser accounts.");
     }
 
     await ctx.db.patch(args.userId, { status: "rejected" });
-    await logAction(ctx, admin, "Rejected account", `${target.name} (${target.role})`);
+    await logAction(
+      ctx,
+      approver,
+      "Rejected account",
+      `${target.name} (${target.role})`
+    );
+    return null;
   },
 });
 

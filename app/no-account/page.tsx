@@ -46,7 +46,8 @@ function NoAccountContent() {
             <span className="font-medium text-foreground">
               Advisers and instructors:
             </span>{" "}
-            sign up first, then wait for admin approval.
+            sign up first. Advisers wait for instructor approval; instructors
+            wait for admin approval.
           </p>
         </CardContent>
 

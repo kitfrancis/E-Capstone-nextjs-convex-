@@ -27,6 +27,7 @@ export default function PendingApproval() {
   }, [me, router]);
 
   const rejected = me?.status === "rejected";
+  const reviewer = me?.role === "adviser" ? "instructor" : "administrator";
 
   return (
     <div className="flex h-screen items-center justify-center">
@@ -37,8 +38,8 @@ export default function PendingApproval() {
           </EmptyTitle>
           <EmptyDescription className="text-lg">
             {rejected
-              ? "An administrator did not approve this account. Contact your administrator if you think this is a mistake."
-              : "Your account was created. An administrator needs to verify it before you can access the system. This page updates automatically once you're approved."}
+              ? `An ${reviewer} did not approve this account. Contact them if you think this is a mistake.`
+              : `Your account was created. An ${reviewer} needs to verify it before you can access the system. This page updates automatically once you're approved.`}
           </EmptyDescription>
           {me?.email && (
             <EmptyDescription>Signed in as {me.email}</EmptyDescription>

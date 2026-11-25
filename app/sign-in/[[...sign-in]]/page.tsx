@@ -89,7 +89,7 @@ const ROLE_INFO: Record<
     description:
       "Review student works, provide feedback, and guide project development.",
     notice:
-      "New adviser? Use Sign up below with your school email. An administrator verifies advisers before they get access.",
+      "New adviser? Use Sign up below with your school email. An instructor verifies advisers before they get access.",
     Icon: UserCheck,
     accent: "#15803d",
     steps: [
@@ -103,7 +103,7 @@ const ROLE_INFO: Record<
       {
         Icon: Clock,
         title: "Wait for approval",
-        summary: "An administrator verifies advisers before they get access.",
+        summary: "An instructor verifies advisers before they get access.",
         detail:
           "You'll get a notification in the system once your account is approved.",
       },
@@ -195,7 +195,7 @@ export default function SignInPage() {
   const { Icon } = info;
 
   // Students no longer self-register: their account is created by the
-  // instructor's roster import. Staff still sign up (admin approves advisers).
+  // instructor's roster import. Instructors approve adviser sign-ups.
   // For students, a Google/GitHub identity Clerk doesn't know has nowhere to
   // "sign up", so it goes to the no-account page. Pointing this back at the
   // sign-in page makes it loop.

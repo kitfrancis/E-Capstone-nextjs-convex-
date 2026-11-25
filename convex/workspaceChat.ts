@@ -32,7 +32,7 @@ async function getApprovedCaller(ctx: QueryCtx | MutationCtx) {
     .first();
   if (!caller) throwUserError("User not found");
   if (caller.status === "pending" || caller.status === "rejected") {
-    throwUserError("Your account is awaiting admin approval");
+    throwUserError("Your account is awaiting approval");
   }
   return caller;
 }

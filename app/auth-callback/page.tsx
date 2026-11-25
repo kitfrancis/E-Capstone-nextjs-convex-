@@ -103,7 +103,7 @@ export default function AuthCallback() {
           return;
         }
 
-        // Instructor / adviser: registered as "pending" until an admin approves.
+        // Instructors await admin approval; advisers await instructor verification.
         const privacyConsentVersion = sessionStorage.getItem(
           PRIVACY_CONSENT_SESSION_KEY
         );
@@ -182,7 +182,8 @@ export default function AuthCallback() {
             <h1 className="text-lg font-semibold">Finish account setup</h1>
             <p className="text-sm text-muted-foreground">
               Review and accept the privacy notice to create your{" "}
-              {registrationRole} account. It will be pending admin approval.
+              {registrationRole} account. It will be pending{" "}
+              {registrationRole === "adviser" ? "instructor" : "admin"} approval.
             </p>
           </div>
           <DataPrivacyConsent

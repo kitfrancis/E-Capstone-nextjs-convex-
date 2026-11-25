@@ -84,7 +84,7 @@ async function requireCaller(ctx: MutationCtx) {
     .first();
   if (!user) throwUserError("User not found");
   if (user.status === "pending" || user.status === "rejected") {
-    throwUserError("Your account is awaiting admin approval");
+    throwUserError("Your account is awaiting approval");
   }
   if (user.mustChangePassword === true) {
     throwUserError("Please change your temporary password first.");
