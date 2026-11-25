@@ -293,7 +293,7 @@ export default function SignInPage() {
                           className="flex w-full items-start gap-4 rounded-2xl p-2 text-left transition-colors hover:bg-white/60 dark:hover:bg-slate-900/60"
                         >
                           <span className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-blue-300 dark:ring-slate-700">
-                            <StepIcon className="h-[18px] w-[18px]" />
+                            <StepIcon className="h-4.5 w-4.5" />
                           </span>
                           <span className="flex-1">
                             <span className="block text-sm font-semibold text-blue-950 dark:text-white">
@@ -335,7 +335,7 @@ export default function SignInPage() {
 
           {/* Right: Clerk sign-in only (no role tabs) */}
           <div className="flex justify-center lg:justify-end">
-            <div className="w-full max-w-[30rem] rounded-[2rem] border border-white/80 bg-white/85 p-3 shadow-2xl shadow-slate-900/15 backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/70">
+            <div className="w-full max-w-120 rounded-[2rem] border border-white/80 bg-white/85 p-3 shadow-2xl shadow-slate-900/15 backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-900/70">
               <SignIn
                 routing="path"
                 path="/sign-in"
