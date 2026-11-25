@@ -17,10 +17,14 @@ export default function ApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Pending first, then rejected; newest first within each
+  // Advisers only. Pending first, then rejected; newest first within each
   const queue = useMemo(() => {
     return (users ?? [])
-      .filter((u) => u.status === "pending" || u.status === "rejected")
+      .filter(
+        (u) =>
+          u.role === "adviser" &&
+          (u.status === "pending" || u.status === "rejected")
+      )
       .sort((a, b) => {
         if (a.status !== b.status) return a.status === "pending" ? -1 : 1;
         return b._creationTime - a._creationTime;
@@ -49,7 +53,7 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
         <p className="text-sm text-muted-foreground">
-          Advisers  can sign up on their own, but they can&apos;t
+          Advisers can sign up on their own, but they can&apos;t
           use the system until you verify them.{" "}
           {users && `${pendingCount} waiting.`}
         </p>

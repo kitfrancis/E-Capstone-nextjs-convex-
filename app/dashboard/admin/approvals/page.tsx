@@ -17,10 +17,14 @@ export default function ApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Pending first, then rejected; newest first within each
+  // Instructors only. Pending first, then rejected; newest first within each
   const queue = useMemo(() => {
     return (users ?? [])
-      .filter((u) => u.status === "pending" || u.status === "rejected")
+      .filter(
+        (u) =>
+          u.role === "instructor" &&
+          (u.status === "pending" || u.status === "rejected")
+      )
       .sort((a, b) => {
         if (a.status !== b.status) return a.status === "pending" ? -1 : 1;
         return b._creationTime - a._creationTime;

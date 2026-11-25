@@ -6,83 +6,84 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
 import {
-  User,
   GraduationCap,
   UserCheck,
   Presentation,
+  Building2,
+  ClipboardCheck,
   ArrowRight,
-  ShieldCheck,
-  ChartNoAxesCombined,
-  Users,
 } from "lucide-react";
-import { title } from "process";
 
-type Role = "student" | "instructor" | "adviser" | "admin";
+type Role = "student" | "instructor" | "adviser" | "admin" | "coordinator";
 
 const ROLES: {
-  role: Exclude<Role, "admin">;
+  role: Role;
   title: string;
   description: string;
   cta: string;
   Icon: typeof GraduationCap;
-  circle: string;
+  tile: string;
   iconColor: string;
-  button: string;
-  wave: string;
+  accent: string;
+  span: string;
 }[] = [
   {
     role: "student",
     title: "Student",
-    description:
-      "Upload deliverables, track progress, and collaborate with your team.",
+    description: "Submit research outputs and keep every milestone on track.",
     cta: "Continue as Student",
     Icon: GraduationCap,
-    circle: "bg-blue-100 dark:bg-blue-950",
-    iconColor: "text-blue-800 dark:text-blue-300",
-    button: "bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500",
-    wave: "from-blue-200 to-blue-100/0 dark:from-blue-900/60 dark:to-blue-900/0",
+    tile: "bg-violet-100 dark:bg-violet-950",
+    iconColor: "text-violet-700 dark:text-violet-300",
+    accent: "text-violet-800 dark:text-violet-300",
+    span: "lg:col-span-2",
   },
   {
     role: "adviser",
     title: "Thesis Adviser",
-    description:
-      "Review student works, provide feedback, and guide project development.",
-    cta: "Continue as Adviser",
+    description: "Guide researchers, review work, and share timely feedback.",
+    cta: "Continue as Thesis Adviser",
     Icon: UserCheck,
-    circle: "bg-green-100 dark:bg-green-950",
-    iconColor: "text-green-700 dark:text-green-300",
-    button: "bg-green-700 hover:bg-green-800 dark:bg-green-600 dark:hover:bg-green-500",
-    wave: "from-green-200 to-green-100/0 dark:from-green-900/60 dark:to-green-900/0",
+    tile: "bg-emerald-100 dark:bg-emerald-950",
+    iconColor: "text-emerald-700 dark:text-emerald-300",
+    accent: "text-violet-800 dark:text-violet-300",
+    span: "lg:col-span-2",
   },
   {
     role: "instructor",
     title: "Subject Instructor",
-    description: "Create teams, assign tasks, and oversee multiple projects.",
-    cta: "Continue as Instructor",
+    description: "Manage classes, assign deliverables, and monitor teams.",
+    cta: "Continue as Subject Instructor",
     Icon: Presentation,
-    circle: "bg-purple-100 dark:bg-purple-950",
+    tile: "bg-purple-100 dark:bg-purple-950",
     iconColor: "text-purple-700 dark:text-purple-300",
-    button: "bg-purple-700 hover:bg-purple-800 dark:bg-purple-600 dark:hover:bg-purple-500",
-    wave: "from-purple-200 to-purple-100/0 dark:from-purple-900/60 dark:to-purple-900/0",
+    accent: "text-violet-800 dark:text-violet-300",
+    span: "lg:col-span-2",
   },
-
-  // {
-  // role: "coordinator",
-  // title: "research coordinator",
-  // description: "Manage Archive and Final Verification of IMRaD submissions.",
-  // cta: "Continue as Research Coordinator",
-  // Icon: ShieldCheck,
-  // circle: "bg-yellow-100 dark:bg-yellow-950",
-  // iconColor: "text-yellow-700 dark:text-yellow-300",
-  // button: "bg-yellow-700 hover:bg-yellow-800 dark:bg-yellow-600 dark:hover:bg-yellow-500",
-  // wave: "from-yellow-200 to-yellow-100/0 dark:from-yellow-900/60 dark:to-yellow-900/0",
-  // }
-];
-
-const FEATURES = [
-  { Icon: ShieldCheck, label: "Organized", sub: "Workflow" },
-  { Icon: ChartNoAxesCombined, label: "Real-Time", sub: "Progress Tracking" },
-  { Icon: Users, label: "Collaborative", sub: "Academic Community" },
+  {
+    // Program Head = admin
+    role: "admin",
+    title: "Program Head/admin",
+    description:
+      "Oversee program performance, faculty, and research progress.",
+    cta: "Continue as Program Head",
+    Icon: Building2,
+    tile: "bg-amber-100 dark:bg-amber-950",
+    iconColor: "text-amber-700 dark:text-amber-300",
+    accent: "text-violet-800 dark:text-violet-300",
+    span: "lg:col-span-3",
+  },
+  {
+    role: "coordinator",
+    title: "Research Coordinator",
+    description: "Coordinate studies, compliance, schedules, and reporting.",
+    cta: "Continue as Coordinator",
+    Icon: ClipboardCheck,
+    tile: "bg-rose-100 dark:bg-rose-950",
+    iconColor: "text-rose-700 dark:text-rose-300",
+    accent: "text-violet-800 dark:text-violet-300",
+    span: "lg:col-span-3",
+  },
 ];
 
 export default function LandingPage() {
@@ -109,173 +110,153 @@ export default function LandingPage() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-950">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600" />
       </div>
     );
   }
 
   return (
-    <div className="font-Poppins relative min-h-screen overflow-hidden bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col">
-      {/* Background: campus photo (put your image at /public/campus.jpg) */}
+    <div className="font-Poppins relative flex min-h-screen flex-col overflow-hidden bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      {/* Background: campus photo */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-cover bg-right bg-no-repeat opacity-60 dark:opacity-25"
+        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat opacity-70 dark:opacity-25"
         style={{ backgroundImage: "url('/ccisbuilding.jpg')" }}
       />
-      {/* Fade from  the page color (left) to transparent (right) so text stays readable */}
+      {/* Fade from page color (left) to transparent (right) */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-linear-to-r from-white via-white/80 to-white/10 dark:from-slate-950 dark:via-slate-950/85 dark:to-slate-950/40"
+        className="pointer-events-none absolute inset-0 bg-linear-to-r from-white via-white/70 to-violet-200/20 dark:from-slate-950 dark:via-slate-950/85 dark:to-slate-950/40"
       />
+      {/* Soft purple fade at the bottom */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-linear-to-b from-white to-transparent dark:from-slate-950"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-linear-to-t from-violet-200/70 to-transparent dark:from-violet-950/60"
       />
-
-      {/* Admin access */}
-      <button
-        onClick={() => handleClick("admin")}
-        aria-label="Admin sign in"
-        title="Admin sign in"
-        className="absolute top-4 right-4 z-50 p-2 rounded-full text-slate-500 hover:text-slate-900 hover:bg-white/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors"
-      >
-        <User className="h-5 w-5" />
-      </button>
 
       {/* Header */}
-      <header className="relative z-10 border-b border-slate-200/70 bg-white/70 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/70">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-6 lg:px-10">
-          <GraduationCap
-            className="h-9 w-9 text-blue-900 dark:text-blue-400"
-            strokeWidth={2.2}
-          />
-          <span className="text-xl sm:text-2xl font-bold text-blue-950 dark:text-white">
-            E-Research
-          </span>
+      <header className="relative z-10 border-b border-slate-200/70 bg-white/90 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/80">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-700 shadow-lg shadow-violet-700/30">
+              <GraduationCap className="h-5 w-5 text-white" />
+            </div>
+            <div className="leading-tight">
+              <p className="text-[10px] font-medium uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
+                Academic Portal
+              </p>
+              <p className="text-xl font-bold text-slate-900 dark:text-white">
+                E-Research
+              </p>
+            </div>
+          </div>
+
+          
         </div>
       </header>
 
       {/* Hero */}
       <main className="relative z-10 flex-1">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] lg:gap-8 lg:px-10 lg:py-16">
+        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] lg:gap-10 lg:px-10 lg:py-14">
           {/* Left: copy */}
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-blue-100/90 px-4 py-2 text-sm font-medium text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-              <GraduationCap className="h-4 w-4" />
-              An Integrated Management Portal
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-violet-300">
+              <span className="h-2 w-2 rounded-full bg-violet-600" />
+              Integrated Research Management
             </span>
 
-            <h1 className="mt-8 text-4xl sm:text-5xl xl:text-6xl font-extrabold leading-[1.05] tracking-tight text-blue-950 dark:text-white">
-              Welcome to the E-Research Portal
+            <h1 className="mt-8 text-5xl font-extrabold leading-[1.02] tracking-tight sm:text-6xl xl:text-7xl">
+              <span className="block text-violet-950 dark:text-white">
+                Research,
+              </span>
+              <span className="block text-violet-600 dark:text-violet-400">
+                made clearer.
+              </span>
             </h1>
 
-            <p className="mt-6 max-w-md text-base sm:text-lg text-slate-600 dark:text-slate-300">
-              Select your role to access your personalized dashboard and start
-              managing your thesis and capstone projects.
+            <p className="mt-6 max-w-md text-base text-slate-600 dark:text-slate-300 sm:text-lg">
+              One secure space to guide every study—from the first proposal to
+              the final defense.
             </p>
 
-            <div className="mt-8 h-1 w-14 rounded-full bg-blue-700 dark:bg-blue-500" />
+            <div className="mt-8 flex items-center gap-4 text-sm font-medium text-slate-800 dark:text-slate-200">
+              <span className="h-px w-12 bg-violet-700 dark:bg-violet-400" />
+              Select your role to continue
+            </div>
           </div>
 
           {/* Right: role cards */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            {ROLES.map(
-              ({
-                role,
-                title,
-                description,
-                cta,
-                Icon,
-                circle,
-                iconColor,
-                button,
-                wave,
-              }) => (
-                <div
-                  key={role}
-                  className="relative flex flex-col items-center overflow-hidden rounded-3xl border border-white bg-white/95 px-5 pb-8 pt-8 text-center shadow-xl shadow-slate-900/10 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-black/40"
-                >
-                  <div
-                    className={`flex h-20 w-20 items-center justify-center rounded-full ${circle}`}
-                  >
-                    <Icon className={`h-9 w-9 ${iconColor}`} />
-                  </div>
+          <section>
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400">
+                  Portal Access
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
+                  How are you signing in?
+                </h2>
+              </div>
+              <span className="shrink-0 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
+                {ROLES.length} user portals
+              </span>
+            </div>
 
-                  <h2 className="mt-6 text-xl font-bold text-blue-950 dark:text-white">
-                    {title}
-                  </h2>
-                  <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                    {description}
-                  </p>
-
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+              {ROLES.map(
+                ({
+                  role,
+                  title,
+                  description,
+                  cta,
+                  Icon,
+                  tile,
+                  iconColor,
+                  accent,
+                  span,
+                }) => (
                   <button
+                    key={role}
+                    type="button"
                     onClick={() => handleClick(role)}
-                    className={`relative z-10 mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 dark:focus-visible:outline-white ${button}`}
+                    className={`group flex flex-col rounded-3xl border border-white/80 bg-white/95 p-5 text-left shadow-xl shadow-slate-900/10 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-black/40 ${span}`}
                   >
-                    {cta}
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
+                    <div
+                      className={`flex h-11 w-11 items-center justify-center rounded-xl ${tile}`}
+                    >
+                      <Icon className={`h-5 w-5 ${iconColor}`} />
+                    </div>
 
-                  {/* Soft tinted wave at the bottom of the card */}
-                  <div
-                    aria-hidden
-                    className={`pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-t-[100%] bg-linear-to-t ${wave}`}
-                  />
-                </div>
-              )
-            )}
-          </div>
+                    <h3 className="mt-5 text-lg font-bold text-slate-900 dark:text-white">
+                      {title}
+                    </h3>
+                    <p className="mt-1 flex-1 text-sm leading-snug text-slate-600 dark:text-slate-300">
+                      {description}
+                    </p>
+
+                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                      <span className={`text-sm font-semibold ${accent}`}>
+                        {cta}
+                      </span>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-800 transition-colors group-hover:bg-violet-700 group-hover:text-white dark:bg-violet-950 dark:text-violet-300">
+                        <ArrowRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </button>
+                )
+              )}
+            </div>
+          </section>
         </div>
       </main>
 
-      {/* Bottom wave + feature strip */}
-      <div className="relative z-10 mt-6">
-        <svg
-          aria-hidden
-          viewBox="0 0 1440 120"
-          preserveAspectRatio="none"
-          className="block h-16 w-full sm:h-24"
-        >
-          <path
-            d="M0 70 C 240 10, 480 30, 760 80 S 1240 120, 1440 40 L1440 120 L0 120 Z"
-            className="fill-blue-300/60 dark:fill-blue-800/40"
-          />
-          <path
-            d="M0 95 C 260 40, 520 60, 800 100 S 1260 125, 1440 70 L1440 120 L0 120 Z"
-            className="fill-blue-900 dark:fill-slate-900"
-          />
-        </svg>
-
-        <div className="bg-blue-900 dark:bg-slate-900">
-          <div className="mx-auto max-w-7xl px-4 pb-6 sm:px-6 lg:px-10">
-            <ul className="grid grid-cols-1 gap-5 py-4 text-white sm:grid-cols-3 sm:gap-0">
-              {FEATURES.map(({ Icon, label, sub }, i) => (
-                <li
-                  key={label}
-                  className={`flex items-center gap-4 sm:px-6 ${
-                    i > 0 ? "sm:border-l sm:border-white/25" : "sm:pl-0"
-                  }`}
-                >
-                  <Icon className="h-9 w-9 shrink-0" strokeWidth={1.6} />
-                  <span className="text-sm leading-snug sm:text-base">
-                    {label}
-                    <br />
-                    {sub}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-4 border-t border-white/15 pt-4 text-center text-xs text-blue-100/80 dark:text-slate-400">
-              <p>&copy; 2026 Thesis Management System. All rights reserved.</p>
-              <p>
-                Developed by Kit Francis Besa, Carl Andrei Diomon, Stephen
-                Gabarda and Kyle Steven Morillo.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Footer */}
+      <footer className="relative z-10 px-4 pb-6 pt-2 text-center text-xs text-slate-700 dark:text-slate-400">
+        <p>Authorized users only · Your access is protected and role-based</p>
+        <p className="mt-1 text-slate-500 dark:text-slate-500">
+          &copy; 2026 Thesis Management System. Developed by Kit Francis Besa,
+          Carl Andrei Diomon, Stephen Gabarda and Kyle Steven Morillo.
+        </p>
+      </footer>
     </div>
   );
 }
