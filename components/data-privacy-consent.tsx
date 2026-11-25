@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-type RegistrationRole = "student" | "adviser" | "instructor";
+type RegistrationRole = "student" | "adviser" | "instructor" | "coordinator";
 
 type DataPrivacyConsentProps = {
   role: RegistrationRole;
@@ -25,6 +25,8 @@ const collectedInformation: Record<RegistrationRole, string> = {
     "your name, email address, student number, program, section, and team invite code",
   adviser: "your name, email address, and adviser role information",
   instructor: "your name, email address, and instructor role information",
+  coordinator:
+    "your name, email address, department or organization, and reason for a research coordinator access request",
 };
 
 export function DataPrivacyConsent({

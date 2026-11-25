@@ -17,12 +17,12 @@ export default function ApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Instructors only. Pending first, then rejected; newest first within each
+  // Instructors and coordinators. Pending first, then rejected; newest first within each.
   const queue = useMemo(() => {
     return (users ?? [])
       .filter(
         (u) =>
-          u.role === "instructor" &&
+          (u.role === "instructor" || u.role === "coordinator") &&
           (u.status === "pending" || u.status === "rejected")
       )
       .sort((a, b) => {
@@ -53,8 +53,8 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
         <p className="text-sm text-muted-foreground">
-          Instructors can sign up on their own, but they can&apos;t
-          use the system until you verify them.{" "}
+          Instructors and research coordinators can request accounts, but
+          they can&apos;t use the system until you approve them.{" "}
           {users && `${pendingCount} waiting.`}
         </p>
       </div>
@@ -71,6 +71,8 @@ export default function ApprovalsPage() {
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Email</th>
+              <th className="px-4 py-3 font-medium">Department / Organization</th>
+              <th className="px-4 py-3 font-medium">Request reason</th>
               <th className="px-4 py-3 font-medium">Role</th>
               <th className="px-4 py-3 font-medium">Signed up</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -81,7 +83,7 @@ export default function ApprovalsPage() {
             {users === undefined && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-muted-foreground"
                 >
                   Loading…
@@ -92,7 +94,7 @@ export default function ApprovalsPage() {
             {users && queue.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-muted-foreground"
                 >
                   No accounts waiting for approval.
@@ -120,6 +122,12 @@ export default function ApprovalsPage() {
                     >
                       {isSchoolEmail ? "School email" : "Not a school email"}
                     </span>
+                  </td>
+                  <td className="max-w-56 px-4 py-3 text-muted-foreground">
+                    {u.coordinatorOrganization ?? "—"}
+                  </td>
+                  <td className="max-w-80 px-4 py-3 text-muted-foreground">
+                    {u.coordinatorReason ?? "—"}
                   </td>
                   <td className="px-4 py-3 capitalize text-muted-foreground">
                     {u.role}

@@ -88,7 +88,14 @@ const splitList = (s: string) =>
 export default function AdminArchivePage() {
   const me = useQuery(api.users.getMe);
   const isAdmin = me?.role === "admin";
-  const projects = useQuery(api.archive.getAll);
+  const hasCoordinatorAccess =
+    me?.role === "coordinator" &&
+    me.status !== "pending" &&
+    me.status !== "rejected";
+  const projects = useQuery(
+    api.archive.getAll,
+    hasCoordinatorAccess ? {} : "skip"
+  );
   const generateUploadUrl = useMutation(api.archive.generateUploadUrl);
   const addProject = useMutation(api.archive.addProject);
   const deleteProject = useMutation(api.archive.deleteProject);
@@ -118,7 +125,9 @@ export default function AdminArchivePage() {
   } | null>(null);
   const fileUrl = useQuery(
     api.archive.getFileUrl,
-    viewing ? { storageId: viewing.storageId } : "skip"
+    viewing && hasCoordinatorAccess
+      ? { storageId: viewing.storageId }
+      : "skip"
   );
 
   const years = useMemo(

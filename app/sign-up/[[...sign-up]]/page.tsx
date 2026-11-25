@@ -24,6 +24,7 @@ import { DataPrivacyConsent } from "@/components/data-privacy-consent";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,7 +37,7 @@ const ACADEMIC_YEAR_LABEL = "AY 2026-2027 Active";
 const HELPDESK_URL = "#";
 const PRIVACY_URL = "#";
 
-type StaffRole = "adviser" | "instructor";
+type StaffRole = "adviser" | "instructor" | "coordinator";
 
 // Password rules shown in the checklist. Keep these in sync with
 // Clerk Dashboard -> Configure -> User & authentication -> Password.
@@ -141,6 +142,13 @@ const ROLE_COPY: Record<
       "Create your account to manage teams, assign tasks, and oversee multiple projects.",
     Icon: Presentation,
   },
+  coordinator: {
+    badge: "Research Coordinator Workspace",
+    title: "Research Coordinator Access Request",
+    description:
+      "Create an account to request access to research coordination tools. An administrator must approve your request before you can use the coordinator workspace.",
+    Icon: ShieldCheck,
+  },
 };
 
 const SIGNUP_STEPS = [
@@ -157,7 +165,7 @@ const SIGNUP_STEPS = [
   {
     Icon: ShieldCheck,
     title: "Wait for approval",
-    text: "An administrator may need to approve your account before you get full access.",
+    text: "The appropriate administrator or instructor must approve your account before you get full access.",
   },
 ];
 
@@ -243,7 +251,8 @@ function Shell({
             <div className="mt-6 flex max-w-xl items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50/90 px-4 py-3.5 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/70 dark:text-blue-100">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300" />
               <p>
-                Use your official @antiquespride.edu.ph email. Students don&apos;t
+                Use your official @antiquespride.edu.ph email. Coordinator
+                requests are reviewed by an administrator. Students don&apos;t
                 sign up here: their accounts are created by their instructor.
               </p>
             </div>
@@ -348,16 +357,19 @@ export default function ClerkSignUpPage() {
   const searchParams = useSearchParams();
   const requestedRole = searchParams.get("role");
   const role: StaffRole | null =
-    requestedRole === "instructor"
-      ? "instructor"
-      : requestedRole === "adviser" || requestedRole === null
-        ? "adviser"
-        : null;
+    requestedRole === "instructor" ||
+    requestedRole === "coordinator" ||
+    requestedRole === "adviser" ||
+    requestedRole === null
+      ? requestedRole ?? "adviser"
+      : null;
 
   const [step, setStep] = useState<"form" | "verify">("form");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [coordinatorOrganization, setCoordinatorOrganization] = useState("");
+  const [coordinatorReason, setCoordinatorReason] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedDataPrivacy, setAcceptedDataPrivacy] = useState(false);
@@ -407,10 +419,29 @@ export default function ClerkSignUpPage() {
       setError("Please accept the data privacy consent to continue.");
       return;
     }
+    if (
+      role === "coordinator" &&
+      (!coordinatorOrganization.trim() || !coordinatorReason.trim())
+    ) {
+      setError(
+        "Enter your department or organization and a short reason for requesting access."
+      );
+      return;
+    }
 
     setLoading(true);
     try {
       sessionStorage.setItem("intendedRole", role);
+      if (role === "coordinator") {
+        sessionStorage.setItem(
+          "coordinatorOrganization",
+          coordinatorOrganization.trim()
+        );
+        sessionStorage.setItem("coordinatorReason", coordinatorReason.trim());
+      } else {
+        sessionStorage.removeItem("coordinatorOrganization");
+        sessionStorage.removeItem("coordinatorReason");
+      }
       sessionStorage.setItem(
         PRIVACY_CONSENT_SESSION_KEY,
         PRIVACY_NOTICE_VERSION
@@ -460,7 +491,7 @@ export default function ClerkSignUpPage() {
   if (!role) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 text-center">
-        Adviser and instructor registration only.
+        Adviser, instructor, and coordinator registration only.
       </div>
     );
   }
@@ -598,6 +629,42 @@ export default function ClerkSignUpPage() {
             required
           />
         </div>
+
+        {role === "coordinator" && (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="coordinator-organization" className="text-xs">
+                Department or organization
+              </Label>
+              <Input
+                id="coordinator-organization"
+                placeholder="e.g. Research Office"
+                className="text-sm"
+                value={coordinatorOrganization}
+                onChange={(event) =>
+                  setCoordinatorOrganization(event.target.value)
+                }
+                maxLength={120}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="coordinator-reason" className="text-xs">
+                Why do you need coordinator access?
+              </Label>
+              <Textarea
+                id="coordinator-reason"
+                placeholder="Briefly describe your role or responsibilities."
+                className="text-sm"
+                value={coordinatorReason}
+                onChange={(event) => setCoordinatorReason(event.target.value)}
+                maxLength={500}
+                rows={4}
+                required
+              />
+            </div>
+          </>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="staff-password" className="text-xs">

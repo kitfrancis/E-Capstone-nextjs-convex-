@@ -48,7 +48,10 @@ function formatCount(count: number) {
 export default function ResearchCoordinatorDashboard() {
   const router = useRouter();
   const me = useQuery(api.users.getMe);
-  const hasAccess = me?.role === "coordinator";
+  const hasAccess =
+    me?.role === "coordinator" &&
+    me.status !== "pending" &&
+    me.status !== "rejected";
   const stats = useQuery(
     api.researchCoordinator.getDashboardStats,
     hasAccess ? {} : "skip"

@@ -91,7 +91,7 @@ function AppSidebarContent() {
     api.imrad.sidebarReviewCounts,
     me?.role === "instructor" || me?.role === "admin" ? {} : "skip"
   );
-  // Admin: pending instructors. Instructor: pending advisers.
+  // Admin: pending instructors and coordinators. Instructor: pending advisers.
   const pendingApprovals = useQuery(
     api.users.pendingApprovalsCount,
     me?.role === "admin" || me?.role === "instructor" ? {} : "skip"
@@ -230,7 +230,7 @@ function AppSidebarContent() {
                           : link.href === "/dashboard/instructor/adviser-approvals"
                             ? "advisers waiting for approval"
                             : link.href === "/dashboard/admin/approvals"
-                              ? "instructors waiting for approval"
+                              ? "accounts waiting for approval"
                               : "teams ready for final verification";
 
                       return (

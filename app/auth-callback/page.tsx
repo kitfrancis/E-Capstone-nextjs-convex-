@@ -34,7 +34,7 @@ export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [registrationRole, setRegistrationRole] = useState<
-    "instructor" | "adviser" | null
+    "instructor" | "adviser" | "coordinator" | null
   >(null);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
@@ -80,16 +80,12 @@ export default function AuthCallback() {
     handled.current = true;
 
     const handle = async () => {
-      // These privileged roles are assigned by an admin, never self-registered.
-      if (intendedRole === "admin" || intendedRole === "coordinator") {
+      // Admin is assigned by the system owner, never self-registered.
+      if (intendedRole === "admin") {
         sessionStorage.removeItem("intendedRole");
 
         if (!me) {
-          if (intendedRole === "coordinator") {
-            await noAccount(intendedRole);
-          } else {
-            await signOut(() => router.replace("/unauthorized"));
-          }
+          await signOut(() => router.replace("/unauthorized"));
           return;
         }
         if (me.role !== intendedRole) {
@@ -114,7 +110,7 @@ export default function AuthCallback() {
           return;
         }
 
-        // Instructors await admin approval; advisers await instructor verification.
+        // Coordinators and instructors await admin approval; advisers await instructor verification.
         const privacyConsentVersion = sessionStorage.getItem(
           PRIVACY_CONSENT_SESSION_KEY
         );
@@ -127,7 +123,15 @@ export default function AuthCallback() {
           await registerStaff({
             name: user.fullName ?? "Unknown",
             email: user.primaryEmailAddress?.emailAddress ?? "",
-            role: intendedRole, // "instructor" | "adviser"
+            role: intendedRole,
+            ...(intendedRole === "coordinator"
+              ? {
+                  coordinatorOrganization:
+                    sessionStorage.getItem("coordinatorOrganization") ?? "",
+                  coordinatorReason:
+                    sessionStorage.getItem("coordinatorReason") ?? "",
+                }
+              : {}),
             privacyConsentVersion,
           });
         } catch (err) {
@@ -144,6 +148,8 @@ export default function AuthCallback() {
 
         sessionStorage.removeItem("intendedRole");
         sessionStorage.removeItem(PRIVACY_CONSENT_SESSION_KEY);
+        sessionStorage.removeItem("coordinatorOrganization");
+        sessionStorage.removeItem("coordinatorReason");
         router.replace("/pending-approval");
         return;
       }

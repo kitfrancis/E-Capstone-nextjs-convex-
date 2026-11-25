@@ -27,6 +27,8 @@ export default defineSchema({
     inviteCode: v.optional(v.string()),
     privacyConsentAt: v.optional(v.number()),
     privacyConsentVersion: v.optional(v.string()),
+    coordinatorOrganization: v.optional(v.string()),
+    coordinatorReason: v.optional(v.string()),
 
     // Roster import: until the temporary password is changed, the account
     // can't use the app (enforced in Convex, not just the UI)

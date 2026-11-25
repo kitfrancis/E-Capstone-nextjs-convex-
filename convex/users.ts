@@ -119,15 +119,22 @@ export const registerStudent = mutation({
   },
 });
 
-// Instructors start as pending until an admin approves; advisers await an
-// instructor's verification. "admin" and "student" are rejected below.
+// Instructors and coordinators start as pending until an admin approves;
+// advisers await an instructor's verification.
 export const registerStaff = mutation({
   args: {
     name: v.string(),
     email: v.string(),
-    role: v.union(v.literal("instructor"), v.literal("adviser")),
+    role: v.union(
+      v.literal("instructor"),
+      v.literal("adviser"),
+      v.literal("coordinator")
+    ),
+    coordinatorOrganization: v.optional(v.string()),
+    coordinatorReason: v.optional(v.string()),
     privacyConsentVersion: v.literal(PRIVACY_NOTICE_VERSION),
   },
+  returns: v.id("users"),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throwUserError("Not signed in");
@@ -138,6 +145,31 @@ export const registerStaff = mutation({
       .unique();
     if (existing) return existing._id;
 
+    let coordinatorDetails: {
+      coordinatorOrganization?: string;
+      coordinatorReason?: string;
+    } = {};
+    if (args.role === "coordinator") {
+      const coordinatorOrganization = args.coordinatorOrganization?.trim();
+      const coordinatorReason = args.coordinatorReason?.trim();
+      if (!coordinatorOrganization || !coordinatorReason) {
+        throwUserError("Organization and request reason are required.");
+      }
+      if (coordinatorOrganization.length > 120 || coordinatorReason.length > 500) {
+        throwUserError(
+          "Organization must be 120 characters or less and the reason 500 characters or less."
+        );
+      }
+      coordinatorDetails = { coordinatorOrganization, coordinatorReason };
+    } else if (
+      args.coordinatorOrganization !== undefined ||
+      args.coordinatorReason !== undefined
+    ) {
+      throwUserError(
+        "Coordinator request details are only valid for coordinator accounts."
+      );
+    }
+
     const userId = await ctx.db.insert("users", {
       clerkId: identity.subject,
       name: args.name.trim(),
@@ -146,6 +178,7 @@ export const registerStaff = mutation({
       status: "pending",
       privacyConsentAt: Date.now(),
       privacyConsentVersion: args.privacyConsentVersion,
+      ...coordinatorDetails,
     });
 
     await logAction(
@@ -339,18 +372,32 @@ export const pendingApprovalsCount = query({
     const caller = await getApprovedUser(ctx);
     if (!caller) return 0;
 
-    let targetRole: "instructor" | "adviser";
-    if (caller.role === "admin") targetRole = "instructor";
-    else if (caller.role === "instructor") targetRole = "adviser";
-    else return 0;
+    if (caller.role === "admin") {
+      const [instructors, coordinators] = await Promise.all([
+        ctx.db
+          .query("users")
+          .withIndex("by_role_status", (q) =>
+            q.eq("role", "instructor").eq("status", "pending")
+          )
+          .take(100),
+        ctx.db
+          .query("users")
+          .withIndex("by_role_status", (q) =>
+            q.eq("role", "coordinator").eq("status", "pending")
+          )
+          .take(100),
+      ]);
+      return instructors.length + coordinators.length;
+    }
 
-    const pending = await ctx.db
+    if (caller.role !== "instructor") return 0;
+    const pendingAdvisers = await ctx.db
       .query("users")
       .withIndex("by_role_status", (q) =>
-        q.eq("role", targetRole).eq("status", "pending")
+        q.eq("role", "adviser").eq("status", "pending")
       )
       .take(100);
-    return pending.length;
+    return pendingAdvisers.length;
   },
 });
 
@@ -362,8 +409,12 @@ export const approveUser = mutation({
 
     const target = await ctx.db.get(args.userId);
     if (!target) throwUserError("User not found");
-    if (approver.role === "admin" && target.role !== "instructor") {
-      throwUserError("Admins can only approve instructor accounts.");
+    if (
+      approver.role === "admin" &&
+      target.role !== "instructor" &&
+      target.role !== "coordinator"
+    ) {
+      throwUserError("Admins can only approve instructor or coordinator accounts.");
     }
     if (approver.role === "instructor" && target.role !== "adviser") {
       throwUserError("Instructors can only approve adviser accounts.");
@@ -388,8 +439,12 @@ export const rejectUser = mutation({
 
     const target = await ctx.db.get(args.userId);
     if (!target) throwUserError("User not found");
-    if (approver.role === "admin" && target.role !== "instructor") {
-      throwUserError("Admins can only reject instructor accounts.");
+    if (
+      approver.role === "admin" &&
+      target.role !== "instructor" &&
+      target.role !== "coordinator"
+    ) {
+      throwUserError("Admins can only reject instructor or coordinator accounts.");
     }
     if (approver.role === "instructor" && target.role !== "adviser") {
       throwUserError("Instructors can only reject adviser accounts.");

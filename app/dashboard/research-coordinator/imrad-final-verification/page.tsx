@@ -13,7 +13,10 @@ import { getConvexErrorMessage } from "@/lib/convex-errors";
 export default function FinalVerificationPage() {
   const router = useRouter();
   const me = useQuery(api.users.getMe);
-  const hasAccess = me?.role === "coordinator";
+  const hasAccess =
+    me?.role === "coordinator" &&
+    me.status !== "pending" &&
+    me.status !== "rejected";
   const queue = useQuery(
     api.researchCoordinator.listFinalVerificationQueue,
     hasAccess ? {} : "skip"

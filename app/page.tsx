@@ -78,7 +78,7 @@ const ROLES: {
     role: "coordinator",
     title: "Research Coordinator",
     description: "Coordinate studies, compliance, schedules, and reporting.",
-    cta: "Continue as Coordinator",
+    cta: "Sign in or request access",
     Icon: ClipboardCheck,
     tile: "bg-rose-100 dark:bg-rose-950",
     iconColor: "text-rose-700 dark:text-rose-300",
@@ -96,7 +96,11 @@ export default function LandingPage() {
     if (!isLoaded) return;
     if (isSignedIn && me && me.role) {
       router.replace(
-        me.mustChangePassword ? "/change-password" : dashboardRouteForRole(me.role)
+        me.mustChangePassword
+          ? "/change-password"
+          : me.status === "pending"
+            ? "/pending-approval"
+            : dashboardRouteForRole(me.role)
       );
     }
   }, [isLoaded, isSignedIn, me, router]);

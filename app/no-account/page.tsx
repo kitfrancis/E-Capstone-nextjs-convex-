@@ -23,12 +23,16 @@ function NoAccountContent() {
       <Card className="w-full max-w-md">
         <CardHeader className="px-6 text-center sm:px-8">
           <CardTitle className="w-full text-lg font-semibold">
-            This account isn&apos;t registered in E-Capstone
+            {isCoordinator
+              ? "No Research Coordinator access yet"
+              : "This account isn't registered in E-Capstone"}
           </CardTitle>
           <CardDescription className="mx-auto max-w-sm text-sm">
             {email ? (
               <>
-                There is no E-Capstone account for{" "}
+                {isCoordinator
+                  ? "Coordinator access isn't enabled for "
+                  : "There is no E-Capstone account for "}
                 <span className="break-all font-semibold">{email}</span>.
               </>
             ) : (
@@ -38,16 +42,20 @@ function NoAccountContent() {
         </CardHeader>
 
         <CardContent className="space-y-3 px-6 text-sm text-muted-foreground sm:px-8">
-          <p>
-            <span className="font-medium text-foreground">Students:</span> your
-            instructor creates your account by importing the class roster. Ask
-            them to add this exact email, then sign in with the temporary
-            password they send you, or with Google using the same email.
-          </p>
+          {!isCoordinator && (
+            <p>
+              <span className="font-medium text-foreground">Students:</span>{" "}
+              your instructor creates your account by importing the class
+              roster. Ask them to add this exact email, then sign in with the
+              temporary password they send you, or with Google using the same
+              email.
+            </p>
+          )}
           {isCoordinator ? (
             <p>
-              Research Coordinator accounts are assigned by an administrator.
-              Contact your administrator if you need access.
+              Create an account to request Research Coordinator access. An
+              administrator must approve your request before you can use the
+              coordinator workspace.
             </p>
           ) : (
             <p>
@@ -76,6 +84,13 @@ function NoAccountContent() {
             <Button asChild variant="outline" className="w-full">
               <Link href="/sign-up/clerk-signup?role=adviser">
                 Adviser or instructor? Sign up
+              </Link>
+            </Button>
+          )}
+          {isCoordinator && (
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/sign-up/clerk-signup?role=coordinator">
+                Request coordinator access
               </Link>
             </Button>
           )}

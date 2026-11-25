@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SignIn } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
@@ -193,16 +193,16 @@ const ROLE_INFO: Record<
     description:
       "Review final IMRaD submissions, verify research work, and manage the archive.",
     notice:
-      "Coordinator accounts are assigned by an administrator. Sign in with your assigned email and password.",
+      "Sign in with your registered account. New coordinators can request access; an administrator must approve it before the workspace is available.",
     Icon: ClipboardCheck,
     accent: "#be123c",
     steps: [
       {
         Icon: KeyRound,
         title: "Sign in",
-        summary: "Use the coordinator account assigned by an administrator.",
+        summary: "Sign in with your registered coordinator account.",
         detail:
-          "Research Coordinator accounts cannot be created through public sign up.",
+          "New coordinator accounts are reviewed by an administrator before access is granted.",
       },
       {
         Icon: UserCheck,
@@ -226,8 +226,7 @@ export default function SignInPage() {
   const searchParams = useSearchParams();
   const role = searchParams.get("role");
   const isStudent = role === "student";
-  const isCoordinator = role === "coordinator";
-  const noSelfSignUp = isStudent || isCoordinator;
+  const noSelfSignUp = isStudent;
   const [openStep, setOpenStep] = useState<number | null>(0);
 
   const roleKey: RoleKey =
@@ -235,11 +234,15 @@ export default function SignInPage() {
   const info = ROLE_INFO[roleKey];
   const { Icon } = info;
 
+  useEffect(() => {
+    if (role && Object.prototype.hasOwnProperty.call(ROLE_INFO, role)) {
+      sessionStorage.setItem("intendedRole", role);
+    }
+  }, [role]);
+
   // Students no longer self-register: their account is created by the
-  // instructor's roster import. Instructors approve adviser sign-ups.
-  // For students, a Google/GitHub identity Clerk doesn't know has nowhere to
-  // "sign up", so it goes to the no-account page. Pointing this back at the
-  // sign-in page makes it loop.
+  // instructor's roster import. Coordinator sign-ups create pending requests.
+  // For students, an unknown Clerk identity goes to the no-account page.
   const signUpUrl = noSelfSignUp
     ? `/no-account?role=${role}`
     : `/sign-up/clerk-signup?role=${role ?? "adviser"}`;
