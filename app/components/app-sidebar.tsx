@@ -91,9 +91,10 @@ function AppSidebarContent() {
     api.imrad.sidebarReviewCounts,
     me?.role === "instructor" || me?.role === "admin" ? {} : "skip"
   );
+  // Admin: pending instructors. Instructor: pending advisers.
   const pendingApprovals = useQuery(
-    api.admin.pendingApprovalsCount,
-    me?.role === "admin" ? {} : "skip"
+    api.users.pendingApprovalsCount,
+    me?.role === "admin" || me?.role === "instructor" ? {} : "skip"
   );
   const { signOut } = useClerk();
   const router = useRouter();
@@ -211,44 +212,48 @@ function AppSidebarContent() {
                     </SidebarGroup>
                   ) : (
                     (() => {
-  const reviewCount =
-    me?.role === "instructor" && link.href === "/dashboard/instructor/verification"
-      ? reviewCounts?.instructorReviewCount ?? 0
-      : me?.role === "admin" && link.href === "/dashboard/admin/imrad-processing"
-        ? reviewCounts?.adminVerificationCount ?? 0
-        : me?.role === "admin" && link.href === "/dashboard/admin/approvals"
-          ? pendingApprovals ?? 0
-          : 0;
-  const badgeLabel =
-    link.href === "/dashboard/instructor/verification"
-      ? "teams waiting for IMRaD review"
-      : link.href === "/dashboard/admin/approvals"
-        ? "pending approvals"
-        : "teams ready for final verification";
+                      const reviewCount =
+                        me?.role === "instructor" && link.href === "/dashboard/instructor/verification"
+                          ? reviewCounts?.instructorReviewCount ?? 0
+                          : me?.role === "instructor" && link.href === "/dashboard/instructor/adviser-approvals"
+                            ? pendingApprovals ?? 0
+                            : me?.role === "admin" && link.href === "/dashboard/admin/imrad-processing"
+                              ? reviewCounts?.adminVerificationCount ?? 0
+                              : me?.role === "admin" && link.href === "/dashboard/admin/approvals"
+                                ? pendingApprovals ?? 0
+                                : 0;
+                      const badgeLabel =
+                        link.href === "/dashboard/instructor/verification"
+                          ? "teams waiting for IMRaD review"
+                          : link.href === "/dashboard/instructor/adviser-approvals"
+                            ? "advisers waiting for approval"
+                            : link.href === "/dashboard/admin/approvals"
+                              ? "instructors waiting for approval"
+                              : "teams ready for final verification";
 
-  return (
-    <SidebarMenuItem key={link.href}>
-      <SidebarMenuButton
-        className={`group/nav h-11 rounded-xl text-[15px] ${ACTIVE}`}
-        asChild
-        isActive={isLinkActive(link.href!)}
-      >
-        <button onClick={() => router.push(link.href!)} title={link.label}>
-          <link.icon className="h-5 w-5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-left">{link.label}</span>
-          {reviewCount > 0 && (
-            <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white group-data-[active=true]/nav:bg-white group-data-[active=true]/nav:text-blue-600">
-              <span aria-hidden>{reviewCount >= 100 ? "99+" : reviewCount}</span>
-              <span className="sr-only">
-                {reviewCount >= 100 ? "At least 100" : reviewCount} {badgeLabel}
-              </span>
-            </span>
-          )}
-        </button>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
-})()
+                      return (
+                        <SidebarMenuItem key={link.href}>
+                          <SidebarMenuButton
+                            className={`group/nav h-11 rounded-xl text-[15px] ${ACTIVE}`}
+                            asChild
+                            isActive={isLinkActive(link.href!)}
+                          >
+                            <button onClick={() => router.push(link.href!)} title={link.label}>
+                              <link.icon className="h-5 w-5 shrink-0" />
+                              <span className="min-w-0 flex-1 truncate text-left">{link.label}</span>
+                              {reviewCount > 0 && (
+                                <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white group-data-[active=true]/nav:bg-white group-data-[active=true]/nav:text-blue-600">
+                                  <span aria-hidden>{reviewCount >= 100 ? "99+" : reviewCount}</span>
+                                  <span className="sr-only">
+                                    {reviewCount >= 100 ? "At least 100" : reviewCount} {badgeLabel}
+                                  </span>
+                                </span>
+                              )}
+                            </button>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })()
                   )
                 )
               )}
