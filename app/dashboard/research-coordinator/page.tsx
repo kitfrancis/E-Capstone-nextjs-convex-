@@ -79,7 +79,7 @@ export default function ResearchCoordinatorDashboard() {
           Welcome, {me.name}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Review final IMRaD submissions and manage the research archive.1
+          Review final IMRaD submissions and manage the research archive.
         </p>
       </header>
 
