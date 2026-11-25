@@ -38,15 +38,17 @@ export function DataPrivacyConsent({
     <>
       <div className="flex items-start gap-2 text-xs text-muted-foreground">
         <input
+          id="data-privacy-consent"
           type="checkbox"
           checked={accepted}
           onChange={(event) => onAcceptedChange(event.target.checked)}
           required
-          disabled={!accepted}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-blue-600"
         />
         <span>
-          I agree to the collection and processing of my information.{" "}
+          <label htmlFor="data-privacy-consent" className="cursor-pointer">
+            I agree to the collection and processing of my information.
+          </label>{" "}
           <button
             type="button"
             className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
@@ -109,16 +111,16 @@ export function DataPrivacyConsent({
             <p>
               By selecting{" "}
               <strong className="text-foreground">I Understand and Agree</strong>,
-              you confirm that you have read this notice and consent to the
-              processing described above, to the extent consent is the
-              applicable lawful basis.
+              or by ticking the consent checkbox, you confirm that you have read
+              this notice and consent to the processing described above, to the
+              extent consent is the applicable lawful basis.
             </p>
           </div>
 
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">
-                Cancel
+                Close
               </Button>
             </DialogClose>
             <Button

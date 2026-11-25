@@ -3,11 +3,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useSignUp } from "@clerk/nextjs/legacy";
 import { useClerk } from "@clerk/nextjs";
+import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Check,
+  Eye,
+  EyeOff,
   GraduationCap,
   Info,
   Mail,
@@ -15,6 +18,7 @@ import {
   ShieldCheck,
   UserCheck,
   UserPlus,
+  X,
 } from "lucide-react";
 import { DataPrivacyConsent } from "@/components/data-privacy-consent";
 import { Button } from "@/components/ui/button";
@@ -33,6 +37,86 @@ const HELPDESK_URL = "#";
 const PRIVACY_URL = "#";
 
 type StaffRole = "adviser" | "instructor";
+
+// Password rules shown in the checklist. Keep these in sync with
+// Clerk Dashboard -> Configure -> User & authentication -> Password.
+const PASSWORD_RULES = [
+  { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
+  { label: "One uppercase letter (A-Z)", test: (p: string) => /[A-Z]/.test(p) },
+  { label: "One lowercase letter (a-z)", test: (p: string) => /[a-z]/.test(p) },
+  { label: "One number (0-9)", test: (p: string) => /[0-9]/.test(p) },
+  {
+    label: "One special character (!@#$%...)",
+    test: (p: string) => /[^A-Za-z0-9]/.test(p),
+  },
+];
+
+// Pulls the real reason out of a Clerk error (e.g. "That email address is taken.")
+// and logs the full error list so the code (form_identifier_exists, etc.) is visible.
+function getClerkErrorMessage(err: unknown, fallback: string) {
+  if (isClerkAPIResponseError(err)) {
+    console.log("Clerk errors:", err.errors);
+    const first = err.errors[0];
+    return first?.longMessage ?? first?.message ?? fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
+// True when Clerk says the problem is with the password field.
+function isClerkPasswordError(err: unknown) {
+  return (
+    isClerkAPIResponseError(err) &&
+    err.errors.some((e) => e.meta?.paramName === "password")
+  );
+}
+
+// Password input with a show/hide eye button and an optional red border.
+function PasswordInput({
+  id,
+  placeholder,
+  value,
+  onChange,
+  onBlur,
+  invalid,
+}: {
+  id: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+  invalid?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={visible ? "text" : "password"}
+        placeholder={placeholder}
+        className={`pr-10 text-sm ${
+          invalid
+            ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/30"
+            : ""
+        }`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={invalid || undefined}
+        required
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
 
 const ROLE_COPY: Record<
   StaffRole,
@@ -281,6 +365,23 @@ export default function ClerkSignUpPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Password validation state
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [confirmTouched, setConfirmTouched] = useState(false);
+  const [passwordServerError, setPasswordServerError] = useState(false);
+
+  const passwordChecks = PASSWORD_RULES.map((rule) => ({
+    label: rule.label,
+    met: rule.test(password),
+  }));
+  const passwordValid = passwordChecks.every((check) => check.met);
+  const passwordInvalid =
+    (passwordTouched && !passwordValid) || passwordServerError;
+  const confirmInvalid =
+    confirmPassword.length > 0 &&
+    (confirmTouched || confirmPassword.length >= password.length) &&
+    password !== confirmPassword;
+
   useEffect(() => {
     if (isSignedIn && role && step === "form") {
       router.replace("/auth-callback");
@@ -291,7 +392,13 @@ export default function ClerkSignUpPage() {
     event.preventDefault();
     if (!isLoaded || !signUp || !role) return;
     setError("");
+    setPasswordTouched(true);
+    setConfirmTouched(true);
 
+    if (!passwordValid) {
+      setError("Your password doesn't meet all the requirements below.");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -309,16 +416,18 @@ export default function ClerkSignUpPage() {
         PRIVACY_NOTICE_VERSION
       );
       await signUp.create({
-        firstName,
-        lastName,
-        emailAddress: email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        emailAddress: email.trim(),
         password,
         legalAccepted: acceptedDataPrivacy,
       });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("verify");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      // If Clerk rejected the password itself, turn the field red too.
+      if (isClerkPasswordError(err)) setPasswordServerError(true);
+      setError(getClerkErrorMessage(err, "Something went wrong."));
     } finally {
       setLoading(false);
     }
@@ -342,7 +451,7 @@ export default function ClerkSignUpPage() {
       await setActive({ session: result.createdSessionId });
       router.replace(`/auth-callback?role=${role}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid verification code.");
+      setError(getClerkErrorMessage(err, "Invalid verification code."));
     } finally {
       setLoading(false);
     }
@@ -417,9 +526,10 @@ export default function ClerkSignUpPage() {
                 });
               } catch (err) {
                 setError(
-                  err instanceof Error
-                    ? err.message
-                    : "Could not resend the verification code."
+                  getClerkErrorMessage(
+                    err,
+                    "Could not resend the verification code."
+                  )
                 );
               }
             }}
@@ -493,33 +603,68 @@ export default function ClerkSignUpPage() {
           <Label htmlFor="staff-password" className="text-xs">
             Password
           </Label>
-          <Input
+          <PasswordInput
             id="staff-password"
-            type="password"
             placeholder="Minimum 8 characters"
-            className="text-sm"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
+            onChange={(value) => {
+              setPassword(value);
+              setPasswordServerError(false);
+            }}
+            onBlur={() => setPasswordTouched(true)}
+            invalid={passwordInvalid}
           />
+
+          {(password.length > 0 || passwordTouched) && (
+            <ul
+              aria-live="polite"
+              className="grid grid-cols-1 gap-x-3 gap-y-1 pt-1 sm:grid-cols-2"
+            >
+              {passwordChecks.map(({ label, met }) => (
+                <li
+                  key={label}
+                  className={`flex items-center gap-1.5 text-xs ${
+                    met
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : passwordTouched
+                        ? "text-red-500"
+                        : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {met ? (
+                    <Check className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <X className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  {label}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="staff-confirm-password" className="text-xs">
             Confirm Password
           </Label>
-          <Input
+          <PasswordInput
             id="staff-confirm-password"
-            type="password"
             placeholder="Re-enter your password"
-            className="text-sm"
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            required
+            onChange={setConfirmPassword}
+            onBlur={() => setConfirmTouched(true)}
+            invalid={confirmInvalid}
           />
+          {confirmInvalid && (
+            <p className="text-xs text-red-500">Passwords do not match.</p>
+          )}
         </div>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-500">
+            {error}
+          </p>
+        )}
 
         <DataPrivacyConsent
           role={role}
