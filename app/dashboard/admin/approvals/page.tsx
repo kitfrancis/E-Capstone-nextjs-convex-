@@ -49,7 +49,7 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
         <p className="text-sm text-muted-foreground">
-          Advisers and instructors can sign up on their own, but they can&apos;t
+          Instructors can sign up on their own, but they can&apos;t
           use the system until you verify them.{" "}
           {users && `${pendingCount} waiting.`}
         </p>

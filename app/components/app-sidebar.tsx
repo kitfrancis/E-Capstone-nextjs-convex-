@@ -42,6 +42,7 @@ const studentLinks = [
 const instructorLinks = [
   { label: "Dashboard", href: "/dashboard/instructor", icon: LayoutDashboard },
   { label: "Team Management", href: "/team-management/instructor", icon: Users },
+  { label: "Adviser Approvals", href: "/dashboard/instructor/adviser-approvals", icon: UserCheck },
   { label: "IMRaD Review", href: "/dashboard/instructor/verification", icon: CheckCircle2 },
   { label: "Admin logs", href: "/dashboard/instructor/admin-logs", icon: FileText },
   { label: "Archive", href: "/components/Archive", icon: Archive },
@@ -59,13 +60,19 @@ const adminLinks = [
   { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
   { label: "User Management", href: "/dashboard/admin/Users", icon: Users },
   { label: "Approvals", href: "/dashboard/admin/approvals", icon: UserCheck },
-  { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
-  { label: "IMRaD Final Verification", href: "/dashboard/admin/imrad-processing", icon: FileText },
-  // { label: "Archive", href: "/components/Archive", icon: Archive },
+  // { label: "Archive Management", href: "/dashboard/admin/archive", icon: Archive },
+  // { label: "IMRaD Final Verification", href: "/dashboard/admin/imrad-processing", icon: FileText },
+  { label: "Archive", href: "/components/Archive", icon: Archive },
   { label: "Reports", href: "/dashboard/admin/reports", icon: FileText },
   { label: "System Settings", href: "/dashboard/admin/system-settings", icon: ScrollText },
   { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ScrollText },
 ];
+
+const ResearchCoordinatorLinks = [
+  { label: "Dashboard", href: "/dashboard/research-coordinator", icon: LayoutDashboard },
+  { label: "Archive Management", href: "/dashboard/research-coordinator/archive-management", icon: Archive },
+  { label: "Imrad Final Verification", href: "/dashboard/research-coordinator/imrad-final-verification", icon: Archive },
+]
 
 type LinkItem = {
   label: string;

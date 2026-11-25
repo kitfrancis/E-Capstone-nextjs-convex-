@@ -15,6 +15,7 @@ import {
   ChartNoAxesCombined,
   Users,
 } from "lucide-react";
+import { title } from "process";
 
 type Role = "student" | "instructor" | "adviser" | "admin";
 
@@ -64,6 +65,18 @@ const ROLES: {
     button: "bg-purple-700 hover:bg-purple-800 dark:bg-purple-600 dark:hover:bg-purple-500",
     wave: "from-purple-200 to-purple-100/0 dark:from-purple-900/60 dark:to-purple-900/0",
   },
+
+  // {
+  // role: "coordinator",
+  // title: "research coordinator",
+  // description: "Manage Archive and Final Verification of IMRaD submissions.",
+  // cta: "Continue as Research Coordinator",
+  // Icon: ShieldCheck,
+  // circle: "bg-yellow-100 dark:bg-yellow-950",
+  // iconColor: "text-yellow-700 dark:text-yellow-300",
+  // button: "bg-yellow-700 hover:bg-yellow-800 dark:bg-yellow-600 dark:hover:bg-yellow-500",
+  // wave: "from-yellow-200 to-yellow-100/0 dark:from-yellow-900/60 dark:to-yellow-900/0",
+  // }
 ];
 
 const FEATURES = [
