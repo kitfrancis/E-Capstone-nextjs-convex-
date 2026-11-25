@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { dashboardRouteForRole } from "@/lib/dashboard-routes";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -22,7 +23,7 @@ export default function PendingApproval() {
   // Approved while waiting: go straight to the dashboard
   useEffect(() => {
     if (me && me.status !== "pending" && me.status !== "rejected") {
-      router.replace(`/dashboard/${me.role}`);
+      router.replace(dashboardRouteForRole(me.role));
     }
   }, [me, router]);
 

@@ -20,13 +20,19 @@ import {
   Users,
   ScrollText,
   ChevronDown,
+  ClipboardCheck,
 } from "lucide-react";
 
 // Set these to real links.
 const HELPDESK_URL = "#";
 const PRIVACY_URL = "#";
 
-type RoleKey = "student" | "adviser" | "instructor" | "admin";
+type RoleKey =
+  | "student"
+  | "adviser"
+  | "instructor"
+  | "coordinator"
+  | "admin";
 
 type Step = {
   Icon: typeof Mail;
@@ -181,12 +187,47 @@ const ROLE_INFO: Record<
       },
     ],
   },
+  coordinator: {
+    badge: "Research Coordinator Workspace",
+    title: "Research Coordinator Sign In",
+    description:
+      "Review final IMRaD submissions, verify research work, and manage the archive.",
+    notice:
+      "Coordinator accounts are assigned by an administrator. Sign in with your assigned email and password.",
+    Icon: ClipboardCheck,
+    accent: "#be123c",
+    steps: [
+      {
+        Icon: KeyRound,
+        title: "Sign in",
+        summary: "Use the coordinator account assigned by an administrator.",
+        detail:
+          "Research Coordinator accounts cannot be created through public sign up.",
+      },
+      {
+        Icon: UserCheck,
+        title: "Verify final IMRaD submissions",
+        summary: "Approve a final document or request changes from the instructor.",
+        detail:
+          "Only submissions awaiting final verification appear in your review queue.",
+      },
+      {
+        Icon: ScrollText,
+        title: "Manage the archive",
+        summary: "Maintain archived project records and files.",
+        detail:
+          "Archive access includes uploading, editing, and deleting archived projects.",
+      },
+    ],
+  },
 };
 
 export default function SignInPage() {
   const searchParams = useSearchParams();
   const role = searchParams.get("role");
   const isStudent = role === "student";
+  const isCoordinator = role === "coordinator";
+  const noSelfSignUp = isStudent || isCoordinator;
   const [openStep, setOpenStep] = useState<number | null>(0);
 
   const roleKey: RoleKey =
@@ -199,8 +240,8 @@ export default function SignInPage() {
   // For students, a Google/GitHub identity Clerk doesn't know has nowhere to
   // "sign up", so it goes to the no-account page. Pointing this back at the
   // sign-in page makes it loop.
-  const signUpUrl = isStudent
-    ? "/no-account"
+  const signUpUrl = noSelfSignUp
+    ? `/no-account?role=${role}`
     : `/sign-up/clerk-signup?role=${role ?? "adviser"}`;
 
   return (
@@ -357,7 +398,7 @@ export default function SignInPage() {
                     rootBox: { width: "100%" },
                     cardBox: { width: "100%", boxShadow: "none" },
                     card: { boxShadow: "none" },
-                    ...(isStudent && {
+                    ...(noSelfSignUp && {
                       footerAction: { display: "none" }, // "Don't have an account? Sign up"
                     }),
                   },

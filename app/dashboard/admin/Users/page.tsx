@@ -32,11 +32,22 @@ import {
 } from "@/components/ui/select";
 import { Check, Eye, MoreHorizontal, Trash2 } from "lucide-react";
 
-type Role = "student" | "instructor" | "adviser" | "admin";
+type Role = "student" | "instructor" | "adviser" | "coordinator" | "admin";
 type AssignableRole = Exclude<Role, "admin">;
 
-const ROLES: Role[] = ["student", "adviser", "instructor", "admin"];
-const ASSIGNABLE_ROLES: AssignableRole[] = ["student", "adviser", "instructor"];
+const ROLES: Role[] = [
+  "student",
+  "adviser",
+  "instructor",
+  "coordinator",
+  "admin",
+];
+const ASSIGNABLE_ROLES: AssignableRole[] = [
+  "student",
+  "adviser",
+  "instructor",
+  "coordinator",
+];
 const PAGE_SIZE = 10;
 
 const roleStyles: Record<Role, string> = {
@@ -44,6 +55,8 @@ const roleStyles: Record<Role, string> = {
   adviser: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
   instructor:
     "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300",
+  coordinator:
+    "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
   admin: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
 };
 

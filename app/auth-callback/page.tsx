@@ -12,8 +12,9 @@ import {
   PRIVACY_CONSENT_SESSION_KEY,
   PRIVACY_NOTICE_VERSION,
 } from "@/lib/privacy-consent";
+import { dashboardRouteForRole } from "@/lib/dashboard-routes";
 
-const ROLES = ["student", "instructor", "adviser", "admin"] as const;
+const ROLES = ["student", "instructor", "adviser", "coordinator", "admin"] as const;
 type Role = (typeof ROLES)[number];
 
 export default function AuthCallback() {
@@ -49,10 +50,12 @@ export default function AuthCallback() {
     // Signed in with Clerk (for example Google) but there is no E-Capstone
     // account for them. Sign out and explain, instead of leaving a half-signed-in
     // session. A leftover Clerk user is harmless: the roster import reuses it.
-    const noAccount = async () => {
+    const noAccount = async (role?: Role) => {
       const email = user.primaryEmailAddress?.emailAddress ?? "";
+      const params = new URLSearchParams({ email });
+      if (role === "coordinator") params.set("role", role);
       await signOut(() =>
-        router.replace(`/no-account?email=${encodeURIComponent(email)}`)
+        router.replace(`/no-account?${params.toString()}`)
       );
     };
 
@@ -62,7 +65,7 @@ export default function AuthCallback() {
         ? "/change-password"
         : u.status === "pending"
           ? "/pending-approval"
-          : `/dashboard/${u.role}`;
+          : dashboardRouteForRole(u.role);
 
     if (!intendedRole) {
       if (me) {
@@ -77,19 +80,27 @@ export default function AuthCallback() {
     handled.current = true;
 
     const handle = async () => {
-      // ---------- ADMIN ----------
-      if (intendedRole === "admin") {
+      // These privileged roles are assigned by an admin, never self-registered.
+      if (intendedRole === "admin" || intendedRole === "coordinator") {
         sessionStorage.removeItem("intendedRole");
 
         if (!me) {
-          await signOut(() => router.replace("/unauthorized"));
+          if (intendedRole === "coordinator") {
+            await noAccount(intendedRole);
+          } else {
+            await signOut(() => router.replace("/unauthorized"));
+          }
           return;
         }
-        if (me.role !== "admin") {
+        if (me.role !== intendedRole) {
           router.replace("/unauthorized");
           return;
         }
-        router.replace("/dashboard/admin");
+        if (me.status === "rejected") {
+          await signOut(() => router.replace("/unauthorized"));
+          return;
+        }
+        router.replace(destinationFor(me));
         return;
       }
 

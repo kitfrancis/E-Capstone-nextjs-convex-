@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
+import { dashboardRouteForRole } from "@/lib/dashboard-routes";
 import {
   GraduationCap,
   UserCheck,
@@ -95,7 +96,7 @@ export default function LandingPage() {
     if (!isLoaded) return;
     if (isSignedIn && me && me.role) {
       router.replace(
-        me.mustChangePassword ? "/change-password" : `/dashboard/${me.role}`
+        me.mustChangePassword ? "/change-password" : dashboardRouteForRole(me.role)
       );
     }
   }, [isLoaded, isSignedIn, me, router]);

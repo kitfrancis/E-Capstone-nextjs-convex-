@@ -50,6 +50,7 @@ export default function AdminDashboard() {
     { label: "Students", value: stats?.roles.student },
     { label: "Advisers", value: stats?.roles.adviser },
     { label: "Instructors", value: stats?.roles.instructor },
+    { label: "Coordinators", value: stats?.roles.coordinator },
     { label: "Admins", value: stats?.roles.admin },
   ];
 

@@ -14,6 +14,7 @@ const roleLabels = {
   student: "Student",
   adviser: "Adviser",
   instructor: "Instructor",
+  coordinator: "Research Coordinator",
   admin: "Admin",
 };
 

@@ -16,6 +16,7 @@ const messageValidator = v.object({
     v.literal("student"),
     v.literal("instructor"),
     v.literal("adviser"),
+    v.literal("coordinator"),
     v.literal("admin")
   ),
   message: v.string(),

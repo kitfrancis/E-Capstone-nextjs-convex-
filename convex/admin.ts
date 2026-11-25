@@ -22,6 +22,19 @@ async function requireInstructorOrAdmin(ctx: QueryCtx) {
 
 export const getDashboardStats = query({
   args: {},
+  returns: v.object({
+    totalUsers: v.number(),
+    roles: v.object({
+      student: v.number(),
+      adviser: v.number(),
+      instructor: v.number(),
+      coordinator: v.number(),
+      admin: v.number(),
+    }),
+    totalTeams: v.number(),
+    archivedProjects: v.number(),
+    underReview: v.number(),
+  }),
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
@@ -36,6 +49,7 @@ export const getDashboardStats = query({
         student: users.filter((u) => u.role === "student").length,
         adviser: users.filter((u) => u.role === "adviser").length,
         instructor: users.filter((u) => u.role === "instructor").length,
+        coordinator: users.filter((u) => u.role === "coordinator").length,
         admin: users.filter((u) => u.role === "admin").length,
       },
       totalTeams: teams.length,

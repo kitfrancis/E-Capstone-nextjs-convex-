@@ -2,7 +2,11 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { throwUserError } from "./errors";
 import { Id } from "./_generated/dataModel";
-import { requireAdmin, logAction } from "./users";
+import {
+  requireAdmin,
+  requireAdminOrCoordinator,
+  logAction,
+} from "./users";
 
 export const getAll = query({
   args: {},
@@ -22,8 +26,9 @@ export const getFileUrl = query({
 // ---------- admin ----------
 export const generateUploadUrl = mutation({
   args: {},
+  returns: v.string(),
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAdminOrCoordinator(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -41,12 +46,14 @@ export const addProject = mutation({
     adviser: v.string(),
     storageId: v.id("_storage"),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requireAdminOrCoordinator(ctx);
     const archivedDate = new Date().toISOString().slice(0, 10);
 
     await ctx.db.insert("projects", { ...args, archivedDate });
     await logAction(ctx, admin, "Uploaded to archive", args.title);
+    return null;
   },
 });
 
@@ -61,8 +68,9 @@ export const updateProject = mutation({
     team: v.optional(v.string()),
     adviser: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, { projectId, ...fields }) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requireAdminOrCoordinator(ctx);
 
     const project = await ctx.db.get(projectId);
     if (!project) throwUserError("Project not found");
@@ -75,7 +83,7 @@ export const updateProject = mutation({
       if ((project as Record<string, unknown>)[key] === clean) continue;
       patch[key] = clean;
     }
-    if (Object.keys(patch).length === 0) return;
+    if (Object.keys(patch).length === 0) return null;
 
     await ctx.db.patch(projectId, patch);
     await logAction(
@@ -84,13 +92,15 @@ export const updateProject = mutation({
       `Edited archived project (${Object.keys(patch).join(", ")})`,
       project.title
     );
+    return null;
   },
 });
 
 export const deleteProject = mutation({
   args: { projectId: v.id("projects") },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
+    const admin = await requireAdminOrCoordinator(ctx);
 
     const project = await ctx.db.get(args.projectId);
     if (!project) throwUserError("Project not found");
@@ -109,6 +119,7 @@ export const deleteProject = mutation({
     await Promise.all([...storageIds].map((storageId) => ctx.storage.delete(storageId)));
     await ctx.db.delete(args.projectId);
     await logAction(ctx, admin, "Deleted archived project", project.title);
+    return null;
   },
 });
 

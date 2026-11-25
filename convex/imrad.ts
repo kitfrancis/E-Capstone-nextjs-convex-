@@ -24,6 +24,20 @@ async function requireInstructor(ctx: MutationCtx) {
   return user;
 }
 
+async function requireInstructorOrCoordinator(ctx: MutationCtx) {
+  const user = await getCurrentUser(ctx);
+  if (!user) throwUserError("Not authenticated");
+  if (
+    (user.role !== "instructor" && user.role !== "coordinator") ||
+    user.status === "pending" ||
+    user.status === "rejected" ||
+    user.mustChangePassword === true
+  ) {
+    throwUserError("Approved instructor or coordinator access required");
+  }
+  return user;
+}
+
 async function requireStudent(ctx: MutationCtx) {
   const user = await getCurrentUser(ctx);
   if (!user) throwUserError("Not authenticated");
@@ -1570,11 +1584,12 @@ export const reviewFinalVerification = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const instructor = await requireInstructor(ctx);
+    const reviewer = await requireInstructorOrCoordinator(ctx);
     const submission = await ctx.db.get(args.submissionId);
     if (
       !submission ||
-      submission.instructorId !== instructor._id ||
+      (reviewer.role === "instructor" &&
+        submission.instructorId !== reviewer._id) ||
       submission.status !== "verification"
     ) {
       throwUserError("This IMRaD document is not awaiting your verification.");
@@ -1600,10 +1615,19 @@ export const reviewFinalVerification = mutation({
         verificationComment: comment,
         requiredSaveRevision,
       });
-      await notifyAdmins(ctx, `${project.teamName}'s IMRaD PDF needs changes: ${comment}`, submission._id);
+      const message = `${project.teamName}'s IMRaD PDF needs changes: ${comment}`;
+      await notifyAdmins(ctx, message, submission._id);
+      if (reviewer.role === "coordinator") {
+        await notifyInstructor(
+          ctx,
+          submission.instructorId,
+          message,
+          submission._id
+        );
+      }
       await logAction(
         ctx,
-        instructor,
+        reviewer,
         "Requested IMRaD verification changes",
         project.teamName
       );
@@ -1619,7 +1643,20 @@ export const reviewFinalVerification = mutation({
       `${project.teamName}'s final IMRaD PDF was approved and is ready for the admin's final action.`,
       submission._id
     );
-    await logAction(ctx, instructor, "Approved final IMRaD verification", project.teamName);
+    if (reviewer.role === "coordinator") {
+      await notifyInstructor(
+        ctx,
+        submission.instructorId,
+        `${project.teamName}'s final IMRaD PDF was approved by the research coordinator.`,
+        submission._id
+      );
+    }
+    await logAction(
+      ctx,
+      reviewer,
+      "Approved final IMRaD verification",
+      project.teamName
+    );
     return null;
   },
 });
@@ -1853,6 +1890,26 @@ async function notifyAdmins(
       link: "/dashboard/admin/imrad-processing",
     });
   }
+}
+
+async function notifyInstructor(
+  ctx: MutationCtx,
+  instructorId: Id<"users">,
+  message: string,
+  submissionId: Id<"imradSubmissions">
+) {
+  const instructor = await ctx.db.get(instructorId);
+  if (!instructor || instructor.role !== "instructor") {
+    throwUserError("The submitting instructor account was not found.");
+  }
+  await ctx.db.insert("notifications", {
+    userId: instructor.clerkId,
+    message,
+    read: false,
+    type: "imrad_verification",
+    relatedId: submissionId,
+    link: "/dashboard/instructor/verification",
+  });
 }
 
 async function notifyProjectStudents(

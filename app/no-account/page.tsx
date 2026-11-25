@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/card";
 
 function NoAccountContent() {
-  const email = useSearchParams().get("email");
+  const searchParams = useSearchParams();
+  const email = searchParams.get("email");
+  const isCoordinator = searchParams.get("role") === "coordinator";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
@@ -42,24 +44,41 @@ function NoAccountContent() {
             them to add this exact email, then sign in with the temporary
             password they send you, or with Google using the same email.
           </p>
-          <p>
-            <span className="font-medium text-foreground">
-              Advisers and instructors:
-            </span>{" "}
-            sign up first. Advisers wait for instructor approval; instructors
-            wait for admin approval.
-          </p>
+          {isCoordinator ? (
+            <p>
+              Research Coordinator accounts are assigned by an administrator.
+              Contact your administrator if you need access.
+            </p>
+          ) : (
+            <p>
+              <span className="font-medium text-foreground">
+                Advisers and instructors:
+              </span>{" "}
+              sign up first. Advisers wait for instructor approval; instructors
+              wait for admin approval.
+            </p>
+          )}
         </CardContent>
 
         <CardFooter className="flex flex-col gap-3 px-6 pb-6 sm:px-8">
           <Button asChild className="w-full">
-            <Link href="/sign-in?role=student">Back to sign in</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/sign-up/clerk-signup?role=adviser">
-              Adviser or instructor? Sign up
+            <Link
+              href={
+                isCoordinator
+                  ? "/sign-in?role=coordinator"
+                  : "/sign-in?role=student"
+              }
+            >
+              Back to sign in
             </Link>
           </Button>
+          {!isCoordinator && (
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/sign-up/clerk-signup?role=adviser">
+                Adviser or instructor? Sign up
+              </Link>
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </div>

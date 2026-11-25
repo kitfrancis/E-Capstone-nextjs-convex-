@@ -7,7 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { logAction } from "./users";
 import { chapterOf, computeProgress } from "../lib/progress";
 
-type Role = "student" | "instructor" | "adviser" | "admin";
+type Role = "student" | "instructor" | "adviser" | "coordinator" | "admin";
 
 // Legacy phase retained so old IMRaD upload requests can be rejected.
 const IMRAD_PHASE = "IMRaD Final";

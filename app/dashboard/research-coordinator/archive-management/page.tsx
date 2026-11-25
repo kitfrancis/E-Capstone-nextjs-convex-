@@ -86,6 +86,8 @@ const splitList = (s: string) =>
     .filter(Boolean);
 
 export default function AdminArchivePage() {
+  const me = useQuery(api.users.getMe);
+  const isAdmin = me?.role === "admin";
   const projects = useQuery(api.archive.getAll);
   const generateUploadUrl = useMutation(api.archive.generateUploadUrl);
   const addProject = useMutation(api.archive.addProject);
@@ -366,8 +368,9 @@ export default function AdminArchivePage() {
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit details
                       </DropdownMenuItem>
-                      {p.title.trim().toLowerCase() === "prajik" ||
-                      p.team.trim().toLowerCase() === "prajik" ? (
+                      {isAdmin &&
+                      (p.title.trim().toLowerCase() === "prajik" ||
+                        p.team.trim().toLowerCase() === "prajik") && (
                         <DropdownMenuItem
                           disabled={!p.capstoneProjectId}
                           className="text-amber-700 focus:text-amber-800"
@@ -384,7 +387,7 @@ export default function AdminArchivePage() {
                           <Trash2 className="mr-2 h-4 w-4" />
                           Reset project process
                         </DropdownMenuItem>
-                      ) : null}
+                      )}
                       {p.title.trim().toLowerCase() !== "prajik" &&
                       p.team.trim().toLowerCase() !== "prajik" ? (
                         <DropdownMenuItem

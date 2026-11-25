@@ -124,6 +124,8 @@ function AppSidebarContent() {
       ? instructorLinks
       : me?.role === "adviser"
       ? adviserLinks
+      : me?.role === "coordinator"
+      ? ResearchCoordinatorLinks
       : me?.role === "admin"
       ? adminLinks
       : [];

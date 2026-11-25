@@ -36,6 +36,23 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
   return user;
 }
 
+export async function requireAdminOrCoordinator(
+  ctx: QueryCtx | MutationCtx
+) {
+  const user = await getCurrentUser(ctx);
+  if (!user) throwUserError("Not authenticated");
+  if (user.role === "admin") return user;
+  if (
+    user.role !== "coordinator" ||
+    user.status === "pending" ||
+    user.status === "rejected" ||
+    user.mustChangePassword === true
+  ) {
+    throwUserError("Approved coordinator access required");
+  }
+  return user;
+}
+
 async function requireAdminOrApprovedInstructor(ctx: MutationCtx) {
   const user = await getCurrentUser(ctx);
   if (!user) throwUserError("Not authenticated");
@@ -396,9 +413,11 @@ export const setUserRole = mutation({
     role: v.union(
       v.literal("student"),
       v.literal("instructor"),
-      v.literal("adviser")
+      v.literal("adviser"),
+      v.literal("coordinator")
     ),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
 
@@ -408,13 +427,17 @@ export const setUserRole = mutation({
       throwUserError("The admin account's role can't be changed.");
     }
 
-    await ctx.db.patch(args.userId, { role: args.role });
+    await ctx.db.patch(args.userId, {
+      role: args.role,
+      ...(args.role === "coordinator" ? { status: "approved" as const } : {}),
+    });
     await logAction(
       ctx,
       admin,
       "Changed user role",
-      `${target.name}: ${target.role} → ${args.role}`
+      `${target.name}: ${target.role} -> ${args.role}`
     );
+    return null;
   },
 });
 
