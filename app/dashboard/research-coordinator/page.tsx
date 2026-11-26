@@ -112,7 +112,7 @@ export default function ResearchCoordinatorDashboard() {
               <h2 className="font-semibold text-foreground">Recent activity</h2>
               <p className="text-sm text-muted-foreground">
                 Latest IMRaD verification and archive actions.
-              </p>
+              </p>  
             </div>
             <FileCheck2 className="h-5 w-5 text-rose-600" />
           </div>
