@@ -92,13 +92,6 @@ export default function StudentProfile() {
               <Mail className="h-4 w-4 shrink-0" />
               <span className="truncate">{me?.email || "—"}</span>
             </div>
-            <div className="flex items-center justify-center gap-2 min-w-0 pt-1">
-              <KeyRound className="h-4 w-4 shrink-0" />
-              <span className="text-xs text-muted-foreground">Team code:</span>
-              <span className="truncate font-mono text-xs font-semibold tracking-wide text-foreground">
-                {team === undefined ? "Loading..." : team?.inviteCode || "No team assigned"}
-              </span>
-            </div>
             {(me?.program || me?.section) && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 {me?.program && (
