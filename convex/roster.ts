@@ -18,6 +18,7 @@ import { PRIVACY_NOTICE_VERSION } from "../lib/privacy-consent";
 // TESTING: remove "@gmail.com" before real use so only school accounts can be imported.
 const ALLOWED_DOMAINS = ["@antiquespride.edu.ph", "@gmail.com"];
 const MAX_ROWS = 200;
+const MAX_TEAM_MEMBERS = 5;
 const SEND_SPACING_MS = 750; // Resend's free plan allows about 2 emails/second
 const PROGRAMS = ["BSIT", "BSCS", "BLIS"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -293,6 +294,22 @@ async function validateRoster(
       section,
       alreadyRegistered,
     });
+  }
+
+  for (const group of groups.values()) {
+    const existingMembers = group.existing?.members ?? [];
+    const newMembers = group.members.filter((m) => !m.alreadyRegistered);
+    const effectiveMemberCount = existingMembers.length + newMembers.length;
+    if (effectiveMemberCount > MAX_TEAM_MEMBERS) {
+      const firstOverflowRow =
+        group.members[MAX_TEAM_MEMBERS - existingMembers.length]?.row ??
+        group.members[0]?.row ??
+        2;
+      addError(
+        firstOverflowRow,
+        `Team "${group.teamName}" cannot have more than ${MAX_TEAM_MEMBERS} members.`
+      );
+    }
   }
 
   return { errors, teams: Array.from(groups.values()) };
@@ -1055,6 +1072,9 @@ export const completeEntry = internalMutation({
       throw new ConvexError(`Already on team "${current.teamName}".`);
     }
     if (!current) {
+      if ((team.members ?? []).length >= 5) {
+        throw new ConvexError(`Team "${team.teamName}" already has 5 members.`);
+      }
       await ctx.db.patch(team._id, {
         members: [...(team.members ?? []), user._id],
       });

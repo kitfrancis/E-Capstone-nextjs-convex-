@@ -18,6 +18,7 @@ import {
   Fragment,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
@@ -1352,7 +1353,9 @@ function DashboardContent() {
                     <div className="flex items-start gap-3 p-5 pb-3">
                       <Users className="mt-0.5 h-6 w-6 text-blue-600" />
                       <div>
-                        <h2 className="text-lg font-semibold text-foreground leading-tight">Group Members</h2>
+                        <h2 className="text-lg font-semibold text-foreground leading-tight">
+                          Group Members ({teamMembers?.length ?? 0}/{MAX_TEAM_MEMBERS})
+                        </h2>
                         <p className="text-sm text-muted-foreground">Your project team.</p>
                       </div>
                     </div>

@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -435,7 +436,9 @@ const handleStatus = async (
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Users className="h-3.5 w-3.5" /> Members
                       </p>
-                      <p className="text-sm font-semibold text-foreground">{team.members?.length ?? 0}</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {team.members?.length ?? 0}/{MAX_TEAM_MEMBERS}
+                      </p>
                     </div>
                     <div>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">

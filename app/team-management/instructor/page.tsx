@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -894,7 +895,7 @@ export default function InstructorTeamManagementPage() {
                             None yet
                           </p>
                         ) : (
-                          <p className="text-sm font-semibold text-foreground">{memberCount}</p>
+                          <p className="text-sm font-semibold text-foreground">{memberCount}/{MAX_TEAM_MEMBERS}</p>
                         )}
                       </div>
                       <div>

@@ -5,6 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import dynamic from "next/dynamic";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
@@ -269,7 +270,7 @@ export default function Archive() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-foreground">
-          Team members <span className="font-normal text-muted-foreground">({selectedProject.members.length})</span>
+          Team members <span className="font-normal text-muted-foreground">({selectedProject.members.length}/{MAX_TEAM_MEMBERS})</span>
         </h2>
         <ul className="space-y-2">
           {selectedProject.members.map((member: string, i: number) => (

@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -344,7 +345,7 @@ export function AdviserTabsDemo({ capstoneProjectId, onBack }: Props) {
 
           <div className={`${cardClass} min-w-0 p-4 sm:p-5`}>
             <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Users className="h-4 w-4 text-blue-600" /> Team Members Roster ( {members?.length ?? 0} )
+              <Users className="h-4 w-4 text-blue-600" /> Team Members Roster ({members?.length ?? 0}/{MAX_TEAM_MEMBERS})
             </h3>
             <div className="space-y-3">
               {members === undefined ? (

@@ -8,6 +8,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { AdviserTabsDemo } from "@/app/components/adviserDashboard-Tabs";
 import { useTeamProgress } from "@/hooks/useTeamProgress";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 
 const LIST_URL = "/team-management/adviser";
 
@@ -77,7 +78,7 @@ function TeamCard({
 
       {/* Members */}
       <div className="mt-4">
-        <p className="text-sm font-medium text-foreground">Members ({members?.length ?? 0})</p>
+        <p className="text-sm font-medium text-foreground">Members ({members?.length ?? 0}/{MAX_TEAM_MEMBERS})</p>
         <div className="mt-2 rounded-xl border bg-muted/40 px-3">
           {members === undefined ? (
             <p className="py-3 text-xs text-muted-foreground">Loading...</p>

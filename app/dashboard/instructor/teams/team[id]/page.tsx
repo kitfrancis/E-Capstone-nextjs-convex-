@@ -9,6 +9,7 @@ import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { Id } from "@/convex/_generated/dataModel";
 import { computeProgress, CHAPTER_MAX } from "@/lib/progress";
 import { chapterOf } from "@/lib/progress";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import { ArrowLeft, CalendarDays, CheckSquare, FileText, Mail, UserCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImradProgressSummary } from "@/app/components/imrad-progress-summary";
@@ -183,7 +184,7 @@ export default function InstructorTeamPage() {
 
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
-            <Users className="h-4 w-4 text-blue-600" /> Team members
+            <Users className="h-4 w-4 text-blue-600" /> Team members ({members?.length ?? 0}/{MAX_TEAM_MEMBERS})
           </h2>
           <div className="rounded-2xl border bg-card p-4 lg:p-5">
             {members === undefined ? (

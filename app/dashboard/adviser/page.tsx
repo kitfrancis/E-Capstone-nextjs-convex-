@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import { Button } from "@/components/ui/button";
 import {
   Users,
@@ -128,7 +129,9 @@ function TeamRow({
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <Users className="h-3.5 w-3.5" /> Members
             </p>
-            <p className="text-sm font-semibold text-foreground">{members === undefined ? "—" : members.length}</p>
+            <p className="text-sm font-semibold text-foreground">
+              {members === undefined ? "—" : `${members.length}/${MAX_TEAM_MEMBERS}`}
+            </p>
           </div>
           <div>
             <p className="flex items-center gap-1 text-xs text-muted-foreground">

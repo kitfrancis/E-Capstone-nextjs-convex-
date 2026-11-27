@@ -1057,6 +1057,9 @@ export const updateTeamMembers = mutation({
 
     // Every member must be a real student; drop duplicates
     const unique = Array.from(new Set(args.members));
+    if (unique.length > 5) {
+      throwUserError("Each team can have at most 5 members.");
+    }
     for (const m of unique) {
       const id = ctx.db.normalizeId("users", m);
       const u = id ? await ctx.db.get(id) : null;
@@ -1574,6 +1577,10 @@ export const joinTeam = mutation({
     if (current) {
       if (current._id === team._id) return { teamName: team.teamName };
       throwUserError("You're already in a team.");
+    }
+
+    if ((team.members ?? []).length >= 5) {
+      throwUserError("This team already has 5 members.");
     }
 
     await ctx.db.patch(team._id, {

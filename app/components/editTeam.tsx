@@ -19,6 +19,7 @@ import { Id } from "@/convex/_generated/dataModel"
 import { toast } from "sonner"
 import { X } from "lucide-react";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 
 interface EditTeamProps {
   teamId: Id<"capstoneProjects">;
@@ -83,6 +84,10 @@ const studentsInOtherTeams = useMemo(() => {
 ) ?? [];
 
     const addMember = (id: string) => {
+    if (selectedMembers.length >= MAX_TEAM_MEMBERS) {
+      toast.error(`Each team can have at most ${MAX_TEAM_MEMBERS} members.`);
+      return;
+    }
     setSelectedMembers(prev => [...prev, id]);
     setSearch("");
   };
@@ -106,6 +111,10 @@ const studentsInOtherTeams = useMemo(() => {
   const handleSubmit = async () => {
     if (!teamName || !projectTitle || !phase) {
       toast.error("Please fill in all required fields.");
+      return;
+    }
+    if (selectedMembers.length > MAX_TEAM_MEMBERS) {
+      toast.error(`Each team can have at most ${MAX_TEAM_MEMBERS} members.`);
       return;
     }
     try {
@@ -200,7 +209,7 @@ const studentsInOtherTeams = useMemo(() => {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Members<span className="text-muted-foreground">(Can search unassigned students only.)</span></Label>
+            <Label>Members<span className="text-muted-foreground"> ({selectedMembers.length}/{MAX_TEAM_MEMBERS}, unassigned students only)</span></Label>
 
             {/* Selected member tags */}
             {selectedMembers.length > 0 && (

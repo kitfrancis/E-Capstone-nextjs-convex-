@@ -12,6 +12,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
+import { MAX_TEAM_MEMBERS } from "@/lib/team-members";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -738,6 +739,9 @@ export function ImportRosterDialog() {
                       </div>
                       <span className={`${BADGE} ${t.isExistingTeam ? AMBER : GREEN}`}>
                         {t.isExistingTeam ? "Existing team" : "New team"}
+                      </span>
+                      <span className={`${BADGE} ${BLUE}`}>
+                        {t.members.length}/{MAX_TEAM_MEMBERS} members
                       </span>
                     </div>
                     <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
