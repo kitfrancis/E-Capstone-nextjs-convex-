@@ -1164,7 +1164,7 @@ function DashboardContent() {
               <Users className="h-8 w-8" />
             </div>
             <h2 className="text-xl font-semibold text-foreground">
-              You&apos;re not assigned to a team yet
+              You&apos;re not currently assigned to a team
             </h2>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
               Your instructor adds students to capstone teams by uploading the class roster. Once
@@ -1176,10 +1176,6 @@ function DashboardContent() {
               <p className="mt-1 flex items-center gap-2 text-sm font-medium text-foreground">
                 <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="truncate">{accountEmail ?? "—"}</span>
-              </p>
-              <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-                Not the school email your instructor listed? Sign out and sign in again with your
-                school account.
               </p>
             </div>
 
