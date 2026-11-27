@@ -118,6 +118,7 @@ function LogoScreen({ outcome }: { outcome: Outcome }) {
             <circle className="vl-arc" cx="52" cy="52" r="50" />
           </svg>
           <div className="vl-disc">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={LOGO_SRC}
               alt="College of Computing and Information Sciences, University of Antique"
@@ -152,6 +153,8 @@ export default function AuthCallback() {
   const { signOut } = useClerk();
   const { isAuthenticated, isLoading } = useConvexAuth();
 
+  // Don't run the query until Convex has the Clerk token, otherwise an
+  // existing user can briefly look like a new one (me === null).
   const me = useQuery(api.users.getMe, isAuthenticated ? {} : "skip");
 
   const registerStaff = useMutation(api.users.registerStaff);

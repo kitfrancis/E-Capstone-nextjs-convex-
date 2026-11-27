@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useConvex } from "convex/react";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useClerk } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { getConvexErrorMessage } from "@/lib/convex-errors";
 import { DefenseBadge, DefenseStatusCard } from "@/app/components/defense-status-card";
@@ -20,7 +20,6 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -53,7 +52,6 @@ import {
   Users,
   UserCheck,
   Mail,
-  KeyRound,
   Loader2,
   FileText,
   FileSpreadsheet,
@@ -262,6 +260,8 @@ function DashboardContent() {
   }, [isLegacyImradUrl, router]);
 
   const { user } = useUser();
+  const { signOut } = useClerk();
+  const accountEmail = user?.primaryEmailAddress?.emailAddress;
   const convex = useConvex();
   const isAdmin = (user?.publicMetadata as { role?: string } | undefined)?.role === "admin";
 
@@ -270,14 +270,8 @@ function DashboardContent() {
     setMounted(true);
   }, []);
 
-  // join team by code
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
   const meQuery = useQuery(api.users.getMe);
   const me = mounted ? meQuery : undefined;
-  const joinTeam = useMutation(api.dashboard.joinTeam);
   const syncReadiness = useMutation(api.defense.syncDefenseReadiness);
   const syncFinalRevisions = useMutation(api.defense.syncFinalRevisions);
   const setMyTeamRole = useMutation(api.dashboard.setMyTeamRole);
@@ -518,6 +512,17 @@ function DashboardContent() {
     viewDraftFromUrl,
   ]);
 
+  // Student no longer has a team (removed, or team deleted): drop team-scoped UI state
+  useEffect(() => {
+    if (project !== null) return;
+    setOfficeDoc(null);
+    setSelectedDeliverable(null);
+    setIsRestoringEditor(false);
+    sessionStorage.removeItem(EDITOR_SESSION_KEY);
+    restoreAttemptStartedRef.current = false;
+    openedDraftDeliverableRef.current = null;
+  }, [project]);
+
   // Deep-link to open PDF from notification
   useEffect(() => {
     if (viewDraftFromUrl || !deliverableIdFromUrl || !deliverables) return;
@@ -574,27 +579,6 @@ function DashboardContent() {
       });
     }
   }, [project?._id, project?.stage, progress.total, syncFinalRevisions]);
-
-  const handleJoin = async () => {
-    const trimmed = code.trim().toUpperCase();
-    if (!trimmed) {
-      setError("Please enter an invite code.");
-      return;
-    }
-    if (!me?.clerkId) {
-      setError("Could not identify your account. Please try again.");
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-    try {
-      await joinTeam({ inviteCode: trimmed });
-    } catch {
-      setError("Invalid invite code. Please check and try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const startEdit = async (d: Deliverable) => {
     try {
@@ -1175,41 +1159,40 @@ function DashboardContent() {
         </div>
 
         {project === null ? (
-          <div className={`${CARD} p-8 lg:p-10 flex flex-col items-center justify-center text-center`}>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300 mb-4">
+          <div className={`${CARD} p-8 lg:p-12 flex flex-col items-center justify-center text-center`}>
+            <div className="mb-4 flex h-18 w-18 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
               <Users className="h-8 w-8" />
             </div>
-            <h2 className="text-lg font-semibold text-foreground">You&apos;re not in a team yet</h2>
-            <p className="text-sm text-muted-foreground max-w-sm mt-1">
-              Enter the invite code your instructor gave you to join your capstone team.
+            <h2 className="text-xl font-semibold text-foreground">
+              You&apos;re not assigned to a team yet
+            </h2>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+              Your instructor adds students to capstone teams by uploading the class roster. Once
+              you&apos;re placed on a team, your dashboard will appear here automatically.
             </p>
 
-            <div className="flex flex-col items-center gap-2 w-full max-w-xs mt-5">
-              <div className="relative w-full">
-                <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="e.g. ECAP-XXXX-XXXX"
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value.toUpperCase());
-                    setError("");
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                  className="h-11 w-full rounded-xl pl-9 text-center font-mono tracking-widest text-sm"
-                />
-              </div>
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <Button
-                onClick={handleJoin}
-                disabled={isLoading || !me?.clerkId}
-                className="h-11 w-full rounded-xl gap-2 bg-blue-600 text-white hover:bg-blue-700"
-              >
-                {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isLoading ? "Joining..." : "Join team"}
-              </Button>
+            <div className="mt-6 w-full max-w-sm rounded-xl border bg-muted/30 p-4 text-left">
+              <p className="text-xs text-muted-foreground">Signed in as</p>
+              <p className="mt-1 flex items-center gap-2 text-sm font-medium text-foreground">
+                <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{accountEmail ?? "—"}</span>
+              </p>
+              <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+                Not the school email your instructor listed? Sign out and sign in again with your
+                school account.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-4">Don&apos;t have a code? Contact your instructor.</p>
+
+            <Button
+              variant="outline"
+              className="mt-4 h-11 rounded-xl px-5"
+              onClick={() => signOut({ redirectUrl: "/" })}
+            >
+              Use a different account
+            </Button>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Still not on a team? Contact your instructor.
+            </p>
           </div>
         ) : project === undefined ? (
           <div className={`${CARD} p-10 flex items-center justify-center`}>

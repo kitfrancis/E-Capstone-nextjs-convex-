@@ -59,33 +59,32 @@ const ROLE_INFO: Record<
     description:
       "Upload deliverables, track progress, and collaborate with your capstone team in real time.",
     notice:
-      "Your account is provisioned by your capstone instructor. Sign in using your official @antiquespride.edu.ph email and temporary password.",
+      "Sign in with your official @antiquespride.edu.ph Google account. Only students on your instructor's roster can get in.",
     Icon: GraduationCap,
     accent: "#1d4ed8",
     steps: [
       {
         Icon: Mail,
-        title: "Check your school email",
+        title: "Use your school Google account",
         summary:
-          "Your temporary password was sent to your @antiquespride.edu.ph address.",
+          "Click Continue with Google and choose your @antiquespride.edu.ph account.",
         detail:
-          "Look in your school inbox for the email from E-Research. If you can't find it, check your spam folder or ask your instructor to resend it.",
+          "Personal Gmail accounts won't work unless your instructor listed that exact address in the roster. There is no password to remember.",
       },
       {
         Icon: ShieldCheck,
-        title: "Verify it's you",
+        title: "Accept the privacy notice",
         summary:
-          "On a new browser or device, enter the 6-digit verification code emailed to you.",
+          "The first time you sign in, review and accept the data privacy notice.",
         detail:
-          "The code goes to the same school email. Use the newest code if you request another one.",
+          "This only appears once. After that you go straight to your dashboard.",
       },
       {
-        Icon: KeyRound,
-        title: "Set your own password",
-        summary:
-          "Create a strong personal password, then land directly on your team dashboard.",
+        Icon: LayoutDashboard,
+        title: "Land on your team dashboard",
+        summary: "Your team and project are already set up by your instructor.",
         detail:
-          "You'll be asked for a new password after your first sign in. Once it's saved, you go straight to your assigned team.",
+          "If you see “no account”, your email isn't on the roster yet. Ask your instructor to check the email they uploaded for you.",
       },
     ],
   },
@@ -142,9 +141,9 @@ const ROLE_INFO: Record<
         Icon: FileSpreadsheet,
         title: "Import your roster",
         summary:
-          "Upload the team list and students get their accounts by email.",
+          "Upload the team list. Listed students can then sign in with their school Google account.",
         detail:
-          "Each student gets a temporary password and is placed on their team automatically.",
+          "Students are placed on their team the first time they sign in. No passwords or emails are sent.",
       },
       {
         Icon: Users,
@@ -240,9 +239,9 @@ export default function SignInPage() {
     }
   }, [role]);
 
-  // Students no longer self-register: their account is created by the
-  // instructor's roster import. Coordinator sign-ups create pending requests.
-  // For students, an unknown Clerk identity goes to the no-account page.
+  // Students never self-register and have no password: they sign in with
+  // Google, and the callback only lets in emails that are on a roster.
+  // Coordinator sign-ups create pending requests.
   const signUpUrl = noSelfSignUp
     ? `/no-account?role=${role}`
     : `/sign-up/clerk-signup?role=${role ?? "adviser"}`;
@@ -386,8 +385,8 @@ export default function SignInPage() {
                 fallbackRedirectUrl="/auth-callback"
                 signUpUrl={signUpUrl}
                 // If Clerk does create the user from an OAuth sign-in, land on the
-                // callback so it can check for an E-Capstone account (otherwise
-                // Clerk sends them to "/").
+                // callback so it can check the roster (otherwise Clerk sends
+                // them to "/").
                 signUpFallbackRedirectUrl="/auth-callback"
                 appearance={{
                   variables: {
@@ -401,7 +400,10 @@ export default function SignInPage() {
                     rootBox: { width: "100%" },
                     cardBox: { width: "100%", boxShadow: "none" },
                     card: { boxShadow: "none" },
+                    // Students use Google only: hide the email/password form.
                     ...(noSelfSignUp && {
+                      form: { display: "none" },
+                      dividerRow: { display: "none" },
                       footerAction: { display: "none" }, // "Don't have an account? Sign up"
                     }),
                   },

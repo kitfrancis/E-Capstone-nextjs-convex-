@@ -30,8 +30,8 @@ export default defineSchema({
     coordinatorOrganization: v.optional(v.string()),
     coordinatorReason: v.optional(v.string()),
 
-    // Roster import: until the temporary password is changed, the account
-    // can't use the app (enforced in Convex, not just the UI)
+    // Legacy (temp-password roster import). New students sign in with Google,
+    // so these are no longer set. Kept so old rows still validate.
     mustChangePassword: v.optional(v.boolean()),
     tempPasswordExpiresAt: v.optional(v.number()),
     importedAt: v.optional(v.number()),
@@ -42,8 +42,9 @@ export default defineSchema({
     .index("by_role_status", ["role", "status"])
     .index("by_email", ["email"]),
 
-  // One row per student in an uploaded roster. Lets the instructor see what
-  // happened to each student and retry only the failures. Never stores passwords.
+  // One row per student in an uploaded roster. This is the allowlist: a
+  // student can only claim an account if their verified Google email matches
+  // an entry here. Never stores passwords.
   rosterEntries: defineTable({
     batchId: v.string(),
     instructorId: v.id("users"),
@@ -56,6 +57,9 @@ export default defineSchema({
     program: v.optional(v.string()),
     section: v.optional(v.string()),
     status: v.union(
+      v.literal("invited"), // on the roster, hasn't signed in yet
+      v.literal("claimed"), // signed in with Google, account exists
+      // Legacy statuses from the temp-password flow:
       v.literal("pending"),
       v.literal("created"),
       v.literal("emailed"),
