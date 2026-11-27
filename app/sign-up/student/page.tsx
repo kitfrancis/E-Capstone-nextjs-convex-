@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-// Students no longer sign themselves up. Their account is created when their
-// instructor imports the roster, and the temporary password arrives by email.
+// Students don't self-register. Their account is provisioned from the
+// instructor's roster, and they sign in with Google using the rostered email.
 export default function StudentSignUpPage() {
   redirect("/sign-in?role=student");
 }

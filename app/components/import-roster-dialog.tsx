@@ -627,8 +627,8 @@ export function ImportRosterDialog() {
         <DialogHeader>
           <DialogTitle>Import roster</DialogTitle>
           <DialogDescription>
-            Students get an account, a place on their team, and an email with a
-            temporary password.
+            Students are added to their team and emailed instructions to sign
+            in with Google using the rostered email. No password is created.
           </DialogDescription>
         </DialogHeader>
 

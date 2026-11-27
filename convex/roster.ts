@@ -18,10 +18,11 @@ import { PRIVACY_NOTICE_VERSION } from "../lib/privacy-consent";
 // TESTING: remove "@gmail.com" before real use so only school accounts can be imported.
 const ALLOWED_DOMAINS = ["@antiquespride.edu.ph", "@gmail.com"];
 const MAX_ROWS = 200;
-const TEMP_PASSWORD_HOURS = 72;
 const SEND_SPACING_MS = 750; // Resend's free plan allows about 2 emails/second
 const PROGRAMS = ["BSIT", "BSCS", "BLIS"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Name shown in the email header and subject line
+const APP_NAME = "E-Research";
 
 // The browser parses the .xlsx/.csv and sends rows in this shape.
 // The server re-validates everything, so the client is never trusted.
@@ -297,30 +298,6 @@ async function validateRoster(
   return { errors, teams: Array.from(groups.values()) };
 }
 
-// Passwords are generated ONLY inside actions. Queries and mutations use a
-// seeded random generator, which is not safe for secrets.
-function generateTempPassword() {
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower = "abcdefghijkmnpqrstuvwxyz";
-  const digits = "23456789";
-  const symbols = "!@#$%*?";
-  const all = upper + lower + digits + symbols;
-  const rand = (max: number) => {
-    const buf = new Uint32Array(1);
-    crypto.getRandomValues(buf);
-    return buf[0] % max;
-  };
-  const pick = (set: string) => set[rand(set.length)];
-
-  const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)];
-  while (chars.length < 14) chars.push(pick(all));
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = rand(i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-  return chars.join("");
-}
-
 async function clerk(path: string, init?: RequestInit) {
   const key = process.env.CLERK_SECRET_KEY;
   if (!key) throw new Error("CLERK_SECRET_KEY is not set in Convex.");
@@ -357,53 +334,17 @@ function escapeHtml(s: string) {
     .replace(/'/g, "&#39;");
 }
 
-async function sendWelcomeEmail(p: {
+async function sendRosterEmail(p: {
   to: string;
-  name: string;
-  teamName: string;
-  tempPassword: string;
-  expiresAt: number;
+  subject: string;
+  html: string;
+  text: string;
 }): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.ROSTER_FROM_EMAIL;
-  const site = (process.env.SITE_URL ?? "").replace(/\/$/, "");
-  if (!key || !from || !site) {
-    throw new Error(
-      "Email isn't configured (RESEND_API_KEY, ROSTER_FROM_EMAIL, SITE_URL)."
-    );
+  if (!key || !from) {
+    throw new Error("Email isn't configured (RESEND_API_KEY, ROSTER_FROM_EMAIL).");
   }
-
-  const loginUrl = `${site}/sign-in?role=student`;
-  // Philippine time (UTC+8), formatted by hand so it doesn't depend on Intl data
-  const expires =
-    new Date(p.expiresAt + 8 * 3600 * 1000)
-      .toISOString()
-      .slice(0, 16)
-      .replace("T", " ") + " (PH time)";
-
-  const text = [
-    `Hi ${p.name},`,
-    ``,
-    `You've been added to team "${p.teamName}" on E-Capstone.`,
-    ``,
-    `Sign in: ${loginUrl}`,
-    `Email: ${p.to}`,
-    `Temporary password: ${p.tempPassword}`,
-    ``,
-    `You'll be asked to set your own password right after you sign in.`,
-    `This temporary password expires on ${expires}.`,
-    `If you weren't expecting this, ignore this email.`,
-  ].join("\n");
-
-  const html = `
-    <p>Hi ${escapeHtml(p.name)},</p>
-    <p>You've been added to team <strong>${escapeHtml(p.teamName)}</strong> on E-Capstone.</p>
-    <p><a href="${escapeHtml(loginUrl)}">Sign in here</a></p>
-    <p>Email: <strong>${escapeHtml(p.to)}</strong><br/>
-    Temporary password: <strong style="font-family:monospace">${escapeHtml(p.tempPassword)}</strong></p>
-    <p>You'll be asked to set your own password right after you sign in.
-    This temporary password expires on ${escapeHtml(expires)}.</p>
-    <p style="color:#666">If you weren't expecting this, ignore this email.</p>`;
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -414,9 +355,9 @@ async function sendWelcomeEmail(p: {
     body: JSON.stringify({
       from,
       to: [p.to],
-      subject: `Your E-Capstone account (${p.teamName})`,
-      html,
-      text,
+      subject: p.subject,
+      html: p.html,
+      text: p.text,
     }),
   });
   const responseBody: unknown = await res.json().catch(() => null);
@@ -440,6 +381,110 @@ async function sendWelcomeEmail(p: {
     return responseBody.id;
   }
   return null;
+}
+
+// One email for every student the roster puts on a team (new or existing).
+// Students sign in with Google only, so there is no password in this email.
+async function sendTeamInviteEmail(p: {
+  to: string;
+  name: string;
+  teamName: string;
+  projectTitle: string;
+}): Promise<string | null> {
+  const site = (process.env.SITE_URL ?? "").replace(/\/$/, "");
+  if (!site) {
+    throw new Error("Email isn't configured (SITE_URL).");
+  }
+
+  const loginUrl = `${site}/sign-in?role=student`;
+  const firstName = p.name.trim().split(/\s+/)[0] || p.name;
+  const showTitle =
+    p.projectTitle.trim() !== "" && p.projectTitle !== "Untitled project";
+
+  const text = [
+    `Hi ${firstName},`,
+    ``,
+    `Your instructor added you to team "${p.teamName}" on ${APP_NAME}.`,
+    showTitle ? `Project: ${p.projectTitle}` : ``,
+    ``,
+    `How to get started:`,
+    `1. Open ${loginUrl}`,
+    `2. Choose "Continue with Google".`,
+    `3. Pick this account: ${p.to}`,
+    ``,
+    `There is no password to set up. After you sign in, you'll land on your team's dashboard.`,
+    ``,
+    `Use this exact email. A different Google account won't be recognized. If you only have another email, ask your instructor to add it instead.`,
+    ``,
+    `Didn't expect this email? Contact your instructor.`,
+  ]
+    .filter((line, i, all) => !(line === "" && all[i - 1] === ""))
+    .join("\n");
+
+  const font =
+    "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  const html = `<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#f1f5f9;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+    You've been added to team ${escapeHtml(p.teamName)}. Sign in with your school Google account to get started.
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-family:${font};">
+        <tr>
+          <td style="background:#2563eb;padding:20px 28px;color:#ffffff;">
+            <div style="font-size:20px;font-weight:700;line-height:1.2;">${escapeHtml(APP_NAME)}</div>
+            <div style="font-size:12px;line-height:1.4;opacity:0.9;">Thesis &amp; Capstone Management</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;color:#0f172a;font-size:15px;line-height:1.6;">
+            <p style="margin:0 0 14px;">Hi ${escapeHtml(firstName)},</p>
+            <p style="margin:0 0 18px;">Your instructor added you to team <strong>${escapeHtml(p.teamName)}</strong> on ${escapeHtml(APP_NAME)}.</p>
+            ${
+              showTitle
+                ? `<div style="margin:0 0 22px;padding:14px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;">
+              <div style="font-size:12px;color:#475569;">Project</div>
+              <div style="font-size:15px;font-weight:600;color:#0f172a;">${escapeHtml(p.projectTitle)}</div>
+            </div>`
+                : ""
+            }
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+              <tr><td style="background:#2563eb;border-radius:12px;">
+                <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Sign in with Google</a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 8px;font-weight:600;">How to get started</p>
+            <ol style="margin:0 0 20px;padding-left:20px;color:#334155;">
+              <li style="margin-bottom:6px;">Open the link above and choose <strong>Continue with Google</strong>.</li>
+              <li style="margin-bottom:6px;">Pick this account: <strong>${escapeHtml(p.to)}</strong></li>
+              <li>You'll land on your team's dashboard. There is no password to set up.</li>
+            </ol>
+            <div style="padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;font-size:13px;color:#78350f;line-height:1.5;">
+              Use this exact email. A different Google account won't be recognized. If you only have another email, ask your instructor to add it instead.
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px 24px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.5;color:#64748b;">
+            Button not working? Copy this link into your browser:<br/>
+            <span style="color:#2563eb;word-break:break-all;">${escapeHtml(loginUrl)}</span><br/><br/>
+            Didn't expect this email? Contact your instructor.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return await sendRosterEmail({
+    to: p.to,
+    subject: `You've been added to team "${p.teamName}" on ${APP_NAME}`,
+    html,
+    text,
+  });
 }
 
 // Turns any thrown value into a short, readable message. Handles plain
@@ -612,9 +657,8 @@ export const importRoster = mutation({
   },
 });
 
-// Retry failures, or re-send a fresh temporary password to students who
-// haven't changed theirs yet. Accounts that already changed their password
-// are never reset (see processEntry).
+// Retry failures, or re-send the invite email to students who haven't
+// signed in yet. Existing accounts are never changed (see processEntry).
 export const retryEntries = mutation({
   args: { entryIds: v.array(v.id("rosterEntries")) },
   handler: async (ctx, args) => {
@@ -642,11 +686,13 @@ export const retryEntries = mutation({
 
 // Remove students from the roster list.
 //
-// - Accounts this import created that were never used (still on the temporary
-//   password) are fully deleted: Clerk user, Convex user, team membership.
-//   That also frees the email, so a corrected row can be imported again.
-// - Anyone else (already signed in, or an account that existed before the
-//   import) keeps their account and team spot. Only the list entry goes away.
+// - Accounts an EARLIER import created that were never used (still on the
+//   temporary password) are fully deleted: Clerk user, Convex user, team
+//   membership. That also frees the email, so a corrected row can be
+//   imported again.
+// - Anyone else (already signed in, an account that existed before the
+//   import, or any account created by the Google-only import) keeps their
+//   account and team spot. Only the list entry goes away.
 //
 // This is an action because deleting the Clerk user needs fetch().
 export const removeEntries = action({
@@ -704,6 +750,9 @@ export const removeEntries = action({
 });
 
 // Decides, per entry, whether the student's account is safe to delete.
+// NOTE: "never used" is detected by mustChangePassword === true, which only
+// accounts from earlier (temporary-password) imports have. Accounts from the
+// Google-only import are never deleted here; only their list entry is removed.
 export const planRemoval = internalQuery({
   args: {
     instructorId: v.id("users"),
@@ -814,7 +863,11 @@ export const myRosterEntries = query({
           deliveryStatus: e.deliveryStatus ?? null,
           error: e.error ?? null,
           createdAt: e.createdAt,
-          passwordChanged: user ? user.mustChangePassword !== true : false,
+          // "Active" = the student has actually signed in and accepted the
+          // privacy notice. privacyConsentAt is only set on first sign-in
+          // (Google flow) or on the first password change (legacy flow).
+          // The field keeps its old name so the dialog doesn't need changes.
+          passwordChanged: user ? user.privacyConsentAt !== undefined : false,
         };
       })
     );
@@ -945,7 +998,8 @@ export const markDelivery = internalMutation({
 });
 
 // Creates (or updates) the Convex user and puts them on their team, in one
-// transaction. tempPasswordExpiresAt = null means "already active, don't touch".
+// transaction. tempPasswordExpiresAt = null means "already active, don't touch"
+// (the Google-only import always passes null).
 export const completeEntry = internalMutation({
   args: {
     entryId: v.id("rosterEntries"),
@@ -1014,6 +1068,9 @@ export const completeEntry = internalMutation({
   },
 });
 
+// Students sign in with Google only, so no password is created, reset or
+// emailed here. The Clerk account is created without a password, the student
+// is put on their team, and one invite email tells them to continue with Google.
 export const processEntry = internalAction({
   args: { entryId: v.id("rosterEntries") },
   handler: async (ctx, args): Promise<void> => {
@@ -1030,20 +1087,6 @@ export const processEntry = internalAction({
         throw new Error(`This email belongs to a ${existing.role} account.`);
       }
 
-      // Already active (changed their password): never reset it.
-      // Just make sure they're on the team.
-      if (existing && existing.mustChangePassword !== true) {
-        await ctx.runMutation(internal.roster.completeEntry, {
-          entryId: args.entryId,
-          clerkId: existing.clerkId,
-          tempPasswordExpiresAt: null,
-        });
-        return;
-      }
-
-      const tempPassword = generateTempPassword();
-      const expiresAt = Date.now() + TEMP_PASSWORD_HOURS * 3600 * 1000;
-
       let clerkId: string | undefined = existing?.clerkId;
       if (!clerkId) {
         const found = await clerk(
@@ -1053,25 +1096,17 @@ export const processEntry = internalAction({
         clerkId = list[0]?.id;
       }
 
-      if (clerkId) {
-        // Account exists (earlier attempt or earlier sign-up): new temp password.
-        // Signing out old sessions is right here: the old password is being replaced.
-        await clerk(`/users/${clerkId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            password: tempPassword,
-            sign_out_of_other_sessions: true,
-          }),
-        });
-      } else {
+      if (!clerkId) {
         const [first, ...rest] = entry.name.split(/\s+/);
         const created = await clerk(`/users`, {
           method: "POST",
           body: JSON.stringify({
             email_address: [entry.email],
-            password: tempPassword,
             first_name: first,
             last_name: rest.join(" ") || undefined,
+            // Students sign in with Google only, so create them without a
+            // password even if the Clerk instance has passwords enabled.
+            skip_password_requirement: true,
             // Clerk rejects backend-created users when "legal consent" is enabled
             // in the dashboard unless this timestamp is sent. The student's real
             // consent to the data privacy notice is recorded in this app
@@ -1085,15 +1120,14 @@ export const processEntry = internalAction({
       await ctx.runMutation(internal.roster.completeEntry, {
         entryId: args.entryId,
         clerkId,
-        tempPasswordExpiresAt: expiresAt,
+        tempPasswordExpiresAt: null,
       });
 
-      const emailId = await sendWelcomeEmail({
+      const emailId = await sendTeamInviteEmail({
         to: entry.email,
         name: entry.name,
         teamName: entry.teamName,
-        tempPassword,
-        expiresAt,
+        projectTitle: entry.projectTitle,
       });
 
       await ctx.runMutation(internal.roster.markEntry, {
@@ -1170,7 +1204,8 @@ export const autoCheckDelivery = internalAction({
 });
 
 // ---------------------------------------------------------------------------
-// Student: first-login password change
+// First-login password change (legacy: only for accounts created by earlier,
+// temporary-password imports. Safe to delete once none are left.)
 // ---------------------------------------------------------------------------
 
 export const clearMustChange = internalMutation({
